@@ -1,0 +1,2221 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#0a0e0a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="VolScan">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+<title>VolScan · Binance Early v15</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0a0e0a;
+    color: #c8d6c8;
+    font-family: 'SF Mono', 'Consolas', 'Menlo', monospace;
+    font-size: 12px;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+  .header {
+    border-bottom: 1px solid #1e2b1e;
+    background: #0d120d;
+    padding: 12px 16px;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+  }
+  .header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand-icon {
+    width: 32px; height: 32px; border-radius: 2px;
+    background: #1a2e1a; border: 1px solid #2f4a2f;
+    display: flex; align-items: center; justify-content: center;
+    color: #5eff8f; font-size: 16px;
+  }
+  .brand-title { font-size: 13px; letter-spacing: 0.2em; color: #5eff8f; font-weight: 600; }
+  .brand-sub { font-size: 10px; color: #5a6b5a; letter-spacing: 0.03em; margin-top: 2px; }
+  .stats { display: flex; align-items: center; gap: 14px; font-size: 11px; flex-wrap: wrap; }
+  .stat-label { color: #5a6b5a; }
+  .stat-val { color: #c8d6c8; }
+  .stat-val.warn { color: #ffb454; }
+  .stat-val.early { color: #ffd85e; }
+  #status-line { font-size: 10px; }
+  .live { color: #5eff8f; }
+  .err { color: #ff6b6b; }
+  .controls { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+  .filters-hint { font-size: 10px; color: #4a5a4a; margin-top: 6px; line-height: 1.45; }
+  .box {
+    display: flex; align-items: center; gap: 8px;
+    background: #0a0e0a; border: 1px solid #1e2b1e; border-radius: 2px;
+    padding: 6px 10px;
+  }
+  .box input {
+    background: transparent; border: none; outline: none; color: #c8d6c8;
+    font-family: inherit; font-size: 12px;
+  }
+  .box input::placeholder { color: #3f4f3f; }
+  #search-input { width: 120px; }
+  #threshold-input { width: 80px; }
+  #threshold-1m-input { width: 80px; }
+  #threshold-2m-input { width: 80px; }
+  #max-price-input { width: 60px; }
+  #max-volume-input { width: 90px; }
+  .market-toggle { display: flex; border: 1px solid #1e2b1e; border-radius: 2px; overflow: hidden; }
+  .market-toggle button {
+    background: transparent; border: none; border-right: 1px solid #1e2b1e;
+    color: #5a6b5a; font-family: inherit; font-size: 10px; letter-spacing: 0.03em;
+    padding: 7px 10px; cursor: pointer;
+  }
+  .market-toggle button:last-child { border-right: none; }
+  .market-toggle button.active { background: #1a2e1a; color: #5eff8f; }
+  .ok-btn, .reset-btn, .sound-btn {
+    font-family: inherit; font-size: 10px; cursor: pointer; border-radius: 2px;
+  }
+  .ok-btn {
+    padding: 3px 8px; background: #1a2e1a; border: 1px solid #2f4a2f; color: #5eff8f;
+  }
+  .reset-btn, .sound-btn {
+    display: flex; align-items: center; gap: 6px; font-size: 11px;
+    padding: 7px 10px; background: #1a1e2e; border: 1px solid #2f3a4a; color: #7ab8ff;
+  }
+  .sound-btn.off { color: #5a6b5a; border-color: #1e2b1e; background: #0a0e0a; }
+  #stop-btn.paused { color: #ff6b6b; border-color: #4a1e1e; background: #1e1010; }
+  #stats-btn.paused { color: #5eff8f; border-color: #2f4a2f; background: #131f13; }
+  #wakelock-btn.paused { color: #5eff8f; border-color: #2f4a2f; background: #131f13; }
+  #early-only-btn.paused { color: #ffd85e; border-color: #4a3a1e; background: #1e1810; }
+  .reset-btn:hover, .sound-btn:hover { background: #232838; }
+  .ok-btn:hover { background: #233823; }
+  .hint { font-size: 10px; color: #3f4f3f; margin-left: auto; }
+  .body-wrap { flex: 1; display: flex; overflow: hidden; }
+  .table-wrap { flex: 1; overflow: auto; min-width: 0; }
+  table { width: 100%; border-collapse: collapse; }
+  thead { position: sticky; top: 0; background: #0d120d; border-bottom: 1px solid #1e2b1e; z-index: 5; }
+  th {
+    text-align: right; padding: 8px 8px; font-weight: 400; font-size: 10px;
+    color: #5a6b5a; letter-spacing: 0.04em; white-space: nowrap;
+  }
+  th:nth-child(1), th:nth-child(2) { text-align: left; }
+  td { padding: 6px 8px; border-bottom: 1px solid #141a14; text-align: right; white-space: nowrap; }
+  td:nth-child(1), td:nth-child(2) { text-align: left; }
+  tr:hover { background: #0f150f; }
+  tr.triggered { background: #1a2410; }
+  tr.triggered:hover { background: #1e2a12; }
+  tr.early-row { background: #1a1a10; }
+  tr.early-row:hover { background: #222214; }
+  tr.accel-row { background: #1e1a10; }
+  .badge {
+    font-size: 9px; padding: 2px 6px; border-radius: 2px; border: 1px solid; letter-spacing: 0.03em;
+  }
+  .badge-SPOT { color: #7ab8ff; border-color: #2f3a4a; background: #131a24; }
+  .badge-USDT-M { color: #ffb454; border-color: #4a3a1e; background: #1e1810; }
+  .sym-base { color: #e4ece4; font-weight: 600; }
+  .sym-quote { color: #4a5a4a; }
+  .pct-pos { color: #5eff8f; }
+  .pct-neg { color: #ff6b6b; }
+  .base-vol { color: #7f9a7f; }
+  .base-time { color: #3f4f3f; font-size: 9px; display: block; }
+  .rank-up { color: #5eff8f; font-size: 10px; font-weight: 600; }
+  .rank-up-strong { color: #ffd85e; animation: rankPulse 1.2s ease-in-out infinite; }
+  .rank-down { color: #ff6b6b; font-size: 10px; }
+  .rank-none { color: #3f4f3f; font-size: 10px; }
+  .rank-top-entry { color: #ffd85e; font-weight: 700; }
+  @keyframes rankPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+  .delta-pos { color: #5eff8f; font-weight: 600; }
+  .delta-trig { color: #ffb454; font-weight: 600; }
+  .delta-zero { color: #4a5a4a; font-weight: 600; }
+  .vel-hot { color: #ffd85e; font-weight: 700; }
+  .vel-warm { color: #5eff8f; font-weight: 600; }
+  .vel-cold { color: #4a5a4a; }
+  .mult-cell { font-weight: 600; }
+  .mult-early { color: #ffd85e; }
+  .mult-mid { color: #5eff8f; }
+  .mult-late { color: #7ab8ff; }
+  .empty-row { text-align: center; padding: 40px; color: #3f4f3f; font-size: 11px; }
+  /* v15 */
+  .score-cell { font-weight: 700; font-size: 13px; }
+  .score-hot { color: #0a0e0a; background: #5eff8f; border-radius: 3px; padding: 1px 6px; display: inline-block; }
+  .score-mid { color: #ffd85e; }
+  .score-low { color: #5a6b5a; }
+  .score-parts { display: block; font-size: 9px; color: #6b7a6b; font-weight: 400; max-width: 150px; white-space: normal; line-height: 1.25; }
+  .sub { display: block; font-size: 9px; color: #5a6b5a; }
+  .taker-buy { color: #5eff8f; }
+  .taker-sell { color: #ff6b6b; }
+  .rng-bar { display: inline-block; width: 42px; height: 5px; background: #1e2b1e; border-radius: 3px; overflow: hidden; vertical-align: middle; }
+  .rng-fill { display: block; height: 100%; background: #5eff8f; }
+  tr.score-row { background: #12240f; }
+  tr.score-row:hover { background: #17300f; }
+  #score-threshold-input { width: 50px; }
+  #hot-badge { color: #ff9f43; }
+  .del-btn {
+    background: transparent; border: 1px solid #3a1e1e; color: #ff6b6b;
+    font-family: inherit; font-size: 11px; line-height: 1; border-radius: 2px;
+    width: 22px; height: 22px; cursor: pointer;
+  }
+  .del-btn:hover { background: #2a1414; border-color: #ff6b6b; }
+  .alerts-panel {
+    width: 280px; border-left: 1px solid #1e2b1e; background: #0d120d;
+    display: flex; flex-direction: column; flex-shrink: 0;
+  }
+  .alerts-header {
+    padding: 8px 12px; border-bottom: 1px solid #1e2b1e; font-size: 10px;
+    color: #5a6b5a; letter-spacing: 0.05em; display: flex; align-items: center; gap: 6px;
+  }
+  .shelf-panel { border: 1px solid #4a3a14; background: #1a1408; border-radius: 4px; margin: 0 12px 8px; padding: 6px 8px; }
+  .shelf-header { font-size: 11px; font-weight: 700; color: #ffd85e; margin-bottom: 4px; }
+  .shelf-list { display: flex; flex-wrap: wrap; gap: 6px; max-height: 120px; overflow-y: auto; }
+  .shelf-empty { font-size: 11px; color: #6b5a3a; padding: 2px 0; }
+  .shelf-item { display: flex; gap: 8px; align-items: center; background: #221a0a; border: 1px solid #4a3a14; border-radius: 3px; padding: 4px 8px; cursor: pointer; }
+  .shelf-item:hover { border-color: #ffd85e; }
+  .shelf-sym { font-size: 12px; font-weight: 600; color: #ffd85e; }
+  .shelf-delta { font-size: 11px; color: #ffb454; font-weight: 600; }
+  .shelf-time { font-size: 9px; color: #8a7a4a; }
+  .alerts-tabs {
+    display: flex; border-bottom: 1px solid #1e2b1e;
+  }
+  .alerts-tabs button {
+    flex: 1; background: transparent; border: none; border-right: 1px solid #1e2b1e;
+    color: #5a6b5a; font-family: inherit; font-size: 10px; padding: 7px 4px; cursor: pointer;
+  }
+  .alerts-tabs button:last-child { border-right: none; }
+  .alerts-tabs button.active { background: #1a2e1a; color: #5eff8f; }
+  .alerts-tabs button.early-tab.active { background: #1e1a10; color: #ffd85e; }
+  .alerts-list { flex: 1; overflow: auto; }
+  .alert-item { padding: 8px 12px; border-bottom: 1px solid #141a14; font-size: 11px; cursor: pointer; border-left: 3px solid transparent; }
+  .alert-item.market-SPOT { border-left-color: #7ab8ff; }
+  .alert-item.market-SPOT .alert-sym { color: #7ab8ff; }
+  .alert-item.market-USDT-M { border-left-color: #ffb454; }
+  .alert-item.market-USDT-M .alert-sym { color: #ffb454; }
+  .alert-item.type-VEL { border-left-color: #ffd85e; }
+  .alert-item.type-ACCEL { border-left-color: #ff9f43; }
+  .alert-item.type-RANK { border-left-color: #a29bfe; }
+  .alert-item.type-TOP { border-left-color: #fd79a8; }
+  .alert-item:hover { background: #10160f; }
+  tr.row-flash { animation: rowFlash 1.4s ease-out; }
+  @keyframes rowFlash {
+    0% { background: #2a3a1a; }
+    100% { background: transparent; }
+  }
+  .alert-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+  .alert-sym { color: #e4ece4; font-weight: 600; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+  .alert-seq { font-size: 9px; font-weight: 400; color: #5a6b5a; background: #131a13; border: 1px solid #223022; border-radius: 3px; padding: 1px 4px; }
+  .alert-type {
+    font-size: 8px; font-weight: 600; letter-spacing: 0.04em;
+    padding: 1px 5px; border-radius: 2px; border: 1px solid;
+  }
+  .alert-type.SPIKE { color: #ffb454; border-color: #4a3a1e; background: #1e1810; }
+  .alert-type.VEL1M { color: #ffd85e; border-color: #4a3a1e; background: #1e1a10; }
+  .alert-type.VEL2M { color: #ffeaa7; border-color: #4a3a1e; background: #1e1a10; }
+  .alert-type.ACCEL { color: #ff9f43; border-color: #4a2a1e; background: #1e1410; }
+  .alert-type.RANK { color: #a29bfe; border-color: #3a2a4a; background: #16101e; }
+  .alert-type.TOP30 { color: #fd79a8; border-color: #4a1e3a; background: #1e1018; }
+  .alert-type.TOP15 { color: #ff6b9d; border-color: #4a1e3a; background: #1e1018; }
+  .alert-type.RVOL { color: #55efc4; border-color: #1e4a3a; background: #101e18; }
+  .alert-type.FAST30 { color: #74b9ff; border-color: #1e3a4a; background: #10181e; }
+  .alert-type.NRATE { color: #81ecec; border-color: #1e4a4a; background: #101e1e; }
+  .alert-type.BIGPRINT { color: #ffeaa7; border-color: #4a3a1e; background: #1e1a10; }
+  .alert-type.IMBAL { color: #a29bfe; border-color: #3a2a4a; background: #16101e; }
+  .alert-type.VWAPX { color: #55efc4; border-color: #1e4a3a; background: #101e18; }
+  .alert-type.RANGEBRK { color: #fab1a0; border-color: #4a2a1e; background: #1e1410; }
+  .alert-type.QUIET { color: #dfe6e9; border-color: #2a2a2a; background: #141414; }
+  .alert-type.SIGNAL { color: #0a0e0a; background: #5eff8f; border-color: #5eff8f; font-weight: 700; }
+  .alert-delta { color: #ffb454; font-weight: 600; white-space: nowrap; }
+  .alert-bottom { display: flex; justify-content: space-between; color: #5a6b5a; margin-top: 3px; }
+  .alerts-empty { font-size: 11px; color: #3f4f3f; padding: 24px 12px; text-align: center; line-height: 1.5; }
+  .footer {
+    border-top: 1px solid #1e2b1e; background: #0d120d; padding: 6px 16px;
+    font-size: 10px; color: #3f4f3f; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px;
+  }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: #0a0e0a; }
+  ::-webkit-scrollbar-thumb { background: #2f4a2f; border-radius: 4px; }
+
+  @media (max-width: 900px) {
+    .body-wrap { flex-direction: column; overflow: visible; flex: none; }
+    .table-wrap { max-height: none; overflow: visible; }
+    .alerts-panel { width: 100%; border-left: none; border-top: 1px solid #1e2b1e; max-height: none; overflow: visible; }
+    .alerts-list { overflow: visible; }
+    thead { position: static; }
+  }
+
+  /* ===== mobile / PWA shell ===== */
+  html, body { height: 100%; }
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: calc(56px + env(safe-area-inset-bottom));
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+  }
+  .header { padding-top: calc(10px + env(safe-area-inset-top)); }
+  .controls { row-gap: 8px; }
+  .controls button, .ok-btn, .reset-btn, .sound-btn, .market-toggle button {
+    min-height: 36px;
+    touch-action: manipulation;
+  }
+  .box input { font-size: 16px; } /* prevent iOS zoom */
+  .filters-hint { display: none; }
+  .tab-bar {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    height: calc(56px + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom);
+    background: #0d120d; border-top: 1px solid #1e2b1e;
+    display: flex; z-index: 40;
+  }
+  .tab-bar button {
+    flex: 1; background: transparent; border: none; color: #5a6b5a;
+    font-family: inherit; font-size: 10px; letter-spacing: 0.06em;
+    padding: 8px 4px 4px; cursor: pointer;
+  }
+  .tab-bar button.active { color: #5eff8f; }
+  body.pane-alerts .table-wrap { display: none; }
+  body.pane-table .alerts-panel { display: none; }
+  .bg-banner {
+    display: none; position: sticky; top: 0; z-index: 30;
+    background: #1e1810; color: #ffd85e; border-bottom: 1px solid #4a3a1e;
+    padding: 8px 12px; font-size: 11px; line-height: 1.4;
+  }
+  body.backgrounded .bg-banner { display: block; }
+  @media (max-width: 900px) {
+    body { font-size: 11px; }
+    .header { padding: 8px 10px; }
+    .brand-title { font-size: 11px; letter-spacing: 0.12em; }
+    .stats { gap: 8px; font-size: 10px; }
+    .controls { gap: 6px; }
+    .hint { display: none; }
+    .body-wrap { flex-direction: column; flex: 1; overflow: hidden; min-height: 0; }
+    .table-wrap { flex: 1; max-height: none; overflow: auto; -webkit-overflow-scrolling: touch; }
+    thead { position: sticky; top: 0; }
+    .alerts-panel {
+      width: 100%; border-left: none; flex: 1; min-height: 0;
+      display: flex; flex-direction: column;
+    }
+    body.pane-table .alerts-panel { display: none; }
+    body.pane-alerts .table-wrap { display: none; }
+    body.pane-alerts .alerts-panel { display: flex; }
+    .alerts-list { overflow: auto; -webkit-overflow-scrolling: touch; }
+    td, th { padding: 8px 6px; }
+    .del-btn { width: 28px; height: 28px; }
+  }
+
+</style>
+</head>
+<body>
+
+<div class="bg-banner" id="bg-banner">Фон: поток приостановлен, база сохранена. Откройте приложение — данные на месте, сокет переподключится.</div>
+<div class="header">
+  <div class="header-top">
+    <div class="brand">
+      <div class="brand-icon">⚡</div>
+      <div>
+        <div class="brand-title">VOLUME SCANNER · EARLY v15</div>
+        <div class="brand-sub">BINANCE · SPOT + USDT-M · SCORE · цена+стакан+тейкер</div>
+      </div>
+    </div>
+    <div class="stats">
+      <span id="status-line">…</span>
+      <span class="stat-label">SESSION <span class="stat-val" id="session-clock">00:00:00</span></span>
+      <span class="stat-label">TRACKED <span class="stat-val" id="tracked-count">0</span></span>
+      <span class="stat-label">TRIGGERED <span class="stat-val warn" id="triggered-count">0</span></span>
+      <span class="stat-label">EARLY <span class="stat-val early" id="early-count">0</span></span>
+    </div>
+  </div>
+  <div class="controls">
+    <div class="market-toggle" id="market-toggle">
+      <button data-market="ALL" class="active">ВСЕ</button>
+      <button data-market="SPOT">SPOT</button>
+      <button data-market="USDT-M">USDT-M</button>
+    </div>
+    <div class="box">
+      <span>🔍</span>
+      <input id="search-input" placeholder="фильтр (BTC, ETH...)">
+    </div>
+    <div class="box">
+      <span>⚙</span>
+      <span class="stat-label">порог 10с $</span>
+      <input id="threshold-input" value="50000">
+      <button class="ok-btn" id="apply-threshold">OK</button>
+    </div>
+    <div class="box">
+      <span>⚡</span>
+      <span class="stat-label">порог Δ1м $</span>
+      <input id="threshold-1m-input" value="30000">
+      <button class="ok-btn" id="apply-threshold-1m">OK</button>
+    </div>
+    <div class="box">
+      <span>⚡</span>
+      <span class="stat-label">порог Δ2м $</span>
+      <input id="threshold-2m-input" value="50000">
+      <button class="ok-btn" id="apply-threshold-2m">OK</button>
+    </div>
+    <div class="box">
+      <span>⚙</span>
+      <span class="stat-label">макс. цена $</span>
+      <input id="max-price-input" value="10">
+      <button class="ok-btn" id="apply-max-price">OK</button>
+    </div>
+    <div class="box">
+      <span>⚙</span>
+      <span class="stat-label">макс. нач. объём $</span>
+      <input id="max-volume-input" value="3000000">
+      <button class="ok-btn" id="apply-max-volume">OK</button>
+    </div>
+    <div class="box">
+      <span>⭐</span>
+      <span class="stat-label">score ≥</span>
+      <input id="score-threshold-input" value="60">
+      <button class="ok-btn" id="apply-score-threshold">OK</button>
+    </div>
+    <button class="reset-btn" id="score-only-btn">⭐ ТОЛЬКО SCORE: ВЫКЛ</button>
+    <button class="reset-btn" id="taker-btn">🔥 ТЕЙКЕР-ПОТОК: ВКЛ</button>
+    <button class="reset-btn" id="sort-btn">⇅ СОРТ: Δ ОБЪЁМА</button>
+    <button class="reset-btn" id="csv-btn">💾 CSV</button>
+    <button class="reset-btn" id="reset-btn">↺ СБРОС БАЗЫ</button>
+    <button class="sound-btn" id="sound-btn">🔊 ЗВУК: ВКЛ</button>
+    <button class="reset-btn" id="notif-btn">🔔 РАЗРЕШИТЬ УВЕДОМЛЕНИЯ</button>
+    <button class="reset-btn" id="stop-btn">⏸ СТОП</button>
+    <button class="reset-btn" id="wakelock-btn">💡 НЕ ГАСИТЬ ЭКРАН: ВЫКЛ</button>
+    <button class="reset-btn" id="stats-btn">📊 СТАТИСТИКА</button>
+    <button class="reset-btn" id="early-only-btn">⚡ ТОЛЬКО РАННИЕ: ВЫКЛ</button>
+    <div class="hint" id="poll-hint">live: websocket</div>
+  </div>
+  <div class="shelf-panel" id="shelf-panel">
+    <div class="shelf-header">🪤 ТИХАЯ ПОЛКА</div>
+    <div class="shelf-list" id="shelf-list">
+      <div class="shelf-empty">Пока нет.</div>
+    </div>
+  </div>
+  <div class="filters-hint">
+    <b>⭐ SCORE (0–100)</b> — главный сигнал: складывает RVOL (объём против средней минуты суток), Δ% цены за 1м, пробой дневного хая, положение к VWAP, скачок среднего чека сделки, перекос стакана и долю тейкер-покупок. Стреляет только при score ≥ порога И растущей цене. «ТОЛЬКО SCORE» глушит старые пороговые сигналы.
+    <b>Пороговые:</b> SPIKE (10с), VEL1M/VEL2M, ACCEL (наклон за 90с). <b>🪤 Тихая полка</b> — первый вынос у пары, которая долго стояла ровно; в течение 10 мин после неё score получает бонус.
+    <b>🔥 Тейкер-поток</b> — kline_1m по 12 самым горячим спот-парам, даёт долю покупок по рынку. <b>💾 CSV</b> — выгрузка всех сигналов с признаками и MFE/MAE для разбора.
+    Отбор при первом появлении: цена &lt; $10, нач. объём ≤ $3M. UTK и Alpha исключены.
+  </div>
+  <div id="stats-panel" style="display:none; margin-top:10px; border:1px solid #1e2b1e; border-radius:2px; background:#0a0e0a; padding:10px 12px;">
+    <div style="font-size:10px; color:#5a6b5a; letter-spacing:0.05em; margin-bottom:8px;">📊 СТАТИСТИКА ПО СИГНАЛАМ — что было с ценой ПОСЛЕ срабатывания (не рекомендация)</div>
+    <div id="stats-content" style="font-size:11px; line-height:1.7;"></div>
+  </div>
+</div>
+
+<div class="body-wrap">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>РЫНОК</th>
+          <th>ПАРА</th>
+          <th>НАЧ. ЦЕНА</th>
+          <th>ТЕК. ЦЕНА</th>
+          <th>24Ч %</th>
+          <th>НАЧ. ОБЪЁМ</th>
+          <th>ТЕК. ОБЪЁМ</th>
+          <th>Δ ОБЪЁМА</th>
+          <th>×</th>
+          <th>Δ1м</th>
+          <th>Δ2м</th>
+          <th>⭐ SCORE</th>
+          <th>Δ% 1м</th>
+          <th>RVOL</th>
+          <th>ЧЕК СДЕЛКИ</th>
+          <th>ДИАП/VWAP</th>
+          <th>ТЕЙКЕР</th>
+          <th>МЕСТО / Δ30с</th>
+          <th></th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="table-body">
+        <tr><td colspan="20" class="empty-row">подключение к Binance…</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="alerts-panel">
+    <div class="alerts-header">🔔 ЖУРНАЛ СИГНАЛОВ</div>
+    <div class="alerts-tabs" id="alerts-tabs">
+      <button data-tab="all" class="active">ВСЕ</button>
+      <button data-tab="early" class="early-tab">РАННИЕ</button>
+    </div>
+    <div class="alerts-list" id="alerts-list">
+      <div class="alerts-empty">Здесь появятся сигналы: ⭐ SCORE, SPIKE, VEL1M/VEL2M, ACCEL.</div>
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  <span>Данные: Binance WS !ticker@arr (~1с) + kline_1m по горячим парам · v15: score, цена, стакан, тейкер, MFE/MAE <span id="hot-badge"></span></span>
+  <span>Не является финансовой рекомендацией</span>
+</div>
+<nav class="tab-bar" id="tab-bar">
+  <button data-pane="table" class="active">ТАБЛИЦА</button>
+  <button data-pane="alerts">СИГНАЛЫ</button>
+</nav>
+
+<script>
+const MARKETS = [
+  { id: "SPOT", label: "SPOT", wsUrl: "wss://stream.binance.com:9443/ws/!ticker@arr", restUrl: "https://api.binance.com/api/v3/ticker/24hr" },
+  { id: "USDT-M", label: "USDT-M", wsUrl: "wss://fstream.binance.com/ws/!ticker@arr", restUrl: "https://fapi.binance.com/fapi/v1/ticker/24hr" },
+];
+// !ticker@arr pushes 24hr ticker stats for changed symbols ~once/sec — no polling needed
+// while it's actually delivering data. If it opens but stays silent (blocked stream port,
+// flaky mobile network, etc.) we fall back to REST polling automatically — see watchdog below.
+const REST_POLL_INTERVAL_MS = 4000;
+const WS_STALE_MS = 8000;              // no message this long after connect/last message = treat as dead
+const WS_MAX_FAILS_BEFORE_FALLBACK = 2; // consecutive stale cycles before switching that market to REST
+const WS_PROBE_INTERVAL_MS = 180000;    // while on REST fallback, retry WS in the background this often
+let feedMode = {};        // market.id -> "ws" | "rest"
+let wsFailStreak = {};    // market.id -> consecutive stale-connection count
+let wsOpenAt = {};        // market.id -> timestamp of last successful ws open
+let restTimer = {};       // market.id -> REST fallback interval handle
+let wsProbeTimer = {};    // market.id -> pending WS-recovery probe timeout
+const RESYNC_GAP_MS = 15000;     // gap after which we treat the feed as having resynced (tab was backgrounded, reconnect, etc.)
+const RECONNECT_BASE_MS = 1000;
+const RECONNECT_MAX_MS = 30000;
+let sockets = {};                // market.id -> WebSocket
+let reconnectDelay = {};         // market.id -> current backoff ms
+let reconnectTimer = {};         // market.id -> setTimeout handle
+let maxInitialPrice = 10;
+let maxInitialVolume = 3_000_000;
+const STORAGE_KEY = "binance_volume_scanner_early_v1";
+const IDB_NAME = "volscan_pwa_v15";
+const IDB_STORE = "kv";
+const IS_MOBILE = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && window.innerWidth < 900);
+const PERSIST_INTERVAL_MS = IS_MOBILE ? 12000 : 8000;
+const RENDER_INTERVAL_MS = IS_MOBILE ? 900 : 500;
+let persistTimer = null;
+let persistDirty = false;
+let lastPersistAt = 0;
+let appHidden = false;
+
+function openIdb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE);
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+function idbPut(key, value) {
+  return openIdb().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, "readwrite");
+    tx.objectStore(IDB_STORE).put(value, key);
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  }));
+}
+function idbGet(key) {
+  return openIdb().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, "readonly");
+    const q = tx.objectStore(IDB_STORE).get(key);
+    q.onsuccess = () => { db.close(); resolve(q.result); };
+    q.onerror = () => { db.close(); reject(q.error); };
+  }));
+}
+function idbDel(key) {
+  return openIdb().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, "readwrite");
+    tx.objectStore(IDB_STORE).delete(key);
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  }));
+}
+async function requestPersistentStorage() {
+  try {
+    if (navigator.storage && navigator.storage.persist) {
+      const already = await navigator.storage.persisted();
+      if (!already) await navigator.storage.persist();
+    }
+  } catch (e) {}
+}
+
+let threshold = 50000;       // 10-sec spike
+let threshold1m = 30000;     // 1-minute volume growth
+let threshold2m = 50000;     // 2-minute volume growth
+let soundOn = true;
+let paused = false;
+let earlyOnlyMode = false;   // table shows only pairs with recent early signals
+let alertsTab = "all";       // "all" | "early"
+
+let rows = {};
+let sessionBase = {};
+let baseTime = {};
+let priceBase = {};
+let doubleLevel = {};
+let lastFired = {};          // key -> { SPIKE:ts, VEL1M:ts, VEL2M:ts, ACCEL:ts, RANK:ts, TOP30:ts, TOP15:ts }
+let signalCount = {};
+let history = {};            // key -> [{t, vol}, ...]
+const HISTORY_WINDOW_MS = 10000;
+const HISTORY_1M_MS = 60000;
+const HISTORY_2M_MS = 120000;
+const HISTORY_MAX_AGE_MS = 150000; // keep ~2.5 min
+const ANCHOR_TOLERANCE_MS = 8000;
+let alertsLog = [];
+const ALERTS_LOG_MAX = 400;
+let lastPollAt = {};
+
+let outcomes = [];
+let outcomesByKey = {};
+const OUTCOMES_MAX = 1000;
+let statsVisible = false;
+
+// Rank tracking
+let rankSnapshot = {};
+let lastComputedRanks = {};
+let lastRankSnapshotAt = 0;
+
+// ---- shelf-baseline state (для QUIET) — not persisted, same as history[] ----
+const SLOPE_WINDOW_MS = 90000;                 // regression window for ACCEL slope
+const RATE_SAMPLE_INTERVAL_MS = 55000;         // how often we sample d1m into the baseline
+const RATE_BASELINE_MAX = 22;                  // ~20 min of baseline samples
+const RVOL_MIN_SAMPLES = 6;
+const RVOL_MIN_ABS = 1500;                     // floor so a near-zero median doesn't fire on dust
+const QUIET_MIN_SAMPLES = 8;
+const QUIET_STD_FACTOR = 0.6;                  // baseline std below median*this AND median itself low => "quiet shelf"
+const QUIET_BREAK_MULT = 3;                    // first tick that breaks the shelf by this much over its own baseline
+
+let rateHistory = {};        // key -> [d1m samples] (baseline for quiet-shelf median/std)
+let lastRateSampleAt = {};   // key -> ts of last baseline sample
+
+// ---- v15: цена, стакан, поток тейкера, composite score ----------------------
+// Вся идея v15: «вынос» — это не объём сам по себе, а объём ПЛЮС цена плюс то,
+// как выглядит стакан и кто агрессор. До v14 все сигналы считались только по
+// объёму, поэтому распродажа в бид и импульс вверх выглядели одинаково.
+const FEAT_BASELINE_MAX = 22;            // столько же сэмплов, сколько у rateHistory
+const SCORE_COOLDOWN_MS = 120000;        // не чаще раза в 2 мин на пару
+const SCORE_MIN_BASE_AGE_MS = 60000;     // не стреляем по свежедобавленной паре
+const TAKER_STALE_MS = 180000;           // тейкер-доля старше 3 мин считается неизвестной
+let scoreThreshold = 60;                 // порог composite score (0..100)
+let scoreOnlyMode = false;               // если ВКЛ — в журнал идут только SCORE-сигналы
+let sortMode = "delta";                  // "delta" | "score"
+let takerStreamOn = true;                // kline_1m по «горячим» парам ради taker buy ratio
+
+let atsHistory = {};         // key -> [средний размер сделки за минуту]
+let spreadHistory = {};      // key -> [спред, %]
+let imbalHistory = {};       // key -> [перекос стакана bid/(bid+ask)]
+let dayHigh = {};            // key -> последний виденный 24ч максимум
+let dayHighAt = {};          // key -> когда максимум в последний раз обновился (= пробой)
+let dayLow = {};             // key -> последний виденный 24ч минимум
+let takerRatio = {};         // key -> { r, at } из kline_1m «горячего» потока
+
+// тихая полка — отдельный список над журналом, не смешивается с пороговыми сигналами
+let shelfAlerts = [];
+const SHELF_ALERTS_MAX = 8;
+
+const RANK_SNAPSHOT_INTERVAL_MS = 30000;
+const RANK_CLIMB_HIGHLIGHT = 15;
+const TOP_N_30 = 30;
+const TOP_N_15 = 15;
+let everInTop30 = {};                // key -> true once entered top-30
+let everInTop15 = {};                // key -> true once entered top-15
+let lastRankSignalAt = {};           // cooldown per key for RANK signals
+
+const EXCLUDED_SYMBOLS = new Set([
+  "UTKUSDT",
+  "ONTUSDT", "IDEXUSDT", "MBOXUSDT", "FARMUSDT", "MLNUSDT",
+  "ATAUSDT", "FORTHUSDT", "DEGOUSDT", "TRUUSDT",
+  "HOOKUSDT", "PHBUSDT", "HIGHUSDT", "SYSUSDT",
+  "MDTUSDT", "FUNUSDT", "DENTUSDT", "COSUSDT",
+  "OXTUSDT", "FIOUSDT", "SXPUSDT", "LRCUSDT",
+  "A2ZUSDT", "DUSDT", "NTRNUSDT", "RDNTUSDT",
+  "WANUSDT",
+]);
+function isExcluded(symbol) {
+  return EXCLUDED_SYMBOLS.has(symbol) || symbol.toUpperCase().includes("ALPHA");
+}
+function purgeKey(key) {
+  delete rows[key]; delete sessionBase[key]; delete baseTime[key]; delete priceBase[key];
+  delete doubleLevel[key]; delete lastFired[key]; delete history[key]; delete signalCount[key];
+  delete rankSnapshot[key]; delete lastComputedRanks[key];
+  delete everInTop30[key]; delete everInTop15[key]; delete lastRankSignalAt[key];
+  delete rateHistory[key]; delete lastRateSampleAt[key];
+  delete atsHistory[key]; delete spreadHistory[key]; delete imbalHistory[key];
+  delete dayHigh[key]; delete dayHighAt[key]; delete dayLow[key]; delete takerRatio[key];
+  shelfAlerts = shelfAlerts.filter(e => e.key !== key);
+  alertsLog = alertsLog.filter(e => e.key !== key);
+  delete outcomesByKey[key];
+}
+let marketFilter = "ALL";
+let searchTerm = "";
+let startTime = Date.now();
+let msgCounts = {};
+let errCounts = {};
+let statuses = {};
+
+// ---------- persistence (IndexedDB + debounce; localStorage only as tiny fallback) ----------
+function buildPayload() {
+  // не пишем history/rateHistory/takerRatio — они восстанавливаются с ленты за секунды
+  // режем outcomes, чтобы не раздувать базу на телефоне
+  return {
+    rows, sessionBase, baseTime, priceBase, doubleLevel, lastFired, signalCount,
+    alertsLog: [],
+    shelfAlerts: [],
+    outcomes: [],
+    threshold, threshold1m, threshold2m, maxInitialPrice, maxInitialVolume,
+    scoreThreshold, scoreOnlyMode, sortMode, takerStreamOn,
+    everInTop30, everInTop15,
+    startTime, savedAt: Date.now(),
+  };
+}
+function applyPayload(payload) {
+  if (!payload || typeof payload !== "object") return false;
+  rows = payload.rows || {};
+  sessionBase = payload.sessionBase || {};
+  baseTime = payload.baseTime || {};
+  priceBase = payload.priceBase || {};
+  doubleLevel = payload.doubleLevel || {};
+  lastFired = payload.lastFired || {};
+  signalCount = payload.signalCount || {};
+  alertsLog = [];
+  shelfAlerts = [];
+  outcomes = [];
+  outcomesByKey = {};
+  outcomes.forEach(o => {
+    if (!o.done) {
+      if (!outcomesByKey[o.key]) outcomesByKey[o.key] = [];
+      outcomesByKey[o.key].push(o);
+    }
+  });
+  threshold = payload.threshold || threshold;
+  threshold1m = payload.threshold1m || threshold1m;
+  threshold2m = payload.threshold2m || threshold2m;
+  maxInitialPrice = payload.maxInitialPrice || maxInitialPrice;
+  maxInitialVolume = payload.maxInitialVolume || maxInitialVolume;
+  scoreThreshold = payload.scoreThreshold || scoreThreshold;
+  scoreOnlyMode = !!payload.scoreOnlyMode;
+  sortMode = payload.sortMode === "score" ? "score" : "delta";
+  takerStreamOn = payload.takerStreamOn !== false;
+  everInTop30 = payload.everInTop30 || {};
+  everInTop15 = payload.everInTop15 || {};
+  startTime = payload.startTime || Date.now();
+  return true;
+}
+function saveState() {
+  persistDirty = true;
+}
+async function flushState(force) {
+  if (!persistDirty && !force) return;
+  const now = Date.now();
+  if (!force && now - lastPersistAt < 2500) return;
+  persistDirty = false;
+  lastPersistAt = now;
+  const payload = buildPayload();
+  try {
+    await idbPut("state", payload);
+  } catch (e) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ savedAt: payload.savedAt, startTime: payload.startTime })); } catch (e2) {}
+  }
+}
+function loadState() {
+  // sync fallback only — async IDB load happens at boot
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY + "_boot");
+    if (!raw) return false;
+    return applyPayload(JSON.parse(raw));
+  } catch (e) { return false; }
+}
+async function loadStateAsync() {
+  try {
+    const fromIdb = await idbGet("state");
+    if (fromIdb) return applyPayload(fromIdb);
+  } catch (e) {}
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return applyPayload(JSON.parse(raw));
+  } catch (e) {}
+  return false;
+}
+function clearState() {
+  try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+  idbDel("state").catch(() => {});
+}
+
+// ---------- formatting ----------
+function fmtMoney(n) {
+  if (n === null || n === undefined || isNaN(n)) return "—";
+  const abs = Math.abs(n);
+  if (abs >= 1e9) return (n / 1e9).toFixed(2) + "B";
+  if (abs >= 1e6) return (n / 1e6).toFixed(2) + "M";
+  if (abs >= 1e3) return (n / 1e3).toFixed(1) + "K";
+  return n.toFixed(0);
+}
+function fmtPrice(n) {
+  if (n === null || n === undefined || isNaN(n)) return "—";
+  if (n >= 1) return n.toFixed(4);
+  return n.toPrecision(4);
+}
+function fmtClock(sec) {
+  const h = String(Math.floor(sec / 3600)).padStart(2, "0");
+  const m = String(Math.floor((sec % 3600) / 60)).padStart(2, "0");
+  const s = String(Math.floor(sec % 60)).padStart(2, "0");
+  return `${h}:${m}:${s}`;
+}
+function fmtTime(ts) {
+  return new Date(ts).toLocaleTimeString();
+}
+function fmtTimeMinusHour(ts) {
+  return new Date(ts - 3600000).toLocaleTimeString();
+}
+
+// ---------- sound ----------
+let audioCtx = null;
+function beep(freq, durationMs) {
+  if (!soundOn) return;
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.frequency.value = freq;
+    osc.type = "sine";
+    gain.gain.setValueAtTime(0.001, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.25, audioCtx.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + durationMs / 1000);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + durationMs / 1000 + 0.02);
+  } catch (e) {}
+}
+function doubleBeep() {
+  beep(880, 160);
+  setTimeout(() => beep(1180, 220), 180);
+}
+function earlyBeep() {
+  // higher, snappier tone for early signals
+  beep(1320, 90);
+  setTimeout(() => beep(1560, 110), 100);
+}
+function signalBeep() {
+  // отдельный, ни на что не похожий звук для composite SCORE
+  beep(880, 90);
+  setTimeout(() => beep(1320, 90), 95);
+  setTimeout(() => beep(1760, 160), 195);
+}
+function rankBeep() {
+  beep(660, 80);
+  setTimeout(() => beep(880, 100), 90);
+  setTimeout(() => beep(1100, 120), 200);
+}
+
+// ---------- notifications ----------
+let notifPermission = (typeof Notification !== "undefined") ? Notification.permission : "unsupported";
+function updateNotifButton() {
+  const btn = document.getElementById("notif-btn");
+  if (notifPermission === "granted") {
+    btn.textContent = "🔔 УВЕДОМЛЕНИЯ: ВКЛ";
+  } else if (notifPermission === "unsupported") {
+    btn.textContent = "🔔 недоступно в этом браузере";
+    btn.disabled = true;
+  } else {
+    btn.textContent = "🔔 РАЗРЕШИТЬ УВЕДОМЛЕНИЯ";
+  }
+}
+function requestNotifPermission() {
+  if (typeof Notification === "undefined") return;
+  Notification.requestPermission().then((perm) => {
+    notifPermission = perm;
+    updateNotifButton();
+    if (perm === "granted") {
+      new Notification("Volume Scanner", { body: "Уведомления включены" });
+    }
+  });
+}
+function notify(title, body) {
+  if (notifPermission !== "granted") return;
+  try {
+    const n = new Notification(title, { body, tag: title });
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+  } catch (e) {}
+}
+
+// ---------- parsing ----------
+function matchQuote(symbol) {
+  return symbol.endsWith("USDT") ? "USDT" : null;
+}
+function numOrNull(v) {
+  if (v === undefined || v === null) return null;
+  const n = parseFloat(v);
+  return isNaN(n) ? null : n;
+}
+function parseTick(t) {
+  const symbol = t.symbol;
+  const quote = matchQuote(symbol);
+  if (!quote) return null;
+  const curVol = parseFloat(t.quoteVolume);
+  const price = parseFloat(t.lastPrice);
+  const pct = parseFloat(t.priceChangePercent);
+  if (isNaN(curVol) || isNaN(price)) return null;
+  return {
+    symbol, base: symbol.slice(0, symbol.length - quote.length), quote, price, pct, curVol,
+    // extra fields already present in the same !ticker@arr / REST 24hr message — no new stream needed
+    trades: numOrNull(t.count),
+    bidPrice: numOrNull(t.bidPrice), bidQty: numOrNull(t.bidQty),
+    askPrice: numOrNull(t.askPrice), askQty: numOrNull(t.askQty),
+    vwap: numOrNull(t.weightedAvgPrice), high: numOrNull(t.highPrice), low: numOrNull(t.lowPrice),
+  };
+}
+
+// ---------- history helpers ----------
+function findAnchor(samples, now, windowMs) {
+  let anchor = null;
+  for (const sample of samples) {
+    if (now - sample.t >= windowMs) anchor = sample;
+  }
+  return anchor;
+}
+function rollingDelta(samples, now, windowMs, curVol) {
+  const anchor = findAnchor(samples, now, windowMs);
+  if (!anchor) return null;
+  const age = now - anchor.t;
+  if (age > windowMs + ANCHOR_TOLERANCE_MS) return null;
+  return curVol - anchor.vol;
+}
+function rollingDeltaField(samples, now, windowMs, curVal, field) {
+  const anchor = findAnchor(samples, now, windowMs);
+  if (!anchor) return null;
+  const age = now - anchor.t;
+  if (age > windowMs + ANCHOR_TOLERANCE_MS) return null;
+  if (anchor[field] === null || anchor[field] === undefined) return null;
+  return curVal - anchor[field];
+}
+// Linear-regression slope of volume over a window, in $/minute. Replaces the old
+// ratio-based accel (recent30/prev30), which produced garbage multiples whenever
+// prev30 was ~0 — a straight line fit is stable even when the previous window was flat.
+function linRegSlopePerMin(samples, now, windowMs) {
+  const pts = samples.filter(s => now - s.t <= windowMs);
+  if (pts.length < 4) return null;
+  const n = pts.length;
+  let sx = 0, sy = 0, sxy = 0, sxx = 0;
+  for (const p of pts) {
+    const x = (p.t - now) / 1000; // seconds, <= 0
+    sx += x; sy += p.vol; sxy += x * p.vol; sxx += x * x;
+  }
+  const denom = n * sxx - sx * sx;
+  if (denom === 0) return null;
+  const slopePerSec = (n * sxy - sx * sy) / denom;
+  return slopePerSec * 60; // $ / minute
+}
+function computeAccel(samples, now, curVol) {
+  return linRegSlopePerMin(samples, now, SLOPE_WINDOW_MS);
+}
+function median(arr) {
+  if (!arr || !arr.length) return null;
+  const s = [...arr].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+function pushBaseline(store, key, val) {
+  if (val === null || val === undefined || isNaN(val)) return;
+  if (!store[key]) store[key] = [];
+  store[key].push(val);
+  if (store[key].length > FEAT_BASELINE_MAX) store[key].shift();
+}
+function stdev(arr) {
+  if (!arr || arr.length < 2) return null;
+  const m = arr.reduce((a, b) => a + b, 0) / arr.length;
+  const v = arr.reduce((a, b) => a + (b - m) ** 2, 0) / arr.length;
+  return Math.sqrt(v);
+}
+
+// ---------- signal helpers ----------
+function ensureLastFired(key) {
+  if (!lastFired[key] || typeof lastFired[key] !== "object") lastFired[key] = {};
+  return lastFired[key];
+}
+function canFire(key, type, cooldownMs) {
+  const lf = ensureLastFired(key);
+  const t = lf[type] || 0;
+  return (Date.now() - t) >= cooldownMs;
+}
+function markFired(key, type) {
+  ensureLastFired(key)[type] = Date.now();
+}
+function pushAlert(entry) {
+  // запись сигналов отключена по запросу — не копить журнал и не писать на диск
+  signalCount[entry.key] = (signalCount[entry.key] || 0) + 1;
+}
+function pushShelfAlert(entry) {
+  // полка тоже без записи
+}
+const EARLY_TYPES = new Set(["VEL1M", "VEL2M", "ACCEL", "SIGNAL"]); // "ранние" = быстрее, чем базовый SPIKE
+function isEarlyType(type) {
+  return EARLY_TYPES.has(type);
+}
+
+// ---------- v15: composite score ----------
+// Каждый компонент даёт баллы (или отнимает), сумма зажимается в 0..100.
+// Смысл шкалы: 60+ — совпало объёмное И ценовое подтверждение; 80+ — совпало почти всё.
+// Веса подобраны на глаз, их специально держим в одном месте, чтобы крутить по статистике.
+function computeScore(f) {
+  const parts = [];
+  let s = 0;
+
+  // 1) RVOL — во сколько раз минутный объём выше средней минуты этих суток.
+  // Это замена долларовым порогам: $30к/мин — событие для пары на $200к и пыль для пары на $3M.
+  if (f.rvol !== null) {
+    if (f.rvol >= 25)      { s += 30; parts.push("RVOL ×" + f.rvol.toFixed(0)); }
+    else if (f.rvol >= 12) { s += 22; parts.push("RVOL ×" + f.rvol.toFixed(0)); }
+    else if (f.rvol >= 6)  { s += 14; parts.push("RVOL ×" + f.rvol.toFixed(1)); }
+    else if (f.rvol >= 3)  { s += 7; }
+    else if (f.rvol < 1)   { s -= 10; }
+  }
+
+  // 2) Цена за минуту. Без этого объём одинаково выглядит и на выносе, и на сливе.
+  if (f.pct1m !== null) {
+    if (f.pct1m >= 2)         { s += 25; parts.push("+" + f.pct1m.toFixed(1) + "%/1м"); }
+    else if (f.pct1m >= 1)    { s += 18; parts.push("+" + f.pct1m.toFixed(1) + "%/1м"); }
+    else if (f.pct1m >= 0.4)  { s += 10; }
+    else if (f.pct1m <= -0.4) { s -= 18; parts.push("цена вниз"); }
+  }
+
+  // 3) Пробой дневного максимума в реальном времени (24ч high тикнул вверх только что).
+  if (f.highFresh !== null && f.highFresh <= 120000) { s += 18; parts.push("новый хай 24ч"); }
+  else if (f.rng !== null && f.rng >= 0.9)  { s += 8; }
+  else if (f.rng !== null && f.rng <= 0.35) { s -= 8; }
+
+  // 4) Цена против VWAP: выше средневзвешенной = весь дневной объём в прибыли.
+  if (f.vwapDev !== null) {
+    if (f.vwapDev >= 3)       { s += 10; parts.push("выше VWAP"); }
+    else if (f.vwapDev >= 0.5){ s += 5; }
+    else if (f.vwapDev <= -3) { s -= 5; }
+  }
+
+  // 5) Средний размер сделки против собственной медианы — «кто-то ест стакан».
+  if (f.ats !== null && f.atsMedian) {
+    const k = f.ats / f.atsMedian;
+    if (k >= 4)      { s += 15; parts.push("чек ×" + k.toFixed(1)); }
+    else if (k >= 2) { s += 8; }
+  }
+
+  // 6) Перекос стакана (bookTicker уже приходит в !ticker@arr — бесплатно).
+  if (f.imbal !== null) {
+    if (f.imbal >= 0.75)      { s += 10; parts.push("бид давит"); }
+    else if (f.imbal >= 0.6)  { s += 5; }
+    else if (f.imbal <= 0.25) { s -= 8; parts.push("аск давит"); }
+  }
+
+  // 7) Доля тейкер-покупок из kline_1m (только по «горячим» парам).
+  if (f.taker !== null) {
+    if (f.taker >= 0.7)       { s += 15; parts.push("тейкер " + Math.round(f.taker * 100) + "%"); }
+    else if (f.taker >= 0.58) { s += 7; }
+    else if (f.taker <= 0.35) { s -= 12; parts.push("тейкер продаёт"); }
+  }
+
+  // 8) Выход из тихой полки ценнее, чем продолжение уже начавшегося движения.
+  if (f.wasQuiet) { s += 12; parts.push("из тихой полки"); }
+
+  // штраф: широкий спред = неликвид, вход будет дороже сигнала
+  if (f.spreadPct !== null && f.spreadPct >= 1.5) { s -= 10; parts.push("широкий спред"); }
+
+  return { score: Math.max(0, Math.min(100, Math.round(s))), parts };
+}
+
+// ---------- v15: kline_1m по «горячим» парам (taker buy ratio) ----------
+// Полный aggTrade по 400 парам машина не потянет, а вот 12 самых горячих —
+// легко. kline_1m отдаёт поле V (taker buy base volume) уже посчитанным.
+const HOT_MAX = 12;
+const HOT_REBUILD_MS = 45000;
+let hotSocket = null;
+let hotSymbols = [];
+let lastHotRebuild = 0;
+function pickHotSymbols() {
+  return Object.values(rows)
+    .filter(r => r.market === "SPOT" && r.d1m !== null && r.d1m > 0)
+    .sort((a, b) => (b.score || 0) - (a.score || 0) || (b.d1m - a.d1m))
+    .slice(0, HOT_MAX)
+    .map(r => r.symbol.toLowerCase());
+}
+function closeHotStream() {
+  if (hotSocket) { try { hotSocket.onclose = null; hotSocket.close(); } catch (e) {} }
+  hotSocket = null;
+  hotSymbols = [];
+}
+function rebuildHotStream() {
+  if (!takerStreamOn || paused) { if (hotSocket) closeHotStream(); return; }
+  const now = Date.now();
+  if (now - lastHotRebuild < HOT_REBUILD_MS) return;
+  const next = pickHotSymbols();
+  if (!next.length) return;
+  if (next.join(",") === hotSymbols.join(",") && hotSocket && hotSocket.readyState === WebSocket.OPEN) {
+    lastHotRebuild = now;
+    return;
+  }
+  lastHotRebuild = now;
+  if (hotSocket) { try { hotSocket.onclose = null; hotSocket.close(); } catch (e) {} }
+  hotSymbols = next;
+  const url = "wss://stream.binance.com:9443/stream?streams=" + hotSymbols.map(x => x + "@kline_1m").join("/");
+  try { hotSocket = new WebSocket(url); } catch (e) { hotSocket = null; return; }
+  hotSocket.onmessage = (ev) => {
+    try {
+      const msg = JSON.parse(ev.data);
+      const k = msg && msg.data && msg.data.k;
+      if (!k) return;
+      const vol = parseFloat(k.v), buy = parseFloat(k.V);
+      if (!(vol > 0) || isNaN(buy)) return;
+      takerRatio["SPOT:" + k.s] = { r: buy / vol, at: Date.now() };
+    } catch (e) {}
+  };
+  hotSocket.onerror = () => {};
+  hotSocket.onclose = () => { hotSocket = null; };
+}
+setInterval(rebuildHotStream, 15000);
+
+// ---------- websocket feed ----------
+function wsTickerToTick(item) {
+  // Normalize Binance !ticker@arr fields (s/c/P/q/n/b/B/a/A/w/h/l) to the shape parseTick() expects.
+  return {
+    symbol: item.s, quoteVolume: item.q, lastPrice: item.c, priceChangePercent: item.P,
+    count: item.n, bidPrice: item.b, bidQty: item.B, askPrice: item.a, askQty: item.A,
+    weightedAvgPrice: item.w, highPrice: item.h, lowPrice: item.l,
+  };
+}
+function connectMarket(market) {
+  feedMode[market.id] = "ws";
+  if (reconnectTimer[market.id]) { clearTimeout(reconnectTimer[market.id]); reconnectTimer[market.id] = null; }
+  statuses[market.id] = statuses[market.id] === "ok" ? "ok" : "connecting";
+  updateStatusLine();
+
+  let ws;
+  try {
+    ws = new WebSocket(market.wsUrl);
+  } catch (e) {
+    scheduleReconnect(market);
+    return;
+  }
+  sockets[market.id] = ws;
+
+  ws.onopen = () => {
+    reconnectDelay[market.id] = RECONNECT_BASE_MS;
+    wsOpenAt[market.id] = Date.now();
+    statuses[market.id] = paused ? "paused" : "ok";
+    updateStatusLine();
+  };
+  ws.onmessage = (ev) => {
+    if (paused) { statuses[market.id] = "paused"; updateStatusLine(); return; }
+    let arr;
+    try {
+      arr = JSON.parse(ev.data);
+      if (!Array.isArray(arr)) return;
+    } catch (e) { return; }
+    wsFailStreak[market.id] = 0;
+    handleTickerBatch(market, arr.map(wsTickerToTick));
+  };
+  ws.onerror = () => {
+    errCounts[market.id] = (errCounts[market.id] || 0) + 1;
+    statuses[market.id] = "error";
+    updateStatusLine();
+  };
+  ws.onclose = () => {
+    if (sockets[market.id] === ws) sockets[market.id] = null;
+    if (!paused) { statuses[market.id] = "error"; updateStatusLine(); scheduleReconnect(market); }
+  };
+}
+function scheduleReconnect(market) {
+  if (reconnectTimer[market.id]) return;
+  const delay = reconnectDelay[market.id] || RECONNECT_BASE_MS;
+  reconnectTimer[market.id] = setTimeout(() => {
+    reconnectTimer[market.id] = null;
+    connectMarket(market);
+  }, delay);
+  reconnectDelay[market.id] = Math.min(delay * 2, RECONNECT_MAX_MS);
+}
+
+// ---------- REST fallback (used when WS opens but delivers no data — blocked stream port, etc.) ----------
+function startRestFallback(market) {
+  if (feedMode[market.id] === "rest") return;
+  feedMode[market.id] = "rest";
+  statuses[market.id] = "connecting";
+  updateStatusLine();
+  const ws = sockets[market.id];
+  if (ws) { try { ws.onopen = ws.onmessage = ws.onerror = ws.onclose = null; ws.close(); } catch (e) {} sockets[market.id] = null; }
+  if (reconnectTimer[market.id]) { clearTimeout(reconnectTimer[market.id]); reconnectTimer[market.id] = null; }
+  pollRestOnce(market);
+  restTimer[market.id] = setInterval(() => pollRestOnce(market), REST_POLL_INTERVAL_MS);
+  scheduleWsProbe(market);
+}
+async function pollRestOnce(market) {
+  if (paused) { statuses[market.id] = "paused"; updateStatusLine(); return; }
+  try {
+    const res = await fetch(market.restUrl, { cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const arr = await res.json();
+    if (!Array.isArray(arr)) throw new Error("unexpected response shape");
+    handleTickerBatch(market, arr); // REST field names already match parseTick()
+  } catch (e) {
+    errCounts[market.id] = (errCounts[market.id] || 0) + 1;
+    statuses[market.id] = "error";
+    updateStatusLine();
+  }
+}
+function scheduleWsProbe(market) {
+  if (wsProbeTimer[market.id]) return;
+  wsProbeTimer[market.id] = setTimeout(() => {
+    wsProbeTimer[market.id] = null;
+    if (feedMode[market.id] !== "rest" || paused) return;
+    probeWs(market);
+  }, WS_PROBE_INTERVAL_MS);
+}
+function probeWs(market) {
+  // Try a WS connection in the background without disturbing the REST fallback that's currently running.
+  let probe;
+  try { probe = new WebSocket(market.wsUrl); } catch (e) { scheduleWsProbe(market); return; }
+  let settled = false;
+  const timeout = setTimeout(() => {
+    if (settled) return;
+    settled = true;
+    try { probe.close(); } catch (e) {}
+    scheduleWsProbe(market);
+  }, WS_STALE_MS);
+  probe.onmessage = () => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timeout);
+    try { probe.close(); } catch (e) {}
+    switchToWs(market); // it's alive again — switch back
+  };
+  probe.onerror = () => {};
+  probe.onclose = () => {};
+}
+function switchToWs(market) {
+  if (feedMode[market.id] === "ws") return;
+  if (restTimer[market.id]) { clearInterval(restTimer[market.id]); restTimer[market.id] = null; }
+  wsFailStreak[market.id] = 0;
+  connectMarket(market);
+}
+function wsWatchdogTick() {
+  const now = Date.now();
+  MARKETS.forEach(market => {
+    if (paused || feedMode[market.id] !== "ws") return;
+    const ws = sockets[market.id];
+    if (!ws || ws.readyState !== WebSocket.OPEN) return; // onclose/reconnect already handles this case
+    const lastActivity = lastPollAt[market.id] || wsOpenAt[market.id] || 0;
+    if (lastActivity && (now - lastActivity) > WS_STALE_MS) {
+      wsFailStreak[market.id] = (wsFailStreak[market.id] || 0) + 1;
+      if (wsFailStreak[market.id] >= WS_MAX_FAILS_BEFORE_FALLBACK) {
+        startRestFallback(market);
+      } else {
+        try { ws.close(); } catch (e) {} // forces onclose -> normal backoff reconnect, one more try first
+      }
+    }
+  });
+}
+setInterval(wsWatchdogTick, 3000);
+function handleTickerBatch(market, arr) {
+    msgCounts[market.id] = (msgCounts[market.id] || 0) + 1;
+    statuses[market.id] = "ok";
+
+    const now = Date.now();
+    const gapSincePrevMsg = lastPollAt[market.id] ? now - lastPollAt[market.id] : 0;
+    const resyncing = gapSincePrevMsg > RESYNC_GAP_MS;
+    lastPollAt[market.id] = now;
+
+    for (const t of arr) {
+      if (isExcluded(t.symbol)) {
+        const exKey = `${market.id}:${t.symbol}`;
+        if (rows[exKey]) purgeKey(exKey);
+        continue;
+      }
+      const parsed = parseTick(t);
+      if (!parsed) continue;
+      const key = `${market.id}:${parsed.symbol}`;
+
+      if (sessionBase[key] === undefined) {
+        if (parsed.price >= maxInitialPrice) continue;
+        if (parsed.curVol > maxInitialVolume) continue;
+        sessionBase[key] = parsed.curVol;
+        baseTime[key] = now;
+        priceBase[key] = parsed.price;
+        doubleLevel[key] = 1;
+      }
+
+      const base = sessionBase[key];
+      const delta = parsed.curVol - base;
+      const mult = base > 0 ? parsed.curVol / base : 1;
+
+      // history
+      if (!history[key]) history[key] = [];
+      history[key].push({ t: now, vol: parsed.curVol, n: parsed.trades, p: parsed.price });
+      while (history[key].length && now - history[key][0].t > HISTORY_MAX_AGE_MS) history[key].shift();
+
+      const rolling10 = rollingDelta(history[key], now, HISTORY_WINDOW_MS, parsed.curVol);
+      const d1m = rollingDelta(history[key], now, HISTORY_1M_MS, parsed.curVol);
+      const d2m = rollingDelta(history[key], now, HISTORY_2M_MS, parsed.curVol);
+      const accel = computeAccel(history[key], now, parsed.curVol); // now a $/min slope, see linRegSlopePerMin
+
+      // ---- v15 признаки: цена, сделки, диапазон, VWAP, стакан ----
+      const anchor1m = findAnchor(history[key], now, HISTORY_1M_MS);
+      const anchor2m = findAnchor(history[key], now, HISTORY_2M_MS);
+      const dp1m = rollingDeltaField(history[key], now, HISTORY_1M_MS, parsed.price, "p");
+      const dp2m = rollingDeltaField(history[key], now, HISTORY_2M_MS, parsed.price, "p");
+      const pct1m = (dp1m !== null && anchor1m && anchor1m.p) ? (dp1m / anchor1m.p) * 100 : null;
+      const pct2m = (dp2m !== null && anchor2m && anchor2m.p) ? (dp2m / anchor2m.p) * 100 : null;
+
+      // средний размер сделки за минуту: Δоборот / Δчисло сделок
+      const dn1m = (parsed.trades !== null)
+        ? rollingDeltaField(history[key], now, HISTORY_1M_MS, parsed.trades, "n") : null;
+      const ats = (dn1m !== null && dn1m >= 3 && d1m !== null && d1m > 0) ? d1m / dn1m : null;
+
+      // RVOL — минутный оборот против средней минуты суток (curVol/1440)
+      const expMinVol = parsed.curVol > 0 ? parsed.curVol / 1440 : null;
+      const rvol = (d1m !== null && expMinVol) ? d1m / expMinVol : null;
+
+      // положение в дневном диапазоне и отклонение от VWAP
+      const rng = (parsed.high !== null && parsed.low !== null && parsed.high > parsed.low)
+        ? (parsed.price - parsed.low) / (parsed.high - parsed.low) : null;
+      const vwapDev = (parsed.vwap && parsed.vwap > 0) ? (parsed.price / parsed.vwap - 1) * 100 : null;
+
+      // стакан прямо из полей тикера — нового стрима не нужно
+      const spreadPct = (parsed.bidPrice && parsed.askPrice && parsed.bidPrice > 0)
+        ? ((parsed.askPrice - parsed.bidPrice) / parsed.bidPrice) * 100 : null;
+      const imbal = (parsed.bidQty !== null && parsed.askQty !== null && (parsed.bidQty + parsed.askQty) > 0)
+        ? parsed.bidQty / (parsed.bidQty + parsed.askQty) : null;
+
+      // 24ч максимум — «храповик»: если он тикнул вверх, это и есть пробой в моменте
+      if (parsed.high !== null && parsed.high > 0) {
+        if (dayHigh[key] === undefined) dayHigh[key] = parsed.high;
+        else if (parsed.high > dayHigh[key]) { dayHigh[key] = parsed.high; dayHighAt[key] = now; }
+      }
+      if (parsed.low !== null && parsed.low > 0) dayLow[key] = parsed.low;
+      const highFresh = dayHighAt[key] ? (now - dayHighAt[key]) : null;
+
+      // тейкер-доля из «горячего» kline-потока (может отсутствовать — тогда null)
+      const tk = takerRatio[key];
+      const taker = (tk && (now - tk.at) <= TAKER_STALE_MS) ? tk.r : null;
+
+      // periodic baseline sampling for QUIET (mirrors how history[] already isn't persisted)
+      if (d1m !== null && (now - (lastRateSampleAt[key] || 0)) >= RATE_SAMPLE_INTERVAL_MS) {
+        if (!rateHistory[key]) rateHistory[key] = [];
+        rateHistory[key].push(d1m);
+        if (rateHistory[key].length > RATE_BASELINE_MAX) rateHistory[key].shift();
+        pushBaseline(atsHistory, key, ats);
+        pushBaseline(spreadHistory, key, spreadPct);
+        pushBaseline(imbalHistory, key, imbal);
+        lastRateSampleAt[key] = now;
+      }
+      const rvolBaseline = rateHistory[key] || [];
+      const rvolMedian = rvolBaseline.length >= RVOL_MIN_SAMPLES ? median(rvolBaseline) : null;
+      const rvolStd = rvolBaseline.length >= QUIET_MIN_SAMPLES ? stdev(rvolBaseline) : null;
+      const atsMedian = (atsHistory[key] && atsHistory[key].length >= 4) ? median(atsHistory[key]) : null;
+
+      // была ли тихая полка в последние 10 минут — вынос из сжатия ценится выше
+      const lfQuiet = (lastFired[key] && lastFired[key].QUIET) || 0;
+      const wasQuiet = lfQuiet > 0 && (now - lfQuiet) <= 600000;
+
+      const scoreObj = computeScore({
+        rvol, pct1m, pct2m, rng, vwapDev, ats, atsMedian, imbal, spreadPct, highFresh, taker, wasQuiet,
+      });
+
+      // age of base — ignore very first minutes for some signals to reduce noise
+      const baseAge = now - (baseTime[key] || now);
+
+      rows[key] = {
+        key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
+        price: parsed.price, pct: parsed.pct, baseVol: base, baseAt: baseTime[key],
+        priceBase: priceBase[key], priceAt: baseTime[key],
+        curVol: parsed.curVol, delta, mult,
+        rollingDelta: rolling10, d1m, d2m, accel,
+        // v15
+        pct1m, pct2m, rvol, ats, atsMedian, rng, vwapDev, spreadPct, imbal, taker,
+        highFresh, trades: parsed.trades,
+        score: scoreObj.score, scoreParts: scoreObj.parts,
+        lastTick: now,
+      };
+
+      // outcomes
+      const pendingOutcomes = outcomesByKey[key];
+      if (pendingOutcomes && pendingOutcomes.length) {
+        for (const o of pendingOutcomes) {
+          const elapsed = now - o.signalTime;
+          // MFE/MAE — бегущий максимум/минимум, а не снапшот. Снапшот на 15-й минуте
+          // показывает ноль, даже если пара сходила +30% на седьмой и откатилась.
+          if (o.signalPrice > 0) {
+            const chg = ((parsed.price - o.signalPrice) / o.signalPrice) * 100;
+            if (o.mfe === undefined || o.mfe === null || chg > o.mfe) { o.mfe = chg; o.mfeAt = elapsed; }
+            if (o.mae === undefined || o.mae === null || chg < o.mae) { o.mae = chg; o.maeAt = elapsed; }
+          }
+          if (o.p1 === null && elapsed >= 60000) { o.p1 = parsed.price; o.v1 = parsed.curVol; o.t1 = now; }
+          if (o.p5 === null && elapsed >= 300000) { o.p5 = parsed.price; o.v5 = parsed.curVol; o.t5 = now; }
+          if (o.p15 === null && elapsed >= 900000) { o.p15 = parsed.price; o.v15 = parsed.curVol; o.t15 = now; o.done = true; }
+        }
+        outcomesByKey[key] = pendingOutcomes.filter(o => !o.done);
+        if (outcomesByKey[key].length === 0) delete outcomesByKey[key];
+      }
+
+      if (resyncing) continue; // skip firing on resync cycle
+
+      // ---- пороговые сигналы: каждый по своему $ порогу из шапки, прямо в журнал ----
+      // SPIKE 10s
+      if (!scoreOnlyMode && rolling10 !== null && rolling10 >= threshold && canFire(key, "SPIKE", HISTORY_WINDOW_MS)) {
+        markFired(key, "SPIKE");
+        pushAlert({
+          key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
+          amount: rolling10, time: now, type: "SPIKE", extra: "10с",
+        });
+        notify(`⚡ SPIKE: ${parsed.base}/${parsed.quote}`, `+$${fmtMoney(rolling10)} за 10с (${market.id})`);
+        startOutcome(key, market.id, parsed, now, "SPIKE", { rvol, pct1m, ats, atsMedian, imbal, spreadPct, vwapDev, rng, taker, d1m, score: scoreObj.score, parts: scoreObj.parts });
+      }
+
+      // VEL 1M
+      if (!scoreOnlyMode && d1m !== null && d1m >= threshold1m && baseAge >= 20000 && canFire(key, "VEL1M", 45000)) {
+        markFired(key, "VEL1M");
+        pushAlert({
+          key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
+          amount: d1m, time: now, type: "VEL1M", extra: "Δ1м",
+        });
+        earlyBeep();
+        notify(`🚀 VEL1M: ${parsed.base}/${parsed.quote}`, `+$${fmtMoney(d1m)} за 1м (${market.id})`);
+        startOutcome(key, market.id, parsed, now, "VEL1M", { rvol, pct1m, ats, atsMedian, imbal, spreadPct, vwapDev, rng, taker, d1m, score: scoreObj.score, parts: scoreObj.parts });
+      }
+
+      // VEL 2M
+      if (!scoreOnlyMode && d2m !== null && d2m >= threshold2m && baseAge >= 30000 && canFire(key, "VEL2M", 60000)) {
+        markFired(key, "VEL2M");
+        pushAlert({
+          key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
+          amount: d2m, time: now, type: "VEL2M", extra: "Δ2м",
+        });
+        earlyBeep();
+        notify(`🚀 VEL2M: ${parsed.base}/${parsed.quote}`, `+$${fmtMoney(d2m)} за 2м (${market.id})`);
+        startOutcome(key, market.id, parsed, now, "VEL2M", { rvol, pct1m, ats, atsMedian, imbal, spreadPct, vwapDev, rng, taker, d1m, score: scoreObj.score, parts: scoreObj.parts });
+      }
+
+      // ACCEL — slope of a 90s linear regression, in $/min, compared against порог Δ1м.
+      // Robust replacement for the old recent30/prev30 ratio, which produced garbage
+      // multiples whenever prev30 was ~0.
+      if (!scoreOnlyMode && accel !== null && accel >= threshold1m * 0.6 && d1m !== null && d1m >= threshold1m * 0.4 && baseAge >= 40000 && canFire(key, "ACCEL", 50000)) {
+        markFired(key, "ACCEL");
+        pushAlert({
+          key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
+          amount: d1m, time: now, type: "ACCEL", extra: `наклон ${accel >= 0 ? "+" : ""}$${fmtMoney(accel)}/мин`,
+        });
+        earlyBeep();
+        notify(`🚀 ACCEL: ${parsed.base}/${parsed.quote}`, `наклон $${fmtMoney(accel)}/мин · Δ1м +$${fmtMoney(d1m)} (${market.id})`);
+        startOutcome(key, market.id, parsed, now, "ACCEL", { rvol, pct1m, ats, atsMedian, imbal, spreadPct, vwapDev, rng, taker, d1m, score: scoreObj.score, parts: scoreObj.parts });
+      }
+
+      // ---- ТИХАЯ ПОЛКА (QUIET) — отдельный сигнал, идёт не в общий журнал, а в свой
+      // пришпиленный блок над списком. Baseline низкий (медиана Δ1м заметно ниже порога
+      // Δ1м) и стабильный (маленький разброс) — настоящая полка, а не пауза в тренде.
+      if (d1m !== null && baseAge >= 60000 && rvolMedian !== null && rvolStd !== null
+          && rvolMedian < threshold1m * 0.5 && rvolStd <= Math.max(rvolMedian, 1) * QUIET_STD_FACTOR
+          && d1m >= Math.max(rvolMedian, 1) * QUIET_BREAK_MULT && d1m >= RVOL_MIN_ABS * 0.6
+          && canFire(key, "QUIET", 90000)) {
+        markFired(key, "QUIET");
+        pushShelfAlert({
+          key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
+          amount: d1m, time: now, type: "QUIET", extra: "вынос с тихой полки",
+        });
+        earlyBeep();
+        notify(`🪤 QUIET: ${parsed.base}/${parsed.quote}`, `первый вынос с тихой полки · Δ1м +$${fmtMoney(d1m)} (${market.id})`);
+        startOutcome(key, market.id, parsed, now, "QUIET", { rvol, pct1m, ats, atsMedian, imbal, spreadPct, vwapDev, rng, taker, d1m, score: scoreObj.score, parts: scoreObj.parts });
+      }
+
+      // ---- SCORE — главный сигнал v15. Не «ещё один порог», а совпадение
+      // объёма, цены, диапазона и агрессии покупателя в одном событии.
+      if (scoreObj.score >= scoreThreshold
+          && d1m !== null && d1m >= RVOL_MIN_ABS
+          && pct1m !== null && pct1m > 0
+          && baseAge >= SCORE_MIN_BASE_AGE_MS
+          && canFire(key, "SIGNAL", SCORE_COOLDOWN_MS)) {
+        markFired(key, "SIGNAL");
+        pushAlert({
+          key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
+          amount: d1m, time: now, type: "SIGNAL",
+          extra: `score ${scoreObj.score} · ` + (scoreObj.parts.slice(0, 4).join(" · ") || "—"),
+          score: scoreObj.score,
+        });
+        signalBeep();
+        notify(`⭐ SCORE ${scoreObj.score}: ${parsed.base}/${parsed.quote}`,
+               `${scoreObj.parts.slice(0, 3).join(" · ")} · Δ1м +$${fmtMoney(d1m)}`);
+        startOutcome(key, market.id, parsed, now, "SIGNAL", { rvol, pct1m, ats, atsMedian, imbal, spreadPct, vwapDev, rng, taker, d1m, score: scoreObj.score, parts: scoreObj.parts });
+      }
+
+      // doubling sound (kept)
+      const currentMultiple = mult;
+      if (currentMultiple >= doubleLevel[key] + 1) {
+        doubleLevel[key] = Math.floor(currentMultiple);
+        doubleBeep();
+        notify(`Объём x${doubleLevel[key]}: ${parsed.base}/${parsed.quote}`, `×${doubleLevel[key]} от начального (${market.id})`);
+      }
+    }
+    updateStatusLine();
+    if (!appHidden) scheduleRender();
+    saveState();
+}
+
+function startOutcome(key, marketId, parsed, now, type, feat) {
+  // запись исходов/MFE отключена
+}
+
+function startFeed(market) {
+  msgCounts[market.id] = msgCounts[market.id] || 0;
+  errCounts[market.id] = errCounts[market.id] || 0;
+  reconnectDelay[market.id] = RECONNECT_BASE_MS;
+  wsFailStreak[market.id] = 0;
+  connectMarket(market);
+}
+function updateStatusLine() {
+  const el = document.getElementById("status-line");
+  const anyOk = Object.values(statuses).some(s => s === "ok");
+  el.className = anyOk ? "live" : "err";
+  el.textContent = MARKETS.map(m =>
+    `${m.id}:${(statuses[m.id] || "…").toUpperCase().slice(0,4)}${feedMode[m.id] === "rest" ? "·REST" : ""} MSG:${msgCounts[m.id] || 0}${errCounts[m.id] ? " ERR:" + errCounts[m.id] : ""}`
+  ).join("   ");
+}
+
+// ---------- rank signals (after full ranking is known) ----------
+function processRankSignals() {
+  const now = Date.now();
+  const fullRanked = Object.values(rows).sort((a, b) => b.delta - a.delta);
+  lastComputedRanks = {};
+  fullRanked.forEach((r, i) => { lastComputedRanks[r.key] = i + 1; });
+
+  // Rank/top-30/top-15 tracking is still computed here (the МЕСТО/Δ30с column in the
+  // table depends on lastComputedRanks/rankSnapshot), but it no longer pushes into the
+  // signal journal — too noisy and not a $ threshold. Only порог-based signals fire below.
+  for (const r of fullRanked) {
+    const curRank = lastComputedRanks[r.key];
+    if (curRank <= TOP_N_30) everInTop30[r.key] = true;
+    if (curRank <= TOP_N_15) everInTop15[r.key] = true;
+  }
+}
+
+// ---------- render ----------
+let renderScheduled = false;
+let dataDirty = false;
+function scheduleRender() { dataDirty = true; }
+
+function badgeClass(m) { return "badge badge-" + m; }
+
+function pctChange(from, to) {
+  if (!from) return null;
+  return ((to - from) / from) * 100;
+}
+
+function renderStats() {
+  if (!statsVisible) return;
+  const content = document.getElementById("stats-content");
+
+  function bucket(list, field) {
+    let n = 0, sum = 0, pos = 0;
+    for (const o of list) {
+      const val = o[field];
+      if (val === null || val === undefined) continue;
+      const c = pctChange(o.signalPrice, val);
+      if (c === null) continue;
+      n++; sum += c; if (c > 0) pos++;
+    }
+    return { n, avg: n ? sum / n : null, winRate: n ? (pos / n) * 100 : null };
+  }
+  // MFE/MAE — то, ради чего это всё: максимум, до которого цена реально доходила
+  // после сигнала, и максимальная просадка. Снапшот на 15-й минуте это не показывает.
+  function excursion(list) {
+    const mfes = [], maes = [], times = [];
+    for (const o of list) {
+      if (o.mfe === undefined || o.mfe === null) continue;
+      mfes.push(o.mfe); maes.push(o.mae ?? 0);
+      if (o.mfeAt) times.push(o.mfeAt / 60000);
+    }
+    if (!mfes.length) return null;
+    const avg = a => a.reduce((x, y) => x + y, 0) / a.length;
+    const hit = t => (mfes.filter(v => v >= t).length / mfes.length) * 100;
+    return {
+      n: mfes.length, mfe: avg(mfes), medMfe: median(mfes), mae: avg(maes),
+      medTime: times.length ? median(times) : null,
+      hit1: hit(1), hit3: hit(3), hit5: hit(5),
+    };
+  }
+
+  function line(label, b) {
+    if (!b || b.n === 0) return `<div>${label}: пока нет данных</div>`;
+    const sign = b.avg >= 0 ? "+" : "";
+    return `<div>${label}: N=${b.n} · средн. ${sign}${b.avg.toFixed(2)}% · в плюсе ${b.winRate.toFixed(0)}%</div>`;
+  }
+  function exLine(label, e) {
+    if (!e) return `<div>${label}: нет данных</div>`;
+    return `<div><b>${label}</b> (N=${e.n}): макс. ход <span style="color:#5eff8f">+${e.mfe.toFixed(2)}%</span> `
+      + `(медиана +${e.medMfe.toFixed(2)}%) · просадка <span style="color:#ff6b6b">${e.mae.toFixed(2)}%</span>`
+      + (e.medTime !== null ? ` · пик через ~${e.medTime.toFixed(1)} мин` : "")
+      + ` · дошло до +1%/+3%/+5%: ${e.hit1.toFixed(0)}% / ${e.hit3.toFixed(0)}% / ${e.hit5.toFixed(0)}%</div>`;
+  }
+
+  const completed = outcomes.filter(o => o.done).length;
+  const pending = outcomes.length - completed;
+
+  const types = ["SIGNAL", "QUIET", "ACCEL", "VEL1M", "VEL2M", "SPIKE"];
+  const byType = types.map(t => {
+    const list = outcomes.filter(o => (o.type || "SPIKE") === t);
+    return list.length ? exLine(t === "SIGNAL" ? "⭐ SCORE" : t, excursion(list)) : "";
+  }).filter(Boolean).join("");
+
+  // разбивка SCORE-сигналов по силе — сразу видно, стоит ли поднимать порог
+  const sig = outcomes.filter(o => o.type === "SIGNAL" && o.score !== null);
+  const bands = [[80, 100], [70, 79], [60, 69]].map(([a, b]) => {
+    const list = sig.filter(o => o.score >= a && o.score <= b);
+    return list.length ? exLine(`score ${a}–${b}`, excursion(list)) : "";
+  }).filter(Boolean).join("");
+
+  content.innerHTML = `
+    <div>Всего сигналов: ${outcomes.length} (завершено: ${completed}, отслеживается: ${pending})</div>
+    <div style="margin:6px 0 2px; color:#5a6b5a;">— снапшоты по времени (все типы) —</div>
+    ${line("Через 1 мин", bucket(outcomes, "p1"))}
+    ${line("Через 5 мин", bucket(outcomes, "p5"))}
+    ${line("Через 15 мин", bucket(outcomes, "p15"))}
+    <div style="margin:8px 0 2px; color:#5a6b5a;">— MFE / MAE по типу сигнала (за 15 мин наблюдения) —</div>
+    ${byType || "<div>пока нет данных</div>"}
+    ${bands ? `<div style="margin:8px 0 2px; color:#5a6b5a;">— SCORE по силе —</div>${bands}` : ""}
+  `;
+}
+
+// ---------- v15 cell renderers ----------
+function scoreCell(r) {
+  const v = r.score || 0;
+  let cls = "score-low";
+  if (v >= 80) cls = "score-hot";
+  else if (v >= scoreThreshold) cls = "score-mid";
+  const parts = (r.scoreParts && r.scoreParts.length)
+    ? `<span class="score-parts">${r.scoreParts.slice(0, 3).join(" · ")}</span>` : "";
+  return `<span class="${cls}">${v}</span>${parts}`;
+}
+function pctCell(r) {
+  if (r.pct1m === null || r.pct1m === undefined) return `<span class="vel-cold">—</span>`;
+  const cls = r.pct1m >= 1 ? "vel-hot" : (r.pct1m > 0 ? "vel-warm" : "pct-neg");
+  const sub = (r.pct2m !== null && r.pct2m !== undefined)
+    ? `<span class="sub">2м ${r.pct2m >= 0 ? "+" : ""}${r.pct2m.toFixed(2)}%</span>` : "";
+  return `<span class="${cls}">${r.pct1m >= 0 ? "+" : ""}${r.pct1m.toFixed(2)}%</span>${sub}`;
+}
+function rvolCell(r) {
+  if (r.rvol === null || r.rvol === undefined) return `<span class="vel-cold">—</span>`;
+  const cls = r.rvol >= 12 ? "vel-hot" : (r.rvol >= 4 ? "vel-warm" : "vel-cold");
+  return `<span class="${cls}">×${r.rvol >= 10 ? r.rvol.toFixed(0) : r.rvol.toFixed(1)}</span>`;
+}
+function atsCell(r) {
+  if (r.ats === null || r.ats === undefined) return `<span class="vel-cold">—</span>`;
+  const k = r.atsMedian ? r.ats / r.atsMedian : null;
+  const cls = (k !== null && k >= 3) ? "vel-hot" : (k !== null && k >= 1.8 ? "vel-warm" : "");
+  const sub = k !== null ? `<span class="sub">×${k.toFixed(1)} к норме</span>` : "";
+  return `<span class="${cls}">$${fmtMoney(r.ats)}</span>${sub}`;
+}
+function rangeCell(r) {
+  if (r.rng === null || r.rng === undefined) return `<span class="vel-cold">—</span>`;
+  const pctPos = Math.max(0, Math.min(100, r.rng * 100));
+  const fresh = (r.highFresh !== null && r.highFresh !== undefined && r.highFresh <= 120000);
+  const bar = `<span class="rng-bar"><span class="rng-fill" style="width:${pctPos.toFixed(0)}%; background:${pctPos >= 90 ? "#ffd85e" : "#5eff8f"}"></span></span>`;
+  const vw = (r.vwapDev !== null && r.vwapDev !== undefined)
+    ? `<span class="sub" style="color:${r.vwapDev >= 0 ? "#5eff8f" : "#ff6b6b"}">VWAP ${r.vwapDev >= 0 ? "+" : ""}${r.vwapDev.toFixed(1)}%</span>` : "";
+  return `${fresh ? "🔺" : ""}${bar}${vw}`;
+}
+function takerCell(r) {
+  if (r.taker === null || r.taker === undefined) return `<span class="vel-cold">—</span>`;
+  const p = Math.round(r.taker * 100);
+  const cls = p >= 60 ? "taker-buy" : (p <= 40 ? "taker-sell" : "");
+  return `<span class="${cls}">${p}% buy</span>`;
+}
+
+function hasRecentEarly(key) {
+  const lf = lastFired[key];
+  if (!lf || typeof lf !== "object") return false;
+  const now = Date.now();
+  return [...EARLY_TYPES].some(t => lf[t] && (now - lf[t]) < 180000); // last 3 min
+}
+
+function render() {
+  processRankSignals();
+
+  let list = Object.values(rows);
+  if (marketFilter !== "ALL") list = list.filter(r => r.market === marketFilter);
+  if (searchTerm.trim()) {
+    const s = searchTerm.trim().toUpperCase();
+    list = list.filter(r => r.base.includes(s) || r.symbol.includes(s));
+  }
+  if (earlyOnlyMode) {
+    list = list.filter(r => hasRecentEarly(r.key) || (r.d1m !== null && r.d1m >= threshold1m * 0.7));
+  }
+  if (sortMode === "score") list.sort((a, b) => (b.score || 0) - (a.score || 0) || (b.delta - a.delta));
+  else list.sort((a, b) => b.delta - a.delta);
+  const shown = list.slice(0, 200);
+
+  const tbody = document.getElementById("table-body");
+  if (shown.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="20" class="empty-row">${Object.values(statuses).some(s=>s==="ok") ? "нет пар, прошедших фильтр…" : "подключение к Binance…"}</td></tr>`;
+  } else {
+    tbody.innerHTML = shown.map(r => {
+      const triggered = r.rollingDelta !== null && r.rollingDelta >= threshold;
+      const earlyHot = (r.d1m !== null && r.d1m >= threshold1m) || (r.d2m !== null && r.d2m >= threshold2m);
+      const accelHot = r.accel !== null && r.accel >= threshold1m * 0.5; // accel is now a $/min slope, not a ratio
+      let rowClasses = [];
+      if ((r.score || 0) >= scoreThreshold) rowClasses.push("score-row");
+      else if (triggered) rowClasses.push("triggered");
+      else if (accelHot) rowClasses.push("accel-row");
+      else if (earlyHot) rowClasses.push("early-row");
+
+      const deltaClass = r.delta > 0 ? "delta-pos" : "delta-zero";
+      const pctClass = r.pct >= 0 ? "pct-pos" : "pct-neg";
+
+      // multiplier styling
+      let multClass = "mult-cell";
+      if (r.mult < 1.5) multClass += " mult-early";
+      else if (r.mult < 3) multClass += " mult-mid";
+      else multClass += " mult-late";
+
+      // Δ1m / Δ2m classes
+      function velClass(v, thr) {
+        if (v === null) return "vel-cold";
+        if (v >= thr) return "vel-hot";
+        if (v >= thr * 0.5) return "vel-warm";
+        return "vel-cold";
+      }
+
+      const prevRank = rankSnapshot[r.key];
+      const curRank = lastComputedRanks[r.key];
+      let rankCell = `<span class="rank-none">—</span>`;
+      if (prevRank !== undefined && curRank !== undefined) {
+        const move = prevRank - curRank;
+        if (move > 0) {
+          const climbClass = move >= RANK_CLIMB_HIGHLIGHT ? "rank-up rank-up-strong" : "rank-up";
+          rankCell = `<span class="${climbClass}">${move >= RANK_CLIMB_HIGHLIGHT ? "🚀" : "▲"} +${move}</span>`;
+        } else if (move < 0) {
+          rankCell = `<span class="rank-down">▼ ${move}</span>`;
+        } else {
+          rankCell = `<span class="rank-none">· 0</span>`;
+        }
+      }
+      // mark if currently in top
+      let rankPrefix = `#${curRank ?? "?"}`;
+      if (curRank && curRank <= TOP_N_15) rankPrefix = `<span class="rank-top-entry">#${curRank}</span>`;
+      else if (curRank && curRank <= TOP_N_30) rankPrefix = `<span class="rank-up">#${curRank}</span>`;
+
+      const flags = [];
+      if ((r.score || 0) >= scoreThreshold) flags.push("⭐");
+      if (triggered) flags.push("🔔");
+      if (earlyHot) flags.push("⚡");
+      if (accelHot) flags.push("🚀");
+
+      return `<tr id="row-${r.key}" class="${rowClasses.join(" ")}">
+        <td><span class="${badgeClass(r.market)}">${r.market}</span></td>
+        <td><span class="sym-base">${r.base}</span><span class="sym-quote">/${r.quote}</span></td>
+        <td>${fmtPrice(r.priceBase)}<span class="base-time">${fmtTime(r.priceAt)}</span></td>
+        <td>${fmtPrice(r.price)}</td>
+        <td class="${pctClass}">${isNaN(r.pct) ? "—" : (r.pct >= 0 ? "+" : "") + r.pct.toFixed(2) + "%"}</td>
+        <td class="base-vol">$${fmtMoney(r.baseVol)}<span class="base-time">${fmtTime(r.baseAt)}</span></td>
+        <td>$${fmtMoney(r.curVol)}</td>
+        <td class="${deltaClass}">${r.delta >= 0 ? "+" : ""}$${fmtMoney(r.delta)}</td>
+        <td class="${multClass}">×${r.mult.toFixed(2)}</td>
+        <td class="${velClass(r.d1m, threshold1m)}">${r.d1m !== null ? (r.d1m >= 0 ? "+" : "") + "$" + fmtMoney(r.d1m) : "—"}</td>
+        <td class="${velClass(r.d2m, threshold2m)}">${r.d2m !== null ? (r.d2m >= 0 ? "+" : "") + "$" + fmtMoney(r.d2m) : "—"}</td>
+        <td class="score-cell">${scoreCell(r)}</td>
+        <td>${pctCell(r)}</td>
+        <td>${rvolCell(r)}</td>
+        <td>${atsCell(r)}</td>
+        <td>${rangeCell(r)}</td>
+        <td>${takerCell(r)}</td>
+        <td>${rankPrefix}<br>${rankCell}</td>
+        <td>${flags.join("")}</td>
+        <td><button class="del-btn" data-key="${r.key}" title="Убрать пару">✕</button></td>
+      </tr>`;
+    }).join("");
+  }
+
+  document.getElementById("tracked-count").textContent = Object.keys(rows).length;
+  document.getElementById("triggered-count").textContent = alertsLog.length;
+  const earlyN = alertsLog.filter(a => isEarlyType(a.type)).length;
+  document.getElementById("early-count").textContent = earlyN;
+
+  // alerts list
+  const alertsList = document.getElementById("alerts-list");
+  let shownAlerts = alertsLog;
+  if (alertsTab === "early") shownAlerts = alertsLog.filter(a => isEarlyType(a.type));
+
+  if (shownAlerts.length === 0) {
+    alertsList.innerHTML = `<div class="alerts-empty">${alertsTab === "early"
+      ? "Запись сигналов отключена."
+      : "Запись сигналов отключена."}</div>`;
+  } else {
+    alertsList.innerHTML = shownAlerts.map(a => `
+      <div class="alert-item market-${a.market} type-${a.type || "SPIKE"}" data-key="${a.key}" title="Показать пару в таблице">
+        <div class="alert-top">
+          <span class="alert-sym">
+            <span class="alert-type ${a.type || "SPIKE"}">${a.type || "SPIKE"}</span>
+            ${a.base}/${a.quote}
+            <span class="alert-seq">#${a.seq || "?"}</span>
+          </span>
+          <span class="alert-delta">${a.amount != null ? "+$" + fmtMoney(a.amount) : ""}</span>
+        </div>
+        <div class="alert-bottom">
+          <span>${a.market}${a.extra ? " · " + a.extra : ""}</span>
+          <span>${fmtTimeMinusHour(a.time)}</span>
+        </div>
+      </div>
+    `).join("");
+  }
+
+  // shelf (тихая полка) — свой список, отдельно от общего журнала, всегда на виду
+  const shelfList = document.getElementById("shelf-list");
+  if (!shelfAlerts.length) {
+    shelfList.innerHTML = `<div class="shelf-empty">Пока нет.</div>`;
+  } else {
+    shelfList.innerHTML = shelfAlerts.map(a => `
+      <div class="shelf-item" data-key="${a.key}" title="Показать пару в таблице">
+        <span class="shelf-sym">${a.base}/${a.quote} <span style="color:#8a7a4a; font-weight:400;">${a.market}</span></span>
+        <span class="shelf-delta">+$${fmtMoney(a.amount)}</span>
+        <span class="shelf-time">${fmtTimeMinusHour(a.time)}</span>
+      </div>
+    `).join("");
+  }
+
+  renderStats();
+}
+
+// ---------- controls ----------
+function removePair(key) {
+  purgeKey(key);
+  saveState();
+  render();
+}
+document.getElementById("table-body").addEventListener("click", (e) => {
+  const btn = e.target.closest(".del-btn");
+  if (!btn) return;
+  removePair(btn.dataset.key);
+});
+
+function jumpToPair(key) {
+  if (!rows[key]) return;
+  let filtersChanged = false;
+  if (searchTerm) { searchTerm = ""; document.getElementById("search-input").value = ""; filtersChanged = true; }
+  if (marketFilter !== "ALL") {
+    marketFilter = "ALL";
+    document.querySelectorAll("#market-toggle button").forEach(b => b.classList.remove("active"));
+    document.querySelector('#market-toggle button[data-market="ALL"]').classList.add("active");
+    filtersChanged = true;
+  }
+  if (earlyOnlyMode) {
+    earlyOnlyMode = false;
+    document.getElementById("early-only-btn").textContent = "⚡ ТОЛЬКО РАННИЕ: ВЫКЛ";
+    document.getElementById("early-only-btn").classList.remove("paused");
+    filtersChanged = true;
+  }
+  if (filtersChanged) render();
+  const el = document.getElementById(`row-${key}`);
+  if (!el) return;
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  el.classList.remove("row-flash");
+  void el.offsetWidth;
+  el.classList.add("row-flash");
+}
+document.getElementById("alerts-list").addEventListener("click", (e) => {
+  const item = e.target.closest(".alert-item");
+  if (!item) return;
+  jumpToPair(item.dataset.key);
+});
+document.getElementById("shelf-list").addEventListener("click", (e) => {
+  const item = e.target.closest(".shelf-item");
+  if (!item) return;
+  jumpToPair(item.dataset.key);
+});
+
+function resetBaseline() {
+  rows = {};
+  sessionBase = {};
+  baseTime = {};
+  priceBase = {};
+  doubleLevel = {};
+  lastFired = {};
+  signalCount = {};
+  alertsLog = [];
+  history = {};
+  rankSnapshot = {};
+  lastComputedRanks = {};
+  lastRankSnapshotAt = 0;
+  everInTop30 = {};
+  everInTop15 = {};
+  lastRankSignalAt = {};
+  rateHistory = {};
+  lastRateSampleAt = {};
+  atsHistory = {};
+  spreadHistory = {};
+  imbalHistory = {};
+  dayHigh = {};
+  dayHighAt = {};
+  dayLow = {};
+  takerRatio = {};
+  outcomes = [];
+  outcomesByKey = {};
+  shelfAlerts = [];
+  startTime = Date.now();
+  clearState();
+  render();
+}
+
+// ---------- v15: выгрузка сигналов в CSV ----------
+// Каждая строка — сигнал со снимком признаков в момент срабатывания и с тем,
+// что было с ценой после. Это тот самый датасет, на котором потом можно
+// проверить, какие компоненты score реально работают, а какие только шумят.
+function exportCsv() {
+  if (!outcomes.length) { alert("Пока нечего выгружать — сигналов не было."); return; }
+  const head = [
+    "time_iso", "market", "symbol", "type", "score", "parts",
+    "signal_price", "signal_vol",
+    "pct_1m", "pct_5m", "pct_15m", "mfe_pct", "mfe_min", "mae_pct", "mae_min",
+    "f_d1m", "f_rvol", "f_pct1m", "f_ats_x", "f_imbal", "f_spread_pct", "f_vwap_dev", "f_range_pos", "f_taker",
+  ];
+  const num = v => (v === null || v === undefined || isNaN(v)) ? "" : (+v).toFixed(6).replace(/0+$/, "").replace(/\.$/, "");
+  const chg = (o, p) => (p === null || p === undefined || !o.signalPrice) ? "" : num(((p - o.signalPrice) / o.signalPrice) * 100);
+  const esc = v => {
+    const t = String(v === null || v === undefined ? "" : v);
+    return /[",;\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+  };
+  const lines = [head.join(",")];
+  for (const o of outcomes) {
+    lines.push([
+      new Date(o.signalTime).toISOString(), o.market, o.symbol, o.type || "SPIKE",
+      o.score ?? "", (o.parts || []).join(" | "),
+      num(o.signalPrice), num(o.signalVol),
+      chg(o, o.p1), chg(o, o.p5), chg(o, o.p15),
+      num(o.mfe), num(o.mfeAt ? o.mfeAt / 60000 : 0), num(o.mae), num(o.maeAt ? o.maeAt / 60000 : 0),
+      num(o.f_d1m), num(o.f_rvol), num(o.f_pct1m), num(o.f_atsX), num(o.f_imbal),
+      num(o.f_spread), num(o.f_vwapDev), num(o.f_rng), num(o.f_taker),
+    ].map(esc).join(","));
+  }
+  const blob = new Blob(["\ufeff" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "scanner_signals_" + new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-") + ".csv";
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+
+function parseAmountInput(raw) {
+  if (!raw) return NaN;
+  let s = raw.trim().toLowerCase().replace(/[\s,_\u00a0]/g, "");
+  let mult = 1;
+  if (/(млн|mln|m)$/.test(s)) { mult = 1_000_000; s = s.replace(/(млн|mln|m)$/, ""); }
+  else if (/(тыс|k|к)$/.test(s)) { mult = 1_000; s = s.replace(/(тыс|k|к)$/, ""); }
+  const n = parseFloat(s);
+  return isNaN(n) ? NaN : n * mult;
+}
+function flashApplied(inputEl) {
+  const box = inputEl.closest(".box") || inputEl;
+  box.style.transition = "border-color 0.15s";
+  box.style.borderColor = "#5eff8f";
+  setTimeout(() => { box.style.borderColor = ""; }, 700);
+}
+
+document.getElementById("apply-threshold").addEventListener("click", () => {
+  const inputEl = document.getElementById("threshold-input");
+  const v = parseAmountInput(inputEl.value);
+  if (!isNaN(v) && v > 0) {
+    threshold = v;
+    inputEl.value = String(v);
+    saveState();
+    render();
+    flashApplied(inputEl);
+  }
+});
+document.getElementById("threshold-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.getElementById("apply-threshold").click();
+});
+document.getElementById("apply-threshold-1m").addEventListener("click", () => {
+  const inputEl = document.getElementById("threshold-1m-input");
+  const v = parseAmountInput(inputEl.value);
+  if (!isNaN(v) && v > 0) {
+    threshold1m = v;
+    inputEl.value = String(v);
+    saveState();
+    render();
+    flashApplied(inputEl);
+  }
+});
+document.getElementById("threshold-1m-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.getElementById("apply-threshold-1m").click();
+});
+document.getElementById("apply-threshold-2m").addEventListener("click", () => {
+  const inputEl = document.getElementById("threshold-2m-input");
+  const v = parseAmountInput(inputEl.value);
+  if (!isNaN(v) && v > 0) {
+    threshold2m = v;
+    inputEl.value = String(v);
+    saveState();
+    render();
+    flashApplied(inputEl);
+  }
+});
+document.getElementById("threshold-2m-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.getElementById("apply-threshold-2m").click();
+});
+document.getElementById("apply-max-price").addEventListener("click", () => {
+  const inputEl = document.getElementById("max-price-input");
+  const v = parseAmountInput(inputEl.value);
+  if (!isNaN(v) && v > 0) {
+    maxInitialPrice = v;
+    inputEl.value = String(v);
+    saveState();
+    flashApplied(inputEl);
+  }
+});
+document.getElementById("max-price-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.getElementById("apply-max-price").click();
+});
+document.getElementById("apply-max-volume").addEventListener("click", () => {
+  const inputEl = document.getElementById("max-volume-input");
+  const v = parseAmountInput(inputEl.value);
+  if (!isNaN(v) && v > 0) {
+    maxInitialVolume = v;
+    inputEl.value = String(v);
+    saveState();
+    flashApplied(inputEl);
+  }
+});
+document.getElementById("max-volume-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.getElementById("apply-max-volume").click();
+});
+document.getElementById("apply-score-threshold").addEventListener("click", () => {
+  const inputEl = document.getElementById("score-threshold-input");
+  const v = parseFloat(inputEl.value);
+  if (!isNaN(v) && v > 0 && v <= 100) {
+    scoreThreshold = v;
+    inputEl.value = String(v);
+    saveState();
+    render();
+    flashApplied(inputEl);
+  }
+});
+document.getElementById("score-threshold-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.getElementById("apply-score-threshold").click();
+});
+document.getElementById("score-only-btn").addEventListener("click", (e) => {
+  scoreOnlyMode = !scoreOnlyMode;
+  e.target.textContent = scoreOnlyMode ? "⭐ ТОЛЬКО SCORE: ВКЛ" : "⭐ ТОЛЬКО SCORE: ВЫКЛ";
+  e.target.classList.toggle("paused", scoreOnlyMode);
+  saveState();
+});
+document.getElementById("taker-btn").addEventListener("click", (e) => {
+  takerStreamOn = !takerStreamOn;
+  e.target.textContent = takerStreamOn ? "🔥 ТЕЙКЕР-ПОТОК: ВКЛ" : "🔥 ТЕЙКЕР-ПОТОК: ВЫКЛ";
+  e.target.classList.toggle("off", !takerStreamOn);
+  if (!takerStreamOn) { closeHotStream(); takerRatio = {}; }
+  else { lastHotRebuild = 0; rebuildHotStream(); }
+  saveState();
+});
+document.getElementById("sort-btn").addEventListener("click", (e) => {
+  sortMode = sortMode === "score" ? "delta" : "score";
+  e.target.textContent = sortMode === "score" ? "⇅ СОРТ: SCORE" : "⇅ СОРТ: Δ ОБЪЁМА";
+  e.target.classList.toggle("paused", sortMode === "score");
+  saveState();
+  render();
+});
+document.getElementById("csv-btn").addEventListener("click", exportCsv);
+document.getElementById("reset-btn").addEventListener("click", resetBaseline);
+document.getElementById("search-input").addEventListener("input", (e) => { searchTerm = e.target.value; render(); });
+document.getElementById("market-toggle").addEventListener("click", (e) => {
+  if (e.target.tagName !== "BUTTON") return;
+  document.querySelectorAll("#market-toggle button").forEach(b => b.classList.remove("active"));
+  e.target.classList.add("active");
+  marketFilter = e.target.dataset.market;
+  render();
+});
+document.getElementById("sound-btn").addEventListener("click", (e) => {
+  soundOn = !soundOn;
+  e.target.textContent = soundOn ? "🔊 ЗВУК: ВКЛ" : "🔇 ЗВУК: ВЫКЛ";
+  e.target.classList.toggle("off", !soundOn);
+  if (soundOn) beep(880, 120);
+});
+document.getElementById("notif-btn").addEventListener("click", requestNotifPermission);
+document.getElementById("stop-btn").addEventListener("click", (e) => {
+  paused = !paused;
+  e.target.textContent = paused ? "▶ СТАРТ" : "⏸ СТОП";
+  e.target.classList.toggle("paused", paused);
+  if (paused) {
+    MARKETS.forEach(m => { statuses[m.id] = "paused"; });
+    updateStatusLine();
+  } else {
+    MARKETS.forEach(m => {
+      if (feedMode[m.id] === "rest") { pollRestOnce(m); return; }
+      const ws = sockets[m.id];
+      if (!ws || ws.readyState === WebSocket.CLOSED) { connectMarket(m); }
+      else { statuses[m.id] = "ok"; }
+    });
+    updateStatusLine();
+  }
+});
+document.getElementById("stats-btn").addEventListener("click", (e) => {
+  statsVisible = !statsVisible;
+  document.getElementById("stats-panel").style.display = statsVisible ? "block" : "none";
+  e.target.classList.toggle("paused", statsVisible);
+  if (statsVisible) renderStats();
+});
+document.getElementById("early-only-btn").addEventListener("click", (e) => {
+  earlyOnlyMode = !earlyOnlyMode;
+  e.target.textContent = earlyOnlyMode ? "⚡ ТОЛЬКО РАННИЕ: ВКЛ" : "⚡ ТОЛЬКО РАННИЕ: ВЫКЛ";
+  e.target.classList.toggle("paused", earlyOnlyMode);
+  render();
+});
+document.getElementById("alerts-tabs").addEventListener("click", (e) => {
+  if (e.target.tagName !== "BUTTON") return;
+  document.querySelectorAll("#alerts-tabs button").forEach(b => b.classList.remove("active"));
+  e.target.classList.add("active");
+  alertsTab = e.target.dataset.tab;
+  render();
+});
+
+// wake lock
+let wakeLock = null;
+const wakelockBtn = document.getElementById("wakelock-btn");
+async function enableWakeLock() {
+  if (!("wakeLock" in navigator)) {
+    wakelockBtn.textContent = "💡 недоступно в этом браузере";
+    wakelockBtn.disabled = true;
+    return;
+  }
+  try {
+    wakeLock = await navigator.wakeLock.request("screen");
+    wakelockBtn.textContent = "💡 НЕ ГАСИТЬ ЭКРАН: ВКЛ";
+    wakelockBtn.classList.add("paused");
+    wakeLock.addEventListener("release", () => {
+      wakelockBtn.textContent = "💡 НЕ ГАСИТЬ ЭКРАН: ВЫКЛ";
+      wakelockBtn.classList.remove("paused");
+      wakeLock = null;
+    });
+  } catch (e) {}
+}
+function disableWakeLock() {
+  if (wakeLock) { wakeLock.release(); wakeLock = null; }
+  wakelockBtn.textContent = "💡 НЕ ГАСИТЬ ЭКРАН: ВЫКЛ";
+  wakelockBtn.classList.remove("paused");
+}
+wakelockBtn.addEventListener("click", () => {
+  if (wakeLock) disableWakeLock(); else enableWakeLock();
+});
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && wakelockBtn.textContent.includes("ВКЛ") && !wakeLock) {
+    enableWakeLock();
+  }
+});
+
+updateNotifButton();
+
+setInterval(() => {
+  document.getElementById("session-clock").textContent = fmtClock((Date.now() - startTime) / 1000);
+}, 1000);
+setInterval(() => {
+  if (appHidden) return;
+  if (dataDirty) { dataDirty = false; render(); }
+}, RENDER_INTERVAL_MS);
+setInterval(() => { flushState(false); }, PERSIST_INTERVAL_MS);
+setInterval(() => {
+  const badge = document.getElementById("hot-badge");
+  if (!badge) return;
+  if (!takerStreamOn) { badge.textContent = ""; return; }
+  const live = Object.keys(takerRatio).filter(k => Date.now() - takerRatio[k].at <= TAKER_STALE_MS).length;
+  badge.textContent = hotSymbols.length ? `· 🔥 ${live}/${hotSymbols.length}` : "";
+}, 3000);
+setInterval(() => {
+  const now = Date.now();
+  if (now - lastRankSnapshotAt >= RANK_SNAPSHOT_INTERVAL_MS) {
+    rankSnapshot = { ...lastComputedRanks };
+    lastRankSnapshotAt = now;
+  }
+}, 5000);
+
+// ---------- boot ----------
+document.body.classList.add("pane-table");
+document.getElementById("tab-bar").addEventListener("click", (e) => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
+  document.querySelectorAll("#tab-bar button").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  document.body.classList.toggle("pane-table", btn.dataset.pane === "table");
+  document.body.classList.toggle("pane-alerts", btn.dataset.pane === "alerts");
+});
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("./sw.js").catch(() => {});
+}
+requestPersistentStorage();
+
+const restored = false; // real restore is async below
+loadStateAsync().then((ok) => {
+  if (!ok) return;
+
+  document.getElementById("threshold-input").value = String(threshold);
+  document.getElementById("threshold-1m-input").value = String(threshold1m);
+  document.getElementById("threshold-2m-input").value = String(threshold2m);
+  document.getElementById("max-price-input").value = String(maxInitialPrice);
+  document.getElementById("max-volume-input").value = String(maxInitialVolume);
+  document.getElementById("score-threshold-input").value = String(scoreThreshold);
+  if (scoreOnlyMode) {
+    const b = document.getElementById("score-only-btn");
+    b.textContent = "⭐ ТОЛЬКО SCORE: ВКЛ"; b.classList.add("paused");
+  }
+  if (!takerStreamOn) {
+    const b = document.getElementById("taker-btn");
+    b.textContent = "🔥 ТЕЙКЕР-ПОТОК: ВЫКЛ"; b.classList.add("off");
+  }
+  if (sortMode === "score") {
+    const b = document.getElementById("sort-btn");
+    b.textContent = "⇅ СОРТ: SCORE"; b.classList.add("paused");
+  }
+  Object.keys(rows).forEach(key => {
+    if (isExcluded(rows[key].symbol)) purgeKey(key);
+  });
+  saveState();
+  render();
+});
+MARKETS.forEach(m => startFeed(m));
+function pauseForBackground() {
+  appHidden = true;
+  document.body.classList.add("backgrounded");
+  flushState(true);
+  // iOS/Android убивают сокет в фоне. Закрываем сами, чтобы не копить half-open.
+  MARKETS.forEach(m => {
+    const ws = sockets[m.id];
+    if (ws) {
+      try { ws.onclose = null; ws.close(); } catch (e) {}
+      sockets[m.id] = null;
+    }
+    if (restTimer[m.id]) { clearInterval(restTimer[m.id]); restTimer[m.id] = null; }
+  });
+  closeHotStream();
+}
+function resumeFromBackground() {
+  appHidden = false;
+  document.body.classList.remove("backgrounded");
+  if (paused) { updateStatusLine(); return; }
+  MARKETS.forEach(m => {
+    feedMode[m.id] = "ws";
+    wsFailStreak[m.id] = 0;
+    connectMarket(m);
+  });
+  lastHotRebuild = 0;
+  rebuildHotStream();
+  dataDirty = true;
+  render();
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") pauseForBackground();
+  else resumeFromBackground();
+});
+window.addEventListener("pagehide", () => { flushState(true); });
+window.addEventListener("freeze", () => { flushState(true); });
+window.addEventListener("pageshow", (ev) => {
+  if (ev.persisted) resumeFromBackground();
+});
+document.addEventListener("resume", resumeFromBackground); // cordova/capacitor
+
+</script>
+</body>
+</html>
