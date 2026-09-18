@@ -120,16 +120,60 @@ python score_v1_time_split_check.py --in score_v1_results/score_v1_events.csv --
 - High `vol_accel_1h` without a confirming candle shape leans towards
   `FAILED_OR_PARTIAL`, not `REAL_CONTINUATION`, in both periods.
 
-**What's still shaky:** RVOL's direction flips between the two periods
-(clearly higher for REAL in March–June, roughly flat/reversed in July–Aug) —
-don't lean on it hard. And 122/71 events is still a small, single time-split
-sample, not a walk-forward validation.
+**What's still shaky (as of the 193-event pass):** RVOL's direction flips
+between the two periods (clearly higher for REAL in March–June, roughly
+flat/reversed in July–Aug) — don't lean on it hard. And 122/71 events was
+still a small, single time-split sample, not a walk-forward validation.
 
-**Status:** `index.html`'s live SCORE has *not* been changed based on this —
-the decision (2026-09-18) was to wait for more months of data before
-touching the live scanner, given the sample size above. When more data is
-available, rerun `binance_runup_research.py` for a longer/fresher window,
-then `score_v1.py` and `score_v1_time_split_check.py` again, before adjusting
-`computeScore()` in `index.html` (candidates per the findings above: soften
-or drop the "тихая полка" bonus, de-weight `taker`, keep/strengthen the
-close_pos/body% component, keep capping the RVOL bonus at extreme values).
+## 12-month extension: `results_12m/` — a real trade-level backtest
+
+`results_12m/` holds a bigger, independently useful follow-up pass: the event
+set extended back to **267 events across 87 symbols, September 2025–August
+2026** (`runup_events_12m.csv`, `score_v1_events_12m.csv`,
+`score_v1_thresholds_12m.csv` — produced with `extend_12m.py` and `run_phase.py`,
+both reference copies of the scripts that built this run, paths hardcoded to
+their original machine). Two things go beyond the 193-event pass:
+
+- **`feature_separation.csv`** — a proper effect-size check per feature:
+  `P(REAL_CONTINUATION's value > FAILED_OR_PARTIAL's value)` on resampled pairs
+  (0.5 = no signal). Ranked: `ret5_pct` (impulse candle's own 5m return) is the
+  single strongest feature at **0.806** — stronger than expected, and distinct
+  from raw volume size (RVOL itself is only moderate, 0.618). `range_pct`,
+  `close_pos`, `quote_volume_5m`, `body_pct` cluster at 0.65–0.68. `range12_pct`
+  (pre-impulse compression) is weaker and *less stable* than the 193-event pass
+  suggested — a fresh out-of-sample slice (Sep 2025–Feb 2026, run via
+  `score_v1_time_split_check.py --in results_12m/score_v1_events_12m.csv`)
+  actually reverses its sign, while March–August repeats the original
+  direction. `taker_buy_share` confirms as ~zero signal (0.512) on every cut
+  tried. `vol_accel_1h`/`trades_accel` are only weakly negative (0.43–0.46),
+  not as dramatic as the smaller sample implied.
+- **`backtest_12m_exit_summary.csv`, `backtest_score70_trades.csv`,
+  `exit_variants_summary.csv`, `../SCORE_v1_*.xlsx`-style trade sims** (the
+  xlsx workbooks themselves aren't checked in, just their CSV exports) — an
+  actual per-trade P&L simulation: enter at the impulse candle's close, −0.10%
+  fee/slippage per round trip, conservative tie-break (stop wins if both stop
+  and target are reachable in the window). A **−5% stop destroys the edge on
+  every target/filter combination** (deeply negative net P&L, −20%+ drawdowns).
+  **−8% stop with a +16–20% target (2h) is consistently net positive**, both
+  on the 193-event set (SCORE≥80: PF 1.42–1.52, net +3.3–4.2%, maxdd ≈−3%) and
+  independently on the 267-event 12-month set (SCORE≥70, n=54: +16% target →
+  net +$241, +20% target → net +$266, vs. +12% target → **net −$250**, same
+  n). Monthly P&L is noisy (several losing months) at this trade frequency —
+  expected, not a red flag by itself.
+
+**Status:** based on both passes together, `index.html`'s live SCORE **has
+been updated** (2026-09-18): the candle-shape bonus/penalty (`closePosCandle`/
+`wickPct` in `computeScore()`) was strengthened and given a middle tier, since
+close_pos/body% is the most consistently validated signal across every cut;
+`taker`'s weight and the "тихая полка" (`wasQuiet`) bonus were both cut
+sharply, down to small tie-breakers, since neither showed a stable, reliable
+effect. RVOL/price/VWAP/orderbook components were left as they were — no
+same-unit research data existed to safely recalibrate their exact thresholds
+(the research RVOL is a 5m-candle multiple of a daily median, the live
+scanner's is a per-minute multiple of an expected/1440 baseline — different
+scales). The trade-management side of this research (stop/target/time-exit
+rules, position sizing) has **not** been wired into the live scanner — it
+stayed a research finding, not a scanner feature, pending a separate decision.
+When more data accumulates, rerun the pipeline for a fresher/longer window and
+re-check `feature_separation.csv` + `score_v1_time_split_check.py` before
+touching `computeScore()` again.

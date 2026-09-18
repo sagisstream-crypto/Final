@@ -1,0 +1,12 @@
+archive_symbols_listed=1018
+symbols_with_1h_history_saved=575
+eligible_any_quote=511
+eligible_usdt_min24h_gt0=395
+symbols_processed_5m=395
+events=193
+unique_event_symbols=85
+real_events=36
+fail_events=157
+real_rate=0.18652849740932642
+window_effective=2026-03-18 .. 2026-08-31 UTC
+window_planned=2026-03-18 .. 2026-09-18 UTC
