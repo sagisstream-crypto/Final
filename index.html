@@ -612,6 +612,7 @@ let dayHigh = {};            // key -> последний виденный 24ч 
 let dayHighAt = {};          // key -> когда максимум в последний раз обновился (= пробой)
 let dayLow = {};             // key -> последний виденный 24ч минимум
 let takerRatio = {};         // key -> { r, at } из kline_1m «горячего» потока
+let candleShape = {};        // key -> { o,h,l,c,v, at } последняя 1m свеча горячего потока
 
 // тихая полка — отдельный список над журналом, не смешивается с пороговыми сигналами
 let shelfAlerts = [];
@@ -645,7 +646,7 @@ function purgeKey(key) {
   delete everInTop30[key]; delete everInTop15[key]; delete lastRankSignalAt[key];
   delete rateHistory[key]; delete lastRateSampleAt[key];
   delete atsHistory[key]; delete spreadHistory[key]; delete imbalHistory[key];
-  delete dayHigh[key]; delete dayHighAt[key]; delete dayLow[key]; delete takerRatio[key];
+  delete dayHigh[key]; delete dayHighAt[key]; delete dayLow[key]; delete takerRatio[key]; delete candleShape[key];
   shelfAlerts = shelfAlerts.filter(e => e.key !== key);
   alertsLog = alertsLog.filter(e => e.key !== key);
   delete outcomesByKey[key];
@@ -1019,61 +1020,85 @@ function computeScore(f) {
   // 8) Выход из тихой полки ценнее, чем продолжение уже начавшегося движения.
   if (f.wasQuiet) { s += 12; parts.push("из тихой полки"); }
 
+  // 9) Форма последней 1m свечи горячего потока (только для 12 самых горячих пар
+  // на каждом рынке — иначе не потянуть). Настоящий вынос обычно закрывается
+  // близко к своему максимуму; ложный — прокалывает верх и утаскивает закрытие
+  // вниз длинной верхней тенью, объём "съеден" без продолжения.
+  if (f.closePosCandle !== null && f.wickPct !== null) {
+    if (f.closePosCandle >= 0.75 && f.wickPct <= 0.15)      { s += 10; parts.push("закрытие у хая свечи"); }
+    else if (f.closePosCandle <= 0.35 && f.wickPct >= 0.4)  { s -= 15; parts.push("длинная тень сверху"); }
+  }
+
   // штраф: широкий спред = неликвид, вход будет дороже сигнала
   if (f.spreadPct !== null && f.spreadPct >= 1.5) { s -= 10; parts.push("широкий спред"); }
 
   return { score: Math.max(0, Math.min(100, Math.round(s))), parts };
 }
 
-// ---------- v15: kline_1m по «горячим» парам (taker buy ratio) ----------
-// Полный aggTrade по 400 парам машина не потянет, а вот 12 самых горячих —
-// легко. kline_1m отдаёт поле V (taker buy base volume) уже посчитанным.
+// ---------- v15: kline_1m по «горячим» парам (taker buy ratio + форма свечи) ----------
+// Полный aggTrade по 400 парам машина не потянет, а вот 12 самых горячих на КАЖДОМ
+// рынке — легко. kline_1m отдаёт taker buy base volume (V) и OHLC уже посчитанными.
+// До этого фикса горячий поток открывался только на spot-хосте и фильтровал
+// r.market === "SPOT" — фьючерсные пары (USDT-M) никогда не получали долю тейкера
+// в SCORE, хотя именно на низколиквидных фьючерсах она отделяет вынос от шпильки.
 const HOT_MAX = 12;
 const HOT_REBUILD_MS = 45000;
-let hotSocket = null;
-let hotSymbols = [];
-let lastHotRebuild = 0;
-function pickHotSymbols() {
+const HOT_WS_HOST = { "SPOT": "wss://stream.binance.com:9443", "USDT-M": "wss://fstream.binance.com" };
+let hotSocket = {};          // market.id -> WebSocket
+let hotSymbols = {};         // market.id -> [symbol,...] в нижнем регистре
+let lastHotRebuild = {};     // market.id -> ts последней пересборки
+function pickHotSymbols(marketId) {
   return Object.values(rows)
-    .filter(r => r.market === "SPOT" && r.d1m !== null && r.d1m > 0)
+    .filter(r => r.market === marketId && r.d1m !== null && r.d1m > 0)
     .sort((a, b) => (b.score || 0) - (a.score || 0) || (b.d1m - a.d1m))
     .slice(0, HOT_MAX)
     .map(r => r.symbol.toLowerCase());
 }
-function closeHotStream() {
-  if (hotSocket) { try { hotSocket.onclose = null; hotSocket.close(); } catch (e) {} }
-  hotSocket = null;
-  hotSymbols = [];
+function closeHotStream(marketId) {
+  const s = hotSocket[marketId];
+  if (s) { try { s.onclose = null; s.close(); } catch (e) {} }
+  hotSocket[marketId] = null;
+  hotSymbols[marketId] = [];
 }
-function rebuildHotStream() {
-  if (!takerStreamOn || paused) { if (hotSocket) closeHotStream(); return; }
+function closeAllHotStreams() { MARKETS.forEach(m => closeHotStream(m.id)); }
+function rebuildHotStream(marketId) {
+  if (!takerStreamOn || paused) { if (hotSocket[marketId]) closeHotStream(marketId); return; }
   const now = Date.now();
-  if (now - lastHotRebuild < HOT_REBUILD_MS) return;
-  const next = pickHotSymbols();
+  if (now - (lastHotRebuild[marketId] || 0) < HOT_REBUILD_MS) return;
+  const next = pickHotSymbols(marketId);
   if (!next.length) return;
-  if (next.join(",") === hotSymbols.join(",") && hotSocket && hotSocket.readyState === WebSocket.OPEN) {
-    lastHotRebuild = now;
+  const cur = hotSymbols[marketId] || [];
+  if (next.join(",") === cur.join(",") && hotSocket[marketId] && hotSocket[marketId].readyState === WebSocket.OPEN) {
+    lastHotRebuild[marketId] = now;
     return;
   }
-  lastHotRebuild = now;
-  if (hotSocket) { try { hotSocket.onclose = null; hotSocket.close(); } catch (e) {} }
-  hotSymbols = next;
-  const url = "wss://stream.binance.com:9443/stream?streams=" + hotSymbols.map(x => x + "@kline_1m").join("/");
-  try { hotSocket = new WebSocket(url); } catch (e) { hotSocket = null; return; }
-  hotSocket.onmessage = (ev) => {
+  lastHotRebuild[marketId] = now;
+  if (hotSocket[marketId]) { try { hotSocket[marketId].onclose = null; hotSocket[marketId].close(); } catch (e) {} }
+  hotSymbols[marketId] = next;
+  const host = HOT_WS_HOST[marketId];
+  const url = host + "/stream?streams=" + next.map(x => x + "@kline_1m").join("/");
+  let sock;
+  try { sock = new WebSocket(url); } catch (e) { hotSocket[marketId] = null; return; }
+  hotSocket[marketId] = sock;
+  sock.onmessage = (ev) => {
     try {
       const msg = JSON.parse(ev.data);
       const k = msg && msg.data && msg.data.k;
       if (!k) return;
       const vol = parseFloat(k.v), buy = parseFloat(k.V);
-      if (!(vol > 0) || isNaN(buy)) return;
-      takerRatio["SPOT:" + k.s] = { r: buy / vol, at: Date.now() };
+      const key = marketId + ":" + k.s;
+      if (vol > 0 && !isNaN(buy)) takerRatio[key] = { r: buy / vol, at: Date.now() };
+      const o = parseFloat(k.o), h = parseFloat(k.h), l = parseFloat(k.l), c = parseFloat(k.c);
+      if (h > l && !isNaN(o) && !isNaN(c)) {
+        candleShape[key] = { o, h, l, c, v: vol, closed: !!k.x, at: Date.now() };
+      }
     } catch (e) {}
   };
-  hotSocket.onerror = () => {};
-  hotSocket.onclose = () => { hotSocket = null; };
+  sock.onerror = () => {};
+  sock.onclose = () => { if (hotSocket[marketId] === sock) hotSocket[marketId] = null; };
 }
-setInterval(rebuildHotStream, 15000);
+function rebuildAllHotStreams() { MARKETS.forEach(m => rebuildHotStream(m.id)); }
+setInterval(rebuildAllHotStreams, 15000);
 
 // ---------- websocket feed ----------
 function wsTickerToTick(item) {
@@ -1297,6 +1322,14 @@ function handleTickerBatch(market, arr) {
       const tk = takerRatio[key];
       const taker = (tk && (now - tk.at) <= TAKER_STALE_MS) ? tk.r : null;
 
+      // форма последней 1m свечи горячего потока: закрытие у хая vs длинная тень.
+      // Реальный вынос обычно закрывается близко к своему максимуму; шпилька —
+      // прокалывает верх на объёме и утаскивает закрытие вниз длинной тенью.
+      const cs = candleShape[key];
+      const csFresh = cs && (now - cs.at) <= TAKER_STALE_MS && cs.h > cs.l;
+      const closePosCandle = csFresh ? (cs.c - cs.l) / (cs.h - cs.l) : null;
+      const wickPct = csFresh ? (cs.h - Math.max(cs.o, cs.c)) / (cs.h - cs.l) : null;
+
       // periodic baseline sampling for QUIET (mirrors how history[] already isn't persisted)
       if (d1m !== null && (now - (lastRateSampleAt[key] || 0)) >= RATE_SAMPLE_INTERVAL_MS) {
         if (!rateHistory[key]) rateHistory[key] = [];
@@ -1318,6 +1351,7 @@ function handleTickerBatch(market, arr) {
 
       const scoreObj = computeScore({
         rvol, pct1m, pct2m, rng, vwapDev, ats, atsMedian, imbal, spreadPct, highFresh, taker, wasQuiet,
+        closePosCandle, wickPct,
       });
 
       // age of base — ignore very first minutes for some signals to reduce noise
@@ -1331,6 +1365,7 @@ function handleTickerBatch(market, arr) {
         rollingDelta: rolling10, d1m, d2m, accel,
         // v15
         pct1m, pct2m, rvol, ats, atsMedian, rng, vwapDev, spreadPct, imbal, taker,
+        closePosCandle, wickPct,
         highFresh, trades: parsed.trades,
         score: scoreObj.score, scoreParts: scoreObj.parts,
         lastTick: now,
@@ -2008,8 +2043,8 @@ document.getElementById("taker-btn").addEventListener("click", (e) => {
   takerStreamOn = !takerStreamOn;
   e.target.textContent = takerStreamOn ? "🔥 ТЕЙКЕР-ПОТОК: ВКЛ" : "🔥 ТЕЙКЕР-ПОТОК: ВЫКЛ";
   e.target.classList.toggle("off", !takerStreamOn);
-  if (!takerStreamOn) { closeHotStream(); takerRatio = {}; }
-  else { lastHotRebuild = 0; rebuildHotStream(); }
+  if (!takerStreamOn) { closeAllHotStreams(); takerRatio = {}; candleShape = {}; }
+  else { lastHotRebuild = {}; rebuildAllHotStreams(); }
   saveState();
 });
 document.getElementById("sort-btn").addEventListener("click", (e) => {
@@ -2122,7 +2157,8 @@ setInterval(() => {
   if (!badge) return;
   if (!takerStreamOn) { badge.textContent = ""; return; }
   const live = Object.keys(takerRatio).filter(k => Date.now() - takerRatio[k].at <= TAKER_STALE_MS).length;
-  badge.textContent = hotSymbols.length ? `· 🔥 ${live}/${hotSymbols.length}` : "";
+  const total = MARKETS.reduce((n, m) => n + (hotSymbols[m.id] || []).length, 0);
+  badge.textContent = total ? `· 🔥 ${live}/${total}` : "";
 }, 3000);
 setInterval(() => {
   const now = Date.now();
@@ -2189,7 +2225,7 @@ function pauseForBackground() {
     }
     if (restTimer[m.id]) { clearInterval(restTimer[m.id]); restTimer[m.id] = null; }
   });
-  closeHotStream();
+  closeAllHotStreams();
 }
 function resumeFromBackground() {
   appHidden = false;
@@ -2200,8 +2236,8 @@ function resumeFromBackground() {
     wsFailStreak[m.id] = 0;
     connectMarket(m);
   });
-  lastHotRebuild = 0;
-  rebuildHotStream();
+  lastHotRebuild = {};
+  rebuildAllHotStreams();
   dataDirty = true;
   render();
 }
