@@ -80,22 +80,56 @@ market; change it and rerun to test other definitions.
 - `errors.csv` — archive files that failed to download (Binance's archive can
   have gaps; these are recorded, not silently skipped).
 
-## Feeding results back into the scanner
+## score_v1: a candidate scoring rubric, tested against a real run
 
-`../../index.html` (VolScan) already implements a first qualitative pass at
-this, ahead of running the actual 6-month study:
+`score_v1.py` takes `runup_events.csv` from an actual run of the script above
+and scores every event with a hand-built rubric (impulse size, candle shape,
+RVOL, 5m liquidity, a combo bonus, and penalties — see the file for the exact
+bands), then checks whether higher SCORE actually means a higher share of
+`REAL_CONTINUATION` events.
 
-- Its composite SCORE now reads USDT-M futures taker-buy share too (the hot
-  `kline_1m` stream previously only ever opened against the spot host and
-  filtered to `market === "SPOT"` rows, so every futures pair scored with
-  `taker: null`).
-- SCORE now includes a candle-shape component: closing near the 1m candle's
-  high with a small upper wick adds points; closing in the lower part of the
-  range with a long upper wick (the MYX/EVAA "spike then give it back" shape)
-  subtracts points.
+```bash
+python score_v1.py --in binance_results/runup_events.csv --out score_v1_results
+```
 
-Once this script has been run for real, use `runup_summary.csv` to check
-whether those thresholds (and the existing RVOL/taker/spread bands in
-`computeScore()` in `index.html`) actually hold up, and adjust the weights —
-they're deliberately kept in one function so they can be tuned from data
-instead of by eye.
+`score_v1_results/` holds a real run: **193 events across 85 low-liquidity
+USD-M symbols, March–August 2026.** Its own report already flags the
+headline numbers as in-sample (the rubric was written looking at this same
+data), so `score_v1_time_split_check.py` re-checks the same events split by
+time — March–June (n=122, the period the rubric was effectively eyeballed
+against) vs held-out July–August (n=71):
+
+```bash
+python score_v1_time_split_check.py --in score_v1_results/score_v1_events.csv --split 2026-07-01
+```
+
+**What held up out-of-time (July–Aug repeats the March–June pattern):**
+- SCORE ≥60 gives ~2x lift over baseline in both periods; ≥70/≥80 hold or
+  improve in the held-out period.
+- Closing near the candle high with a wide body (`close_pos`, `body_pct`) is
+  consistently higher for `REAL_CONTINUATION` in both periods — this matches
+  the MYX/EVAA candle-shape logic already added to `index.html`'s SCORE.
+- **Tight 12h compression before the impulse (`range12_pct` ≤ 4%) predicts a
+  *lower* real-continuation rate, not higher, in both periods** (11%/7% vs
+  21%/23% for a wider pre-range). This contradicts VolScan's current "тихая
+  полка" bonus (+12 points in `computeScore()`), which rewards exactly the
+  opposite.
+- `taker_buy_share` medians are nearly identical between the two labels in
+  both periods — no real discriminative power here, at least on this sample.
+  `score_v1`'s rubric doesn't use it as a component at all.
+- High `vol_accel_1h` without a confirming candle shape leans towards
+  `FAILED_OR_PARTIAL`, not `REAL_CONTINUATION`, in both periods.
+
+**What's still shaky:** RVOL's direction flips between the two periods
+(clearly higher for REAL in March–June, roughly flat/reversed in July–Aug) —
+don't lean on it hard. And 122/71 events is still a small, single time-split
+sample, not a walk-forward validation.
+
+**Status:** `index.html`'s live SCORE has *not* been changed based on this —
+the decision (2026-09-18) was to wait for more months of data before
+touching the live scanner, given the sample size above. When more data is
+available, rerun `binance_runup_research.py` for a longer/fresher window,
+then `score_v1.py` and `score_v1_time_split_check.py` again, before adjusting
+`computeScore()` in `index.html` (candidates per the findings above: soften
+or drop the "тихая полка" bonus, de-weight `taker`, keep/strengthen the
+close_pos/body% component, keep capping the RVOL bonus at extreme values).
