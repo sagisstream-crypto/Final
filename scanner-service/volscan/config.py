@@ -105,6 +105,9 @@ class Config:
     alert_candidate: bool = True
     alert_accumulation: bool = False   # measured: no forward edge, so off by default
     alert_anomaly: bool = False
+    alert_wake: bool = False
+    alert_score: bool = False
+    tg_max_per_hour: int = 30          # hard ceiling across all pairs
 
     # ---------------- detector: volume anomaly ----------------
     # z-score of the current 1-minute turnover against the symbol's own rolling
@@ -132,6 +135,7 @@ class Config:
     # unconditional base rate.
     cand_rvol_min: float = 20.0
     cand_pct5m_min: float = 2.0
+    cand_range15_rel_min: float = 0.55      # 15m range vs the symbol's own norm (expansion, not squeeze)
     cand_range_expansion_min: float = 2.5   # 60m range vs the symbol's own 24h norm
     cand_dist_high24_min: float = -1.0      # within 1% of (or above) the 24h high
     cand_pos_range_min: float = 0.90        # sitting at the top of its own 4h range
@@ -161,6 +165,9 @@ class Config:
     dashboard_host: str = "127.0.0.1"
     dashboard_port: int = 8787
     dashboard_enabled: bool = True
+    # Optional shared secret for the settings WRITE endpoint. Empty = anyone who
+    # can open the dashboard can also change thresholds. See README.
+    dashboard_token: str = ""
     log_level: str = "INFO"
     outcome_checkpoints_min: tuple = (5, 15, 30, 60, 240)
 
@@ -201,3 +208,165 @@ def _coerce(value, typ):
             return tuple(x.strip() for x in value.split(",") if x.strip())
         return tuple(value)
     return value
+
+
+# --------------------------------------------------------------------------- #
+#  What the dashboard is allowed to edit at runtime
+# --------------------------------------------------------------------------- #
+# The old browser scanner kept its filters in localStorage, so every device had
+# its own copy. Here one backend serves the PC and the phone, so the settings
+# live server-side: a change made on either one takes effect for both, and for
+# the engine, within a second.
+#
+# (field, label, kind, group, hint). `kind` is num | int | bool | text | secret.
+# `live=False` marks a value that is only read when a structure is built, so it
+# needs a restart to take full effect — the UI says so instead of pretending.
+EDITABLE = [
+    # ---- старые фильтры (те же, что были в HTML-сканере) ----
+    ("threshold_10s",        "порог 10с $",          "num",    "old", "всплеск оборота за 10 секунд"),
+    ("threshold_1m",         "порог Δ1м $",          "num",    "old", "прирост оборота за минуту"),
+    ("threshold_2m",         "порог Δ2м $",          "num",    "old", "прирост оборота за две минуты"),
+    ("max_initial_price",    "макс. цена $",         "num",    "old", "0 = без ограничения"),
+    ("max_initial_volume",   "макс. нач. объём $",   "num",    "old", "не брать пару с суточным оборотом выше"),
+    ("score_threshold",      "score ≥",              "num",    "old", "порог составной оценки"),
+    ("log_score_min",        "лог score ≥",          "num",    "old", "с какого score писать в журнал"),
+    ("telegram_token",       "TG bot token",         "secret", "old", "от @BotFather"),
+    ("telegram_chat_id",     "TG chat id",           "text",   "old", "у групп и каналов с минусом"),
+
+    # ---- ускорение ----
+    ("accel_min_gain_pct",   "мин. рост за окно, %", "num",  "accel", "сколько цена должна прибавить"),
+    ("accel_min_rvol",       "мин. RVOL",            "num",  "accel", "абсолютный пол по объёму"),
+    ("accel_min_r2_price",   "R² цены ≥",            "num",  "accel", "насколько ровно растёт цена (0..1)"),
+    ("accel_min_r2_volume",  "R² объёма ≥",          "num",  "accel", "насколько ровно растёт объём (0..1)"),
+    ("accel_persist",        "дебаунс, сэмплов",     "int",  "accel", "сколько подряд держать состояние"),
+    ("accel_window_slots",   "окно, слотов",         "int",  "accel", "20 слотов × 30с = 10 минут"),
+    ("accel_slot_sec",       "слот, сек",            "num",  "accel", "шаг сетки усреднения"),
+    ("accel_alert_min_score", "🚀 в TG при score ≥", "num",  "accel", "ниже — только в журнал"),
+
+    # ---- кандидат +10% ----
+    ("cand_rvol_min",        "RVOL ≥",               "num",  "cand", "объём против своей средней минуты"),
+    ("cand_pct5m_min",       "Δ% за 5 мин ≥",        "num",  "cand", "импульс цены"),
+    ("cand_range15_rel_min", "диапазон 15м / норма ≥", "num", "cand", "расширение, а не сжатие"),
+    ("cand_dist_high24_min", "до 24ч хая ≥, %",      "num",  "cand", "−1 = в пределах 1% от хая"),
+    ("cand_pos_range_min",   "позиция в 4ч диапазоне ≥", "num", "cand", "0.90 = в верхних 10%"),
+    ("cand_taker_min",       "доля покупок ≥",       "num",  "cand", "0.60 по калибровке"),
+    ("cand_cooldown_sec",    "кулдаун, сек",         "num",  "cand", "не чаще одного на пару"),
+
+    # ---- алерты ----
+    ("alert_candidate",      "🎯 КАНДИДАТ в Telegram",   "bool", "alerts", "есть замеренное преимущество"),
+    ("alert_anomaly",        "🔥 АНОМ. ОБЪЁМ в Telegram", "bool", "alerts", "обычно дублирует ⚡/🚀"),
+    ("alert_accumulation",   "🐋 НАКОПЛЕНИЕ в Telegram", "bool", "alerts", "преимущества не замерено, будет много"),
+    ("alert_wake",           "😴→⚡ СЖАТИЕ в Telegram",  "bool", "alerts", "хуже случайного, по умолчанию выкл"),
+    ("alert_score",          "⭐ ВЫСОКИЙ SCORE в Telegram", "bool", "alerts", "по умолчанию только в журнал"),
+    ("tg_max_per_hour",      "потолок сообщений в час",  "int",  "alerts", "жёсткий лимит на всё"),
+    ("episode_cooldown_sec", "кулдаун эпизода, сек",     "num",  "alerts", "один эпизод на пару за это время"),
+    ("episode_idle_sec",     "эпизод остывает за, сек",  "num",  "alerts", "после тишины эпизод закрывается"),
+    ("escalate_rising_samples", "сэмплов роста для 🔥",  "int",  "alerts", "подряд, без отката"),
+    ("escalate_rvol_mult",   "во сколько раз RVOL для 🔥", "num", "alerts", "с момента ⚡"),
+
+    # ---- прочие детекторы ----
+    ("anomaly_z_min",        "аномалия: z ≥",        "num", "other", "z-оценка минутного оборота"),
+    ("anomaly_rvol_min",     "аномалия: RVOL ≥",     "num", "other", "обязательный абсолютный пол"),
+    ("anomaly_pct1m_min",    "аномалия: Δ%1м ≥",     "num", "other", "подтверждение ценой"),
+    ("accum_taker_min",      "накопление: доля покупок ≥", "num", "other", "за окно 20 минут"),
+    ("accum_taker_frac_min", "накопление: доля бычьих минут ≥", "num", "other", ""),
+    ("accum_net_flow_min",   "накопление: чистый поток ≥", "num", "other", "× своей средней минуты"),
+    ("accum_range_rel_max",  "накопление: диапазон ≤",  "num", "other", "цена должна стоять"),
+    ("compression_rel_max",  "сжатие: диапазон / норма ≤", "num", "other", "относительный, не фиксированный %"),
+    ("wake_rvol_min",        "выход из сжатия: RVOL ≥", "num", "other", ""),
+    ("wake_pct1m_min",       "выход из сжатия: Δ%1м ≥", "num", "other", ""),
+    ("early_rvol_min",       "⚡ ранний: RVOL ≥",     "num", "other", ""),
+    ("early_pct1m_min",      "⚡ ранний: Δ%1м ≥",     "num", "other", ""),
+]
+
+GROUPS = [
+    ("old",    "Старые фильтры"),
+    ("accel",  "🚀 Ускорение"),
+    ("cand",   "🎯 Кандидат +10%"),
+    ("alerts", "Алерты и Telegram"),
+    ("other",  "Остальные детекторы"),
+]
+
+# Changing these rebuilds nothing by itself; the engine reads them per tick.
+# The two exceptions below are read when a per-symbol structure is created.
+NEEDS_RESTART = {"accel_window_slots", "accel_slot_sec"}
+
+_LIMITS = {
+    "accel_min_r2_price": (0.0, 1.0), "accel_min_r2_volume": (0.0, 1.0),
+    "cand_taker_min": (0.0, 1.0), "cand_pos_range_min": (0.0, 1.0),
+    "accum_taker_min": (0.0, 1.0), "accum_taker_frac_min": (0.0, 1.0),
+    "accum_range_rel_max": (0.0, 10.0), "compression_rel_max": (0.0, 10.0),
+    "score_threshold": (0.0, 100.0), "log_score_min": (0.0, 100.0),
+    "accel_alert_min_score": (0.0, 100.0),
+    "accel_persist": (1, 20), "accel_window_slots": (6, 60),
+    "accel_slot_sec": (5.0, 300.0), "tg_max_per_hour": (1, 500),
+    "escalate_rising_samples": (1, 50),
+    "episode_cooldown_sec": (60.0, 86400.0), "episode_idle_sec": (60.0, 86400.0),
+    "cand_cooldown_sec": (60.0, 86400.0),
+    "cand_dist_high24_min": (-100.0, 100.0),
+    "max_initial_price": (0.0, 1e9), "max_initial_volume": (0.0, 1e13),
+}
+
+_EDITABLE_BY_NAME = {e[0]: e for e in EDITABLE}
+
+
+def parse_amount(raw):
+    """Accept the shorthand the old HTML panel accepted: 500k, 3млн, 1 000 000."""
+    if isinstance(raw, (int, float)):
+        return float(raw)
+    s = str(raw).strip().lower().replace(" ", "").replace(",", ".").replace("_", "").replace(" ", "")
+    mult = 1.0
+    for suffix, m in (("млн", 1e6), ("mln", 1e6), ("m", 1e6),
+                      ("тыс", 1e3), ("k", 1e3), ("к", 1e3)):
+        if s.endswith(suffix):
+            mult = m
+            s = s[: -len(suffix)]
+            break
+    return float(s) * mult
+
+
+def coerce_setting(name: str, raw):
+    """Validate and normalise one incoming settings value.
+
+    Raises ValueError with a message meant to be shown to the person typing.
+    """
+    spec = _EDITABLE_BY_NAME.get(name)
+    if spec is None:
+        raise ValueError(f"{name}: эта настройка не редактируется")
+    kind = spec[2]
+    if kind == "bool":
+        if isinstance(raw, bool):
+            return raw
+        return str(raw).strip().lower() in ("1", "true", "yes", "on", "да")
+    if kind in ("text", "secret"):
+        return str(raw).strip()
+    try:
+        val = parse_amount(raw)
+    except (TypeError, ValueError):
+        raise ValueError(f"{spec[1]}: «{raw}» — не число")
+    if kind == "int":
+        val = int(round(val))
+    lo, hi = _LIMITS.get(name, (None, None))
+    if lo is not None and not (lo <= val <= hi):
+        raise ValueError(f"{spec[1]}: допустимо от {lo} до {hi}")
+    if lo is None and val < 0 and name != "cand_dist_high24_min":
+        raise ValueError(f"{spec[1]}: не может быть отрицательным")
+    return val
+
+
+def settings_view(cfg: "Config"):
+    """The payload the dashboard renders its panel from."""
+    groups = []
+    for gid, title in GROUPS:
+        items = []
+        for name, label, kind, group, hint in EDITABLE:
+            if group != gid:
+                continue
+            value = getattr(cfg, name)
+            if kind == "secret":
+                value = ("•" * 8 + str(value)[-4:]) if value else ""
+            items.append({"name": name, "label": label, "kind": kind,
+                          "hint": hint, "value": value,
+                          "restart": name in NEEDS_RESTART})
+        groups.append({"id": gid, "title": title, "items": items})
+    return groups

@@ -6,6 +6,7 @@
   "db_path": "volscan.db",
   "dashboard_host": "0.0.0.0",
   "dashboard_port": 8787,
+  "dashboard_token": "",
   "alert_candidate": true,
   "alert_accumulation": false,
   "alert_anomaly": false,

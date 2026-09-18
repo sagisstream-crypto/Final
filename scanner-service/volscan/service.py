@@ -7,6 +7,7 @@ outcome tracking intact.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import signal as os_signal
 import time
@@ -15,7 +16,7 @@ from typing import Dict, List, Optional
 import aiohttp
 
 from .alerts import Telegram
-from .config import Config
+from .config import Config, coerce_setting
 from .dashboard import Dashboard
 from .engine import Engine, Tick
 from .feed import HotKlineFeed, HourlyRefresher, MarketFeed
@@ -45,6 +46,7 @@ class Service:
     # ------------------------------------------------------------- lifecycle
     async def run(self) -> None:
         self._restore()
+        self._apply_stored_settings()
         timeout = aiohttp.ClientTimeout(total=None, sock_connect=15, sock_read=60)
         self.session = aiohttp.ClientSession(timeout=timeout)
         self.telegram = Telegram(self.cfg, lambda: self.session)
@@ -62,7 +64,8 @@ class Service:
             tasks.append(asyncio.create_task(self._alerter(), name="alerter"))
             tasks.append(asyncio.create_task(self._outcomes(), name="outcomes"))
             if self.cfg.dashboard_enabled:
-                self.dashboard = Dashboard(self.cfg, self.storage, self.status)
+                self.dashboard = Dashboard(self.cfg, self.storage, self.status,
+                                           on_settings=self._on_settings_changed)
                 await self.dashboard.start()
                 log.info("dashboard on http://%s:%s", self.cfg.dashboard_host,
                          self.cfg.dashboard_port)
@@ -98,6 +101,30 @@ class Service:
                 loop.add_signal_handler(s, self.request_stop)
             except NotImplementedError:      # Windows
                 os_signal.signal(s, self.request_stop)
+
+    # -------------------------------------------------------------- settings
+    def _apply_stored_settings(self) -> None:
+        """Settings edited from the dashboard outlive a restart: they are stored
+        in SQLite and layered on top of config.json here."""
+        try:
+            stored = self.storage.load_settings()
+        except Exception as exc:
+            log.warning("could not read stored settings: %r", exc)
+            return
+        applied = 0
+        for name, raw in stored.items():
+            try:
+                value = coerce_setting(name, json.loads(raw))
+            except Exception:
+                continue
+            setattr(self.cfg, name, value)
+            applied += 1
+        if applied:
+            log.info("applied %d setting(s) saved from the dashboard", applied)
+
+    def _on_settings_changed(self, changed: dict) -> None:
+        names = ", ".join(sorted(changed))
+        log.info("settings changed from the dashboard: %s", names)
 
     # --------------------------------------------------------------- restore
     def _restore(self) -> None:

@@ -75,6 +75,12 @@ CREATE TABLE IF NOT EXISTS samples (
 ) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS ix_samples_ts ON samples(ts);
 
+CREATE TABLE IF NOT EXISTS settings (
+    k          TEXT PRIMARY KEY,
+    v          TEXT,
+    updated_at INTEGER
+);
+
 CREATE TABLE IF NOT EXISTS live (
     key     TEXT PRIMARY KEY,
     ts      INTEGER,
@@ -109,6 +115,25 @@ class Storage:
     def get_meta(self, k: str, default=None):
         row = self.db.execute("SELECT v FROM meta WHERE k=?", (k,)).fetchone()
         return row["v"] if row else default
+
+    # ------------------------------------------------------------- settings
+    # Written straight through (no batching): a settings change is rare, and the
+    # person clicking "OK" needs it to survive an immediate restart.
+    def load_settings(self) -> Dict[str, str]:
+        return {r["k"]: r["v"] for r in
+                self.db.execute("SELECT k,v FROM settings").fetchall()}
+
+    def save_settings(self, values: Dict[str, object]) -> None:
+        now = int(time.time() * 1000)
+        self.db.executemany(
+            "INSERT INTO settings(k,v,updated_at) VALUES(?,?,?)"
+            " ON CONFLICT(k) DO UPDATE SET v=excluded.v, updated_at=excluded.updated_at",
+            [(k, json.dumps(v), now) for k, v in values.items()])
+        self.db.commit()
+
+    def settings_updated_at(self) -> int:
+        row = self.db.execute("SELECT MAX(updated_at) m FROM settings").fetchone()
+        return row["m"] or 0
 
     # --------------------------------------------------------------- buffers
     def queue_signal(self, sig, alerted: bool) -> None:

@@ -60,7 +60,7 @@ class Telegram:
     def _rate_ok(self, now_ms: int) -> bool:
         hour = now_ms - 3600_000
         recent = sum(1 for t in self._sent if t >= hour)
-        return recent < 30                   # hard ceiling: 30 messages per hour
+        return recent < self.cfg.tg_max_per_hour
 
     def allowed(self, kind: str) -> bool:
         if kind in ("EARLY", "ACCEL", "BLOWOFF"):
@@ -71,6 +71,10 @@ class Telegram:
             return self.cfg.alert_accumulation
         if kind == "ANOMALY":
             return self.cfg.alert_anomaly
+        if kind == "WAKE":
+            return self.cfg.alert_wake
+        if kind == "SCORE":
+            return self.cfg.alert_score
         return False
 
     async def send_signal(self, sig) -> bool:

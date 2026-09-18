@@ -18,7 +18,7 @@ from typing import Optional
 
 from aiohttp import web
 
-from .config import Config
+from .config import (Config, NEEDS_RESTART, coerce_setting, settings_view)
 from .storage import Storage
 
 PAGE = r"""<!DOCTYPE html>
@@ -100,6 +100,30 @@ PAGE = r"""<!DOCTYPE html>
        background:#0a0e0a}
   .sig .t{font-size:11px;color:var(--dim)}
   .sig .r{font-size:11px;color:#8fa08f;margin-top:3px;white-space:normal;line-height:1.45}
+  /* settings panel */
+  .sect{border:1px solid var(--line);border-radius:4px;margin-bottom:12px;background:#0a0e0a}
+  .sect h2{font-size:12px;color:var(--green);letter-spacing:.1em;font-weight:600;
+           padding:10px 12px;border-bottom:1px solid var(--line)}
+  .fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:8px;padding:12px}
+  .fld{display:flex;align-items:center;gap:7px;background:var(--bg);border:1px solid var(--line);
+       border-radius:3px;padding:6px 8px;transition:border-color .2s}
+  .fld.saved{border-color:var(--green)}
+  .fld.bad{border-color:var(--red)}
+  .fld label{flex:1 1 auto;color:var(--dim);font-size:11px;line-height:1.3;min-width:0}
+  .fld label b{display:block;color:var(--text);font-weight:400;font-size:12px}
+  .fld input[type=text]{width:88px;flex:0 0 auto;background:transparent;border:none;outline:none;
+       color:var(--text);font-family:inherit;font-size:16px;text-align:right;min-width:0}
+  .fld input[type=checkbox]{width:22px;height:22px;accent-color:var(--green);flex:0 0 auto}
+  .fld button{flex:0 0 auto;background:#1a2e1a;border:1px solid #2f4a2f;color:var(--green);
+       font-family:inherit;font-size:11px;padding:7px 10px;border-radius:3px;cursor:pointer;min-height:34px}
+  .fld button:active{background:#233823}
+  .warnrestart{color:var(--amber);font-size:10px}
+  .note{font-size:11px;color:var(--dim);padding:0 12px 12px;line-height:1.5}
+  .note.warn{color:var(--amber)}
+  #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:22px;z-index:60;
+         background:#12240f;border:1px solid #2f4a2f;color:var(--green);padding:10px 16px;
+         border-radius:4px;font-size:12px;display:none;max-width:90vw;text-align:center}
+  #toast.bad{background:#2a1414;border-color:#5a2a2a;color:var(--red)}
   @media (max-width:760px){
     body{font-size:14px}
     .hide-s{display:none}
@@ -126,11 +150,14 @@ PAGE = r"""<!DOCTYPE html>
     <button data-f="cand">🎯 КАНДИДАТЫ</button>
     <button data-f="accum">🐋 НАКОПЛЕНИЕ</button>
     <button data-f="signals">📜 СИГНАЛЫ</button>
+    <button data-f="settings">⚙ ФИЛЬТРЫ</button>
   </div>
 </header>
 <main>
   <div id="view"></div>
 </main>
+
+<div id="toast"></div>
 
 <div class="sheet" id="sheet">
   <div class="sheet-in">
@@ -192,6 +219,7 @@ function badges(r) {
 
 function render() {
   if (filter === "signals") return renderSignals();
+  if (filter === "settings") return renderSettings();
   let list = rows;
   if (filter === "accel") list = rows.filter(r => r.accel);
   if (filter === "cand") list = rows.filter(r => r.candidate);
@@ -226,6 +254,93 @@ function renderSignals() {
         ${s.alerted ? "· 📨 TG" : ""} · score ${s.score}</div>
       <div class="r">${(s.reasons || "").replace(/</g, "&lt;")}</div>
     </div>`).join("");
+}
+
+// ---- settings panel: same value+OK box as the old HTML scanner, but the value
+// lives on the server, so PC and phone always agree and the engine picks it up
+// on the very next tick.
+let settingsData = null;
+const esc = t => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+const tokenKey = "volscan_token";
+const getToken = () => { try { return localStorage.getItem(tokenKey) || ""; } catch (e) { return ""; } };
+
+function toast(msg, bad) {
+  const t = $("#toast");
+  t.textContent = msg; t.className = bad ? "bad" : "";
+  t.style.display = "block";
+  clearTimeout(t._h); t._h = setTimeout(() => { t.style.display = "none"; }, 3200);
+}
+
+async function renderSettings() {
+  if (!settingsData) {
+    try {
+      settingsData = await (await fetch("api/settings", {cache: "no-store"})).json();
+    } catch (e) { $("#view").innerHTML = `<div class="empty">не удалось загрузить настройки</div>`; return; }
+  }
+  const d = settingsData;
+  $("#view").innerHTML = d.groups.map(g => `<div class="sect">
+      <h2>${esc(g.title)}</h2>
+      <div class="fields">${g.items.map(it => fieldHtml(it)).join("")}</div>
+    </div>`).join("")
+    + `<div class="sect"><h2>ДОСТУП</h2><div class="fields">
+        <div class="fld"><label><b>токен этого браузера</b>нужен, только если включён dashboard_token</label>
+        <input type="text" id="tok" value="${esc(getToken())}" placeholder="пусто">
+        <button id="tok-ok">OK</button></div></div>
+        <div class="note${d.protected ? " warn" : ""}">${d.protected
+          ? "Запись настроек защищена токеном. Впишите его сюда один раз — он останется в этом браузере."
+          : "Запись настроек НЕ защищена: любой, кто откроет этот адрес, может менять пороги. Если дашборд виден в сети — задайте dashboard_token в config.json (см. README)."}</div>
+       </div>`
+    + `<div class="note">Значения применяются к работающему сканеру сразу и сохраняются в базу — переживут перезапуск. Можно писать сокращения: <b>500m</b>, <b>3млн</b>, <b>50k</b>.</div>`;
+
+  document.querySelectorAll("[data-apply]").forEach(b =>
+    b.addEventListener("click", () => applyField(b.dataset.apply)));
+  document.querySelectorAll("input[data-name][type=text]").forEach(i =>
+    i.addEventListener("keydown", e => { if (e.key === "Enter") applyField(i.dataset.name); }));
+  document.querySelectorAll("input[data-name][type=checkbox]").forEach(i =>
+    i.addEventListener("change", () => applyField(i.dataset.name)));
+  const tk = $("#tok-ok");
+  if (tk) tk.addEventListener("click", () => {
+    try { localStorage.setItem(tokenKey, $("#tok").value.trim()); } catch (e) {}
+    toast("токен сохранён в этом браузере");
+  });
+}
+
+function fieldHtml(it) {
+  const warn = it.restart ? `<span class="warnrestart">нужен перезапуск</span>` : "";
+  const hint = it.hint ? `${esc(it.hint)} ` : "";
+  const lbl = `<label><b>${esc(it.label)}</b>${hint}${warn}</label>`;
+  if (it.kind === "bool") {
+    return `<div class="fld" id="fld-${it.name}">${lbl}
+      <input type="checkbox" data-name="${it.name}" ${it.value ? "checked" : ""}></div>`;
+  }
+  return `<div class="fld" id="fld-${it.name}">${lbl}
+    <input type="text" data-name="${it.name}" value="${esc(it.value)}"
+      inputmode="${it.kind === "text" || it.kind === "secret" ? "text" : "decimal"}">
+    <button data-apply="${it.name}">OK</button></div>`;
+}
+
+async function applyField(name) {
+  const el = document.querySelector(`input[data-name="${name}"]`);
+  const box = $("#fld-" + name);
+  const value = el.type === "checkbox" ? el.checked : el.value;
+  try {
+    const r = await fetch("api/settings", {
+      method: "POST",
+      headers: {"Content-Type": "application/json", "X-VolScan-Token": getToken()},
+      body: JSON.stringify({[name]: value}),
+    });
+    const d = await r.json();
+    if (!d.ok) { box.className = "fld bad"; toast(d.error || "не применилось", true); return; }
+    box.className = "fld saved";
+    setTimeout(() => { box.className = "fld"; }, 1400);
+    settingsData = null;
+    toast((d.restart && d.restart.length)
+      ? "сохранено, но это значение подхватится после перезапуска"
+      : "применено");
+  } catch (e) {
+    box.className = "fld bad";
+    toast("нет связи с сервисом", true);
+  }
 }
 
 async function openPair(key) {
@@ -285,10 +400,11 @@ poll();
 
 
 class Dashboard:
-    def __init__(self, cfg: Config, storage: Storage, status_fn):
+    def __init__(self, cfg: Config, storage: Storage, status_fn, on_settings=None):
         self.cfg = cfg
         self.storage = storage
         self.status_fn = status_fn
+        self.on_settings = on_settings
         self.runner: Optional[web.AppRunner] = None
 
     async def start(self) -> None:
@@ -298,6 +414,8 @@ class Dashboard:
         app.router.add_get("/api/state", self._state)
         app.router.add_get("/api/pair", self._pair)
         app.router.add_get("/api/health", self._health)
+        app.router.add_get("/api/settings", self._get_settings)
+        app.router.add_post("/api/settings", self._post_settings)
         self.runner = web.AppRunner(app, access_log=None)
         await self.runner.setup()
         site = web.TCPSite(self.runner, self.cfg.dashboard_host, self.cfg.dashboard_port)
@@ -332,3 +450,69 @@ class Dashboard:
             "history": self.storage.history(key, since),
             "signals": self.storage.recent_signals(40, key),
         })
+
+    # ------------------------------------------------------------- settings
+    # The panel edits the LIVE Config object this process is already using, so a
+    # change takes effect on the very next tick — no restart, no polling delay.
+    # It is also written to SQLite so it survives one.
+    def _auth_ok(self, req) -> bool:
+        token = (self.cfg.dashboard_token or "").strip()
+        if not token:
+            return True
+        given = (req.headers.get("X-VolScan-Token")
+                 or req.query.get("token") or "").strip()
+        return given == token
+
+    async def _get_settings(self, _req):
+        return web.json_response({
+            "groups": settings_view(self.cfg),
+            "needs_restart": sorted(NEEDS_RESTART),
+            "protected": bool((self.cfg.dashboard_token or "").strip()),
+        })
+
+    async def _post_settings(self, req):
+        if not self._auth_ok(req):
+            return web.json_response(
+                {"ok": False, "error": "неверный токен доступа"}, status=403)
+        try:
+            body = await req.json()
+        except Exception:
+            return web.json_response({"ok": False, "error": "битый JSON"}, status=400)
+        if not isinstance(body, dict) or not body:
+            return web.json_response({"ok": False, "error": "пустой запрос"}, status=400)
+        clean, errors = {}, []
+        for name, raw in body.items():
+            # a masked secret means "leave it alone"
+            if isinstance(raw, str) and raw.startswith("\u2022"):
+                continue
+            try:
+                clean[name] = coerce_setting(name, raw)
+            except ValueError as exc:
+                errors.append(str(exc))
+        if errors:
+            return web.json_response({"ok": False, "error": "; ".join(errors)}, status=400)
+        if not clean:
+            return web.json_response({"ok": True, "applied": {}, "restart": []})
+        for name, value in clean.items():
+            setattr(self.cfg, name, value)
+        try:
+            self.storage.save_settings(clean)
+        except Exception as exc:
+            return web.json_response(
+                {"ok": False, "error": f"не удалось сохранить: {exc}"}, status=500)
+        if self.on_settings:
+            try:
+                self.on_settings(clean)
+            except Exception:
+                pass
+        return web.json_response({
+            "ok": True,
+            "applied": {k: (v if not _is_secret(k) else "сохранено") for k, v in clean.items()},
+            "restart": sorted(set(clean) & NEEDS_RESTART),
+        })
+
+
+def _is_secret(name: str) -> bool:
+    return "token" in name
+
+

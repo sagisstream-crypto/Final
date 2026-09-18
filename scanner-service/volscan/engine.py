@@ -744,7 +744,7 @@ class Engine:
         # +10% candidate: calibrated at 18.9% of fires reaching +10% within 4h
         cand = (rvol >= cfg.cand_rvol_min
                 and p5 is not None and p5 >= cfg.cand_pct5m_min
-                and f.get("range15_rel") is not None and f["range15_rel"] >= 0.55
+                and f.get("range15_rel") is not None and f["range15_rel"] >= cfg.cand_range15_rel_min
                 and f.get("dist_high24") is not None and f["dist_high24"] >= cfg.cand_dist_high24_min
                 and f.get("pos_range") is not None and f["pos_range"] >= cfg.cand_pos_range_min
                 and (taker is None or taker >= cfg.cand_taker_min)
@@ -763,7 +763,7 @@ class Engine:
                 and p1 is not None and p1 >= cfg.anomaly_pct1m_min
                 and st.can_fire("ANOMALY", now, cfg.anomaly_cooldown_sec)):
             st.mark("ANOMALY", now)
-            sigs.append(mk("ANOMALY", alert=False, extra=[
+            sigs.append(mk("ANOMALY", alert=cfg.alert_anomaly, extra=[
                 f"💥 ВЗРЫВ ОБЪЁМА z={z:.1f} · RVOL ×{rvol:.0f}"]))
 
         # compression wake-up: logged, deliberately NOT alerted — measured
@@ -773,7 +773,7 @@ class Engine:
                 and p1 is not None and p1 >= cfg.wake_pct1m_min
                 and st.can_fire("WAKE", now, cfg.anomaly_cooldown_sec)):
             st.mark("WAKE", now)
-            sigs.append(mk("WAKE", alert=False, extra=["😴→⚡ выход из сжатия"]))
+            sigs.append(mk("WAKE", alert=cfg.alert_wake, extra=["😴→⚡ выход из сжатия"]))
 
         # accumulation: descriptive state, never alerted
         acc = (f.get("taker_w") is not None and f["taker_w"] >= cfg.accum_taker_min
@@ -785,13 +785,13 @@ class Engine:
         st.snapshot["accumulating"] = f["accumulating"]
         if f["accumulating"] and st.can_fire("ACCUM", now, cfg.accum_cooldown_sec):
             st.mark("ACCUM", now)
-            sigs.append(mk("ACCUM", alert=False, extra=["🧲 накопление"]))
+            sigs.append(mk("ACCUM", alert=cfg.alert_accumulation, extra=["🧲 накопление"]))
 
         # plain high score — journal only
         if (score >= cfg.log_score_min and not tier1
                 and st.can_fire("SCORE", now, cfg.cluster_cooldown_sec)):
             st.mark("SCORE", now)
-            sigs.append(mk("SCORE", alert=False))
+            sigs.append(mk("SCORE", alert=cfg.alert_score))
         return sigs
 
     # ------------------------------------------------------------------ views

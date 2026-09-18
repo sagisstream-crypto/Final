@@ -18,6 +18,8 @@ from volscan.engine import Engine, Tick, _blocks_rising, _fit
 from volscan.indicators import median, stdev, zscore, lin_reg_slope_per_min
 from volscan.storage import Storage
 from volscan.alerts import format_signal, TYPES
+from volscan.config import (EDITABLE, GROUPS, coerce_setting, parse_amount,
+                            settings_view)
 from volscan.feed import hourly_context, parse_ws_ticker, rsi
 
 MIN = 60_000
@@ -218,6 +220,86 @@ class TestFeedParsing(unittest.TestCase):
         self.assertIsNotNone(ctx.rsi14)
         self.assertIsNotNone(ctx.bb_width_pct)
         self.assertTrue(0.0 <= ctx.bb_width_pct <= 1.0)
+
+
+class TestSettings(unittest.TestCase):
+    """The dashboard's filter panel writes to the LIVE config, so the validation
+    in front of it is the only thing standing between a typo and a broken run."""
+
+    def test_old_html_filters_are_all_exposed(self):
+        names = {e[0] for e in EDITABLE}
+        for old in ("threshold_10s", "threshold_1m", "threshold_2m",
+                    "max_initial_price", "max_initial_volume", "score_threshold",
+                    "telegram_token", "telegram_chat_id"):
+            self.assertIn(old, names, f"{old} must stay editable from the browser")
+
+    def test_new_thresholds_are_exposed(self):
+        names = {e[0] for e in EDITABLE}
+        for new in ("accel_min_r2_price", "accel_min_r2_volume", "accel_min_rvol",
+                    "accel_min_gain_pct", "accel_persist", "accel_alert_min_score",
+                    "cand_rvol_min", "cand_pct5m_min", "cand_range15_rel_min",
+                    "cand_dist_high24_min", "cand_pos_range_min", "cand_taker_min",
+                    "alert_candidate", "alert_anomaly", "alert_accumulation",
+                    "alert_wake", "alert_score", "tg_max_per_hour",
+                    "episode_cooldown_sec", "episode_idle_sec"):
+            self.assertIn(new, names, f"{new} must be editable from the browser")
+
+    def test_every_editable_field_exists_on_config(self):
+        cfg = Config()
+        for name, label, kind, group, hint in EDITABLE:
+            self.assertTrue(hasattr(cfg, name), name)
+            self.assertIn(group, {g[0] for g in GROUPS}, name)
+            self.assertIn(kind, ("num", "int", "bool", "text", "secret"), name)
+
+    def test_shorthand_amounts(self):
+        self.assertEqual(parse_amount("500m"), 500_000_000)
+        self.assertEqual(parse_amount("3млн"), 3_000_000)
+        self.assertEqual(parse_amount("50k"), 50_000)
+        self.assertEqual(parse_amount("1 000 000"), 1_000_000)
+
+    def test_validation_rejects_bad_values(self):
+        with self.assertRaises(ValueError):
+            coerce_setting("accel_min_r2_price", "5")        # out of 0..1
+        with self.assertRaises(ValueError):
+            coerce_setting("score_threshold", "abc")         # not a number
+        with self.assertRaises(ValueError):
+            coerce_setting("db_path", "/etc/passwd")         # not editable at all
+        with self.assertRaises(ValueError):
+            coerce_setting("accel_min_rvol", "-5")           # negative
+
+    def test_validation_accepts_good_values(self):
+        self.assertEqual(coerce_setting("max_initial_volume", "250m"), 250_000_000)
+        self.assertEqual(coerce_setting("accel_persist", "3"), 3)
+        self.assertIs(coerce_setting("alert_accumulation", "да"), True)
+        self.assertIs(coerce_setting("alert_accumulation", "нет"), False)
+        self.assertEqual(coerce_setting("cand_dist_high24_min", "-1.5"), -1.5)
+
+    def test_secrets_are_masked_in_the_view(self):
+        cfg = Config()
+        cfg.telegram_token = "123456789:AAHsecretpart"
+        for g in settings_view(cfg):
+            for it in g["items"]:
+                if it["name"] == "telegram_token":
+                    self.assertNotIn("secretpart", it["value"])
+                    self.assertTrue(it["value"].startswith("•"))
+
+    def test_applied_setting_changes_engine_behaviour_immediately(self):
+        cfg = Config()
+        cfg.min_base_age_sec = 0.0
+        e = Engine(cfg)
+        e.on_ticker_batch("SPOT", [Tick("AUSDT", 1.0, 0, 4e8)], 1)
+        self.assertIn("SPOT:AUSDT", e.states)      # under the 500M ceiling
+        setattr(cfg, "max_initial_volume", coerce_setting("max_initial_volume", "100m"))
+        e.on_ticker_batch("SPOT", [Tick("BUSDT", 1.0, 0, 4e8)], 2)
+        self.assertNotIn("SPOT:BUSDT", e.states)   # same engine, new ceiling, no restart
+
+    def test_settings_round_trip_through_storage(self):
+        import json as _json
+        with tempfile.TemporaryDirectory() as d:
+            st = Storage(os.path.join(d, "s.db"))
+            st.save_settings({"score_threshold": 72.0, "alert_wake": True})
+            self.assertEqual(_json.loads(st.load_settings()["score_threshold"]), 72.0)
+            st.close()
 
 
 if __name__ == "__main__":
