@@ -1,0 +1,28 @@
+# VolScan scanner service — systemd unit
+#
+#   sudo cp deploy/volscan.service /etc/systemd/system/
+#   sudo nano /etc/systemd/system/volscan.service     # поправить User и пути
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now volscan
+#   journalctl -u volscan -f
+#
+[Unit]
+Description=VolScan Binance scanner service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=youruser
+WorkingDirectory=/home/youruser/volscan/scanner-service
+ExecStart=/home/youruser/volscan/scanner-service/.venv/bin/python3 run.py --config config.json
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+# лёгкое усиление безопасности: сервису нужен только свой каталог
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

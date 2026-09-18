@@ -1,0 +1,13 @@
+{
+  "telegram_token": "123456789:AA...ваш_токен...",
+  "telegram_chat_id": "-1001234567890",
+  "max_initial_volume": 500000000,
+  "max_initial_price": 0,
+  "db_path": "volscan.db",
+  "dashboard_host": "0.0.0.0",
+  "dashboard_port": 8787,
+  "alert_candidate": true,
+  "alert_accumulation": false,
+  "alert_anomaly": false,
+  "log_level": "INFO"
+}

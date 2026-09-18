@@ -1,0 +1,10 @@
+config.json
+volscan.db
+volscan.db-wal
+volscan.db-shm
+*.log
+*.pid
+.venv/
+__pycache__/
+*.pyc
+tools/.klines/
