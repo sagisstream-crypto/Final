@@ -8,3 +8,6 @@ volscan.db-shm
 __pycache__/
 *.pyc
 tools/.klines/
+build/
+dist/
+*.spec
