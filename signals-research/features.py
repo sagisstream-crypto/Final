@@ -18,11 +18,12 @@ from binance_data import read_klines, months
 DAY = 1440
 
 
-def load_symbol(symbol, start, end):
-    """Concatenated 1m bars for a symbol. Returns a dict of float64/int arrays."""
+def load_symbol(symbol, start, end, market="spot"):
+    """Concatenated 1m bars for a symbol. Returns a dict of float64/int arrays.
+    `market` is "spot" or "futures/um" (USDT-M perpetuals)."""
     ts, o, h, l, c, qv, nt, tbq = [], [], [], [], [], [], [], []
     for ym in months(start, end):
-        rows = read_klines(symbol, "1m", ym)
+        rows = read_klines(symbol, "1m", ym, market=market)
         if not rows:
             continue
         for r in rows:

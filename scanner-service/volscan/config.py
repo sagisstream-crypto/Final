@@ -107,7 +107,34 @@ class Config:
     alert_anomaly: bool = False
     alert_wake: bool = False
     alert_score: bool = False
+    alert_blast: bool = True
     tg_max_per_hour: int = 30          # hard ceiling across all pairs
+
+    # ---------------- detector: explosive launch (single candle) ----------------
+    # ACCEL needs ~10 minutes of ramp. Some moves have no ramp at all: a dead
+    # pair prints ONE candle where the trade COUNT explodes, the candle's own
+    # range is 4-15% and RSI(6) saturates. To fire on sample 1 there is no
+    # temporal persistence available as a noise filter, so severity does that
+    # job: every term below is a single-sample outlier test against the pair's
+    # own quiet baseline.
+    blast_window_sec: float = 300.0        # the "candle" this looks at (5 min, like the charts)
+    blast_baseline_sec: float = 3600.0     # the quiet base it is compared against
+    # Measured A/B on 110 perps over 8 months: the trade-count axis turned out to
+    # be largely REDUNDANT with RVOL — leaning on it (x60, x120) looked better
+    # in-sample and got worse out-of-time, the signature of a curve fit. It ships
+    # as a modest sanity floor instead: it costs nothing (205 vs 206 events) and
+    # still rejects the case it was meant for, one whale print faking a candle.
+    blast_trades_x_min: float = 8.0        # trades/min vs the pair's own quiet median
+    blast_trades_floor: float = 5.0        # trades/min floor so a dead tape can't score x1000
+    blast_range_pct_min: float = 2.5       # the candle's own high-low range
+    blast_range_x_min: float = 6.0         # ... and how much wider than the base that is
+    blast_rvol_min: float = 60.0
+    blast_close_pos_min: float = 0.60      # closed in the upper part of its own range
+    # RSI(6) saturates at 94-99 on these candles by construction, so gating on it
+    # was measured to change nothing (25.4% -> 25.0% at >=80). Ships off; the
+    # value is still computed, shown and alertable.
+    blast_rsi_min: float = 0.0             # RSI(6) on the recent price track
+    blast_cooldown_sec: float = 120 * 60
 
     # ---------------- detector: volume anomaly ----------------
     # z-score of the current 1-minute turnover against the symbol's own rolling
@@ -253,6 +280,7 @@ EDITABLE = [
     ("cand_cooldown_sec",    "кулдаун, сек",         "num",  "cand", "не чаще одного на пару"),
 
     # ---- алерты ----
+    ("alert_blast",          "💥 ВЗРЫВНОЙ СТАРТ в Telegram", "bool", "alerts", "вход на первой свече, догоняющий"),
     ("alert_candidate",      "🎯 КАНДИДАТ в Telegram",   "bool", "alerts", "есть замеренное преимущество"),
     ("alert_anomaly",        "🔥 АНОМ. ОБЪЁМ в Telegram", "bool", "alerts", "обычно дублирует ⚡/🚀"),
     ("alert_accumulation",   "🐋 НАКОПЛЕНИЕ в Telegram", "bool", "alerts", "преимущества не замерено, будет много"),
@@ -263,6 +291,17 @@ EDITABLE = [
     ("episode_idle_sec",     "эпизод остывает за, сек",  "num",  "alerts", "после тишины эпизод закрывается"),
     ("escalate_rising_samples", "сэмплов роста для 🔥",  "int",  "alerts", "подряд, без отката"),
     ("escalate_rvol_mult",   "во сколько раз RVOL для 🔥", "num", "alerts", "с момента ⚡"),
+
+    # ---- взрывной старт ----
+    ("blast_trades_x_min",   "сделок ×к тишине ≥",   "num", "blast", "главная ось: число сделок, не $"),
+    ("blast_range_pct_min",  "диапазон свечи ≥, %",  "num", "blast", "размах одной свечи"),
+    ("blast_range_x_min",    "диапазон ×к обычному ≥", "num", "blast", "во сколько раз шире базы"),
+    ("blast_rvol_min",       "RVOL ≥",               "num", "blast", "оборот против своей средней минуты"),
+    ("blast_close_pos_min",  "закрытие в верхней части ≥", "num", "blast", "0.60 = верхние 40% свечи"),
+    ("blast_rsi_min",        "RSI(6) ≥",             "num", "blast", "перегрев на коротком RSI"),
+    ("blast_window_sec",     "окно свечи, сек",      "num", "blast", "300 = 5 минут"),
+    ("blast_baseline_sec",   "база сравнения, сек",  "num", "blast", "3600 = час тишины"),
+    ("blast_cooldown_sec",   "кулдаун, сек",         "num", "blast", ""),
 
     # ---- прочие детекторы ----
     ("anomaly_z_min",        "аномалия: z ≥",        "num", "other", "z-оценка минутного оборота"),
@@ -283,6 +322,7 @@ GROUPS = [
     ("old",    "Старые фильтры"),
     ("accel",  "🚀 Ускорение"),
     ("cand",   "🎯 Кандидат +10%"),
+    ("blast",  "💥 Взрывной старт (вход на 1-й свече)"),
     ("alerts", "Алерты и Telegram"),
     ("other",  "Остальные детекторы"),
 ]
@@ -298,6 +338,9 @@ _LIMITS = {
     "accum_range_rel_max": (0.0, 10.0), "compression_rel_max": (0.0, 10.0),
     "score_threshold": (0.0, 100.0), "log_score_min": (0.0, 100.0),
     "accel_alert_min_score": (0.0, 100.0),
+    "blast_close_pos_min": (0.0, 1.0), "blast_rsi_min": (0.0, 100.0),
+    "blast_window_sec": (60.0, 1800.0), "blast_baseline_sec": (600.0, 21600.0),
+    "blast_cooldown_sec": (60.0, 86400.0),
     "accel_persist": (1, 20), "accel_window_slots": (6, 60),
     "accel_slot_sec": (5.0, 300.0), "tg_max_per_hour": (1, 500),
     "escalate_rising_samples": (1, 50),

@@ -250,15 +250,16 @@ def _live_payload(st) -> dict:
     keep = ("price", "score", "rvol", "d1m", "d2m", "pct1m", "pct2m", "pct5m", "taker",
             "taker_w", "net_flow_x", "mult", "day_qv", "dist_high24", "range15",
             "range15_rel", "session_gain", "vol_z", "accel_gain", "accel_r2_p",
-            "accel_r2_v", "hourly_rsi", "hourly_bb_pct", "hourly_vol_z")
+            "accel_r2_v", "blast_trades_x", "blast_range", "blast_range_x",
+            "blast_rsi6", "hourly_rsi", "hourly_bb_pct", "hourly_vol_z")
     out = {"key": st.key, "symbol": st.symbol, "base": st.base, "market": st.market,
            "ts": s.get("ts")}
     for k in keep:
         v = s.get(k)
         if isinstance(v, (int, float)):
             out[k] = round(float(v), 8)
-    for k in ("accel", "candidate", "accumulating", "compressed", "break15",
-              "precursor", "background_ok"):
+    for k in ("accel", "blast", "candidate", "accumulating", "compressed",
+              "break15", "precursor", "background_ok"):
         if s.get(k):
             out[k] = True
     out["reasons"] = " · ".join(s.get("reasons", [])[:5])

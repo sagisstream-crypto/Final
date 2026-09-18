@@ -131,6 +131,136 @@ class TestAccelDetector(unittest.TestCase):
         self.assertFalse(any(s.kind == "ACCEL" for s in sigs))
 
 
+def feed_bars(engine, symbol, bars, start=1_700_000_000_000, market="SPOT",
+              day_qv_mult=1440.0, ticks_per_min=4):
+    """bars: list of (open, high, low, close, minute_turnover, minute_trades).
+    Each minute is walked open -> extreme -> extreme -> close, the way the live
+    ticker actually traverses a candle."""
+    sigs = []
+    cum_qv = bars[0][4] * day_qv_mult
+    cum_tr = 0.0
+    for bi, (o, hi, lo, cl, qv, ntr) in enumerate(bars):
+        path = [o, lo, hi, cl] if cl >= o else [o, hi, lo, cl]
+        for k in range(ticks_per_min):
+            frac = (k + 1) / ticks_per_min
+            ts = start + bi * 60_000 + int(60_000 * k / ticks_per_min)
+            t = Tick(symbol=symbol, price=path[min(k, len(path) - 1)], pct24=0.0,
+                     quote_volume=cum_qv + qv * frac,
+                     trades=cum_tr + ntr * frac,
+                     high=hi, low=lo, vwap=(hi + lo + cl) / 3)
+            sigs += engine.on_ticker_batch(market, [t], ts)
+        cum_qv += qv
+        cum_tr += ntr
+    return sigs
+
+
+class TestBlastDetector(unittest.TestCase):
+    """💥 ВЗРЫВНОЙ СТАРТ fires on a SINGLE candle, so it has no debounce to lean
+    on — severity against the pair's own quiet hour is the only noise filter."""
+
+    def _engine(self):
+        cfg = Config()
+        cfg.min_base_age_sec = 0.0
+        return Engine(cfg)
+
+    @staticmethod
+    def _quiet(n=90, price=1.0, qv=1000.0, ntr=20.0):
+        return [(price, price * 1.0005, price * 0.9995, price, qv, ntr)] * n
+
+    def test_explosive_candle_after_quiet_base_fires(self):
+        e = self._engine()
+        bars = self._quiet()
+        # five minutes that between them print a 9% range on 100x turnover
+        p = 1.0
+        for i in range(5):
+            nxt = p * 1.019
+            bars.append((p, nxt * 1.002, p * 0.999, nxt, 1000.0 * 120, 20.0 * 60))
+            p = nxt
+        sigs = feed_bars(e, "BOOMUSDT", bars)
+        self.assertTrue(any(s.kind == "BLAST" for s in sigs))
+
+    def test_quiet_tape_never_fires(self):
+        e = self._engine()
+        sigs = feed_bars(e, "CALMUSDT", self._quiet(200))
+        self.assertFalse(any(s.kind == "BLAST" for s in sigs))
+
+    def test_big_range_without_volume_does_not_fire(self):
+        e = self._engine()
+        bars = self._quiet()
+        p = 1.0
+        for i in range(5):
+            nxt = p * 1.019
+            bars.append((p, nxt * 1.002, p * 0.999, nxt, 1000.0, 20.0))  # no volume
+            p = nxt
+        sigs = feed_bars(e, "NOVOL2USDT", bars)
+        self.assertFalse(any(s.kind == "BLAST" for s in sigs))
+
+    def test_volume_without_range_does_not_fire(self):
+        e = self._engine()
+        bars = self._quiet()
+        for i in range(5):
+            bars.append((1.0, 1.0005, 0.9995, 1.0, 1000.0 * 120, 20.0 * 60))
+        sigs = feed_bars(e, "NORANGEUSDT", bars)
+        self.assertFalse(any(s.kind == "BLAST" for s in sigs))
+
+    def test_candle_closing_on_its_low_does_not_fire(self):
+        e = self._engine()
+        bars = self._quiet()
+        p = 1.0
+        for i in range(5):
+            # violent range and volume, but it closes at the bottom — a dump
+            bars.append((p, p * 1.03, p * 0.97, p * 0.972, 1000.0 * 120, 20.0 * 60))
+            p *= 0.972
+        sigs = feed_bars(e, "DUMPUSDT", bars)
+        self.assertFalse(any(s.kind == "BLAST" for s in sigs))
+
+    def test_blast_fires_without_any_prior_early_or_accel(self):
+        """The reference screenshots had no warm-up at all, so BLAST must not be
+        gated behind the EARLY -> ACCEL ladder."""
+        e = self._engine()
+        bars = self._quiet()
+        p = 1.0
+        for i in range(5):
+            nxt = p * 1.019
+            bars.append((p, nxt * 1.002, p * 0.999, nxt, 1000.0 * 150, 20.0 * 80))
+            p = nxt
+        sigs = feed_bars(e, "STEPUSDT", bars)
+        kinds = [s.kind for s in sigs]
+        self.assertIn("BLAST", kinds)
+        first_blast = kinds.index("BLAST")
+        self.assertNotIn("ACCEL", kinds[:first_blast])
+
+    def test_blast_respects_its_cooldown(self):
+        e = self._engine()
+        bars = self._quiet()
+        p = 1.0
+        for rep in range(3):
+            for i in range(5):
+                nxt = p * 1.019
+                bars.append((p, nxt * 1.002, p * 0.999, nxt, 1000.0 * 150, 20.0 * 80))
+                p = nxt
+            bars += [(p, p * 1.0005, p * 0.9995, p, 1000.0, 20.0)] * 20
+        sigs = feed_bars(e, "REPEATUSDT", bars)
+        self.assertEqual(sum(1 for s in sigs if s.kind == "BLAST"), 1)
+
+    def test_message_names_the_type_and_warns_it_is_a_chase(self):
+        from volscan.engine import Signal
+        sig = Signal(key="USDT-M:XUSDT", market="USDT-M", symbol="XUSDT",
+                     kind="BLAST", ts=0, price=0.5, score=30,
+                     reasons=["💥 ВЗРЫВНОЙ СТАРТ"],
+                     features={"rvol": 120.0, "blast_trades_x": 88.0})
+        msg = format_signal(sig, Config())
+        self.assertTrue(msg.startswith("💥 ВЗРЫВНОЙ СТАРТ"))
+        self.assertIn("догоняющий вход", msg)
+
+    def test_blast_is_editable_from_the_dashboard(self):
+        names = {x[0] for x in EDITABLE}
+        for f in ("blast_trades_x_min", "blast_range_pct_min", "blast_range_x_min",
+                  "blast_rvol_min", "blast_close_pos_min", "blast_rsi_min",
+                  "blast_window_sec", "blast_baseline_sec", "alert_blast"):
+            self.assertIn(f, names, f)
+
+
 class TestAlertLadder(unittest.TestCase):
     def test_escalation_is_monotonic_and_deduped(self):
         cfg = Config()

@@ -92,7 +92,8 @@ class SymbolState:
                  "ats_samples", "day_high", "day_high_at", "day_low", "taker",
                  "taker_at", "last_fired", "cluster_at", "cluster_high",
                  "accel_streak", "accum_streak", "hourly", "last_tick",
-                 "snapshot", "signal_count", "pending_hold", "episode", "ref_samples")
+                 "snapshot", "signal_count", "pending_hold", "episode", "ref_samples",
+                 "bars", "last_bar_min")
 
     def __init__(self, key: str, market: str, symbol: str, base: str, quote: str,
                  cfg: Config):
@@ -133,6 +134,12 @@ class SymbolState:
         # '×5 chase' — which is exactly what would have suppressed the EARLY
         # tier on the GENIUS pump in a long-running process.
         self.ref_samples: deque = deque(maxlen=80)
+        # per-MINUTE bars, kept ~1.5h. The tick-level history deque only holds
+        # 20 minutes, but the launch detector needs an hour of quiet baseline
+        # to decide that one candle is a genuine outlier.
+        # [minute_id, open, high, low, close, trades0, trades1, qv0, qv1]
+        self.bars: deque = deque(maxlen=96)
+        self.last_bar_min = -1
 
     # -- cooldown helpers ---------------------------------------------------
     def can_fire(self, kind: str, now: int, cooldown_sec: float) -> bool:
@@ -337,6 +344,10 @@ class Engine:
         # acceleration slots
         f.update(self._accel(st, now, t.price, f))
 
+        # per-minute bars + the single-candle launch detector
+        self._push_bar(st, t, now)
+        f.update(self._blast(st, now, f))
+
         f["accel_slope"] = lin_reg_slope_per_min([(s[0], s[1]) for s in h], now)
         f["btc15"] = self.btc_pct(now, 15 * MINUTE)
         f["hourly_rsi"] = st.hourly.rsi14
@@ -458,6 +469,93 @@ class Engine:
                     accel_r2_p=r2p, accel_r2_v=r2v,
                     accel_gain=gain, accel_streak=st.accel_streak,
                     accel_slope_p=sp, accel_slope_v=sv)
+
+    # -------------------------------------------------- explosive launch
+    def _push_bar(self, st: SymbolState, t: Tick, now: int) -> None:
+        """Fold ticks into per-minute OHLC + cumulative trade/turnover marks."""
+        mid = int(now // 60_000)
+        tr = t.trades if t.trades is not None else 0.0
+        if mid != st.last_bar_min:
+            st.bars.append([mid, t.price, t.price, t.price, t.price,
+                            tr, tr, t.quote_volume, t.quote_volume])
+            st.last_bar_min = mid
+        else:
+            b = st.bars[-1]
+            b[2] = max(b[2], t.price)
+            b[3] = min(b[3], t.price)
+            b[4] = t.price
+            b[6] = tr
+            b[8] = t.quote_volume
+
+    def _blast(self, st: SymbolState, now: int, f: dict) -> dict:
+        """One candle, from dead quiet to violent.
+
+        Nothing here is averaged over time: this must be decidable from a single
+        window, because the whole point is to fire on the first candle. The
+        noise rejection is therefore severity, not persistence — the window has
+        to be an outlier against an hour of the pair's own baseline on THREE
+        independent axes at once (trade count, range, turnover).
+        """
+        cfg = self.cfg
+        empty = dict(blast=False, blast_trades_x=None, blast_range=None,
+                     blast_range_x=None, blast_rsi6=None, blast_tpm=None)
+        w = max(int(cfg.blast_window_sec // 60), 1)
+        nbase = max(int(cfg.blast_baseline_sec // 60), w * 4)
+        bars = list(st.bars)
+        if len(bars) < w + nbase // 2:
+            return empty
+        # the window must be contiguous minutes, or a feed gap looks like a candle
+        win = bars[-w:]
+        if win[-1][0] - win[0][0] != w - 1:
+            return empty
+
+        def blk_stats(chunk):
+            hi = max(b[2] for b in chunk)
+            lo = min(b[3] for b in chunk)
+            trades = sum(max(b[6] - b[5], 0.0) for b in chunk)
+            return hi, lo, trades, chunk[-1][4]
+
+        hi, lo, w_trades, close = blk_stats(win)
+        if lo <= 0:
+            return empty
+        rng_pct = (hi - lo) / lo * 100.0
+        close_pos = ((close - lo) / (hi - lo)) if hi > lo else 0.0
+        tpm = w_trades / w
+
+        # baseline: non-overlapping w-minute blocks BEFORE the window
+        base = bars[:-w][-nbase:]
+        blocks = [base[i:i + w] for i in range(0, len(base) - w + 1, w)]
+        if len(blocks) < 4:
+            return empty
+        b_tpm, b_rng = [], []
+        for ch in blocks:
+            if ch[-1][0] - ch[0][0] != w - 1:
+                continue
+            bh, bl, bt, _ = blk_stats(ch)
+            if bl <= 0:
+                continue
+            b_tpm.append(bt / w)
+            b_rng.append((bh - bl) / bl * 100.0)
+        if len(b_tpm) < 4:
+            return empty
+        med_tpm = median(b_tpm) or 0.0
+        med_rng = median(b_rng) or 0.0
+        trades_x = tpm / max(med_tpm, cfg.blast_trades_floor)
+        range_x = rng_pct / max(med_rng, 0.05)
+
+        # RSI(6) over the block closes, including the current window
+        closes = [ch[-1][4] for ch in blocks] + [close]
+        rsi6 = _rsi(closes, 6)
+
+        ok = (trades_x >= cfg.blast_trades_x_min
+              and rng_pct >= cfg.blast_range_pct_min
+              and range_x >= cfg.blast_range_x_min
+              and (f.get("rvol") or 0.0) >= cfg.blast_rvol_min
+              and close_pos >= cfg.blast_close_pos_min
+              and close > win[0][1]
+              and (rsi6 is None or rsi6 >= cfg.blast_rsi_min))
+        return dict(blast=bool(ok), blast_trades_x=trades_x, blast_range=rng_pct,
+                    blast_range_x=range_x, blast_rsi6=rsi6, blast_tpm=tpm)
 
     # ---------------------------------------------------------------- scoring
     def _classify(self, f: dict) -> str:
@@ -703,6 +801,31 @@ class Engine:
             ep["d1m_peak"] = max(ep["d1m_peak"], d1m)
             ep["last_rvol"], ep["last_d1m"] = rvol, d1m
 
+        # ---- explosive launch: its own trigger path ------------------------
+        # These moves have no warm-up, so this is NOT gated behind tier 1 — it
+        # can fire with no prior EARLY at all. It still runs through the same
+        # episode cooldown and the same global rate limit, so it cannot spam.
+        if f.get("blast") and st.can_fire("BLAST", now, cfg.blast_cooldown_sec):
+            st.mark("BLAST", now)
+            st.signal_count += 1
+            if ep is None and st.can_fire("EPISODE", now, cfg.episode_cooldown_sec):
+                st.mark("EPISODE", now)
+                ep = st.episode = {
+                    "tier": 2, "t0": now, "last_ts": now, "price0": t.price,
+                    "rvol0": rvol, "d1m0": f.get("d1m") or 0.0,
+                    "rvol_peak": rvol, "d1m_peak": f.get("d1m") or 0.0,
+                    "rising": 0, "last_rvol": rvol, "last_d1m": f.get("d1m") or 0.0,
+                }
+            elif ep is not None:
+                ep["tier"] = max(ep["tier"], 2)
+            sigs.append(mk("BLAST", alert=cfg.alert_blast, tier=2, extra=[
+                f"💥 ВЗРЫВНОЙ СТАРТ · score {score}",
+                f"сделок ×{f['blast_trades_x']:.0f} к своей тишине "
+                f"({f['blast_tpm']:.0f}/мин), свеча {f['blast_range']:.1f}% "
+                f"(×{f['blast_range_x']:.0f} к обычной), RSI(6) {f['blast_rsi6']:.0f}",
+                f"RVOL ×{rvol:.0f} · вход по закрытию свечи — цена УЖЕ ушла",
+            ]))
+
         # ---- tier 2: sustained acceleration -------------------------------
         if f.get("accel"):
             if ep is None and st.can_fire("EPISODE", now, cfg.episode_cooldown_sec):
@@ -799,7 +922,7 @@ class Engine:
         """Accelerating pairs pinned to the top, then score, then Δ volume."""
         rows = [s.snapshot for s in self.states.values() if s.snapshot]
         rows.sort(key=lambda r: (
-            0 if r.get("accel") else 1,
+            0 if r.get("blast") else (1 if r.get("accel") else 2),
             -(r.get("score") or 0),
             -(r.get("d1m") or 0),
         ))
@@ -846,6 +969,7 @@ _SLIM = ("rvol", "vol_z", "pct1m", "pct2m", "pct5m", "d1m", "d2m", "mult",
          "taker", "taker_w", "net_flow_x", "imbal", "spread_pct", "vwap_dev",
          "rng", "range15", "range15_rel", "dist_high24", "pos_range",
          "session_gain", "accel_gain", "accel_r2_p", "accel_r2_v",
+         "blast_trades_x", "blast_range", "blast_range_x", "blast_rsi6", "blast_tpm",
          "hourly_rsi", "hourly_bb_pct", "hourly_vol_z", "day_qv")
 
 
@@ -855,7 +979,28 @@ def _slim(f: dict) -> Dict[str, float]:
         v = f.get(k)
         if isinstance(v, (int, float)) and not (isinstance(v, float) and math.isnan(v)):
             out[k] = round(float(v), 6)
-    for k in ("accel", "break15", "compressed", "accumulating", "precursor", "background_ok"):
+    for k in ("accel", "blast", "break15", "compressed", "accumulating",
+              "precursor", "background_ok"):
         if f.get(k):
             out[k] = 1
     return out
+
+
+def _rsi(closes: List[float], n: int = 6) -> Optional[float]:
+    """Wilder RSI over a short series. The launch candles in the reference
+    screenshots all printed RSI(6) between 94 and 99."""
+    if len(closes) < n + 1:
+        return None
+    gains = losses = 0.0
+    for i in range(1, n + 1):
+        d = closes[i] - closes[i - 1]
+        gains += max(d, 0.0)
+        losses += max(-d, 0.0)
+    ag, al = gains / n, losses / n
+    for i in range(n + 1, len(closes)):
+        d = closes[i] - closes[i - 1]
+        ag = (ag * (n - 1) + max(d, 0.0)) / n
+        al = (al * (n - 1) + max(-d, 0.0)) / n
+    if al == 0:
+        return 100.0
+    return 100.0 - 100.0 / (1.0 + ag / al)

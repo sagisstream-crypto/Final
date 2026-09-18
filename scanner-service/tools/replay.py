@@ -94,24 +94,36 @@ def replay(symbol: str, start: str, end: str, market: str = "spot",
         return engine, []
     bars.sort()
 
+    # Walk each 1m bar as open -> extreme -> other extreme -> close. A straight
+    # open->close interpolation never hands the engine the bar's high or low, so
+    # the single-candle detector (which is all about a candle's own range) would
+    # never see the range it is built to detect. The o/h/l/c path is the standard
+    # conservative approximation: it visits the real extremes without inventing
+    # any price the bar did not actually trade at.
     slot = cfg.accel_slot_sec
-    per_bar = max(int(60 // slot), 1)
+    per_bar = max(int(60 // slot), 1) * 2
     cum = 0.0
+    ntr_cum = 0.0
     window24 = []                          # rolling 24h of (ts, quote_volume)
     signals = []
     for t, o, hi, lo, cl, qv, ntr, tbq in bars:
         cum += qv
+        ntr_cum += ntr
         window24.append((t, qv))
         while window24 and t - window24[0][0] > 24 * 3600 * 1000:
             window24.pop(0)
         vol24 = sum(v for _, v in window24)
+        # up bar: o -> l -> h -> c;  down bar: o -> h -> l -> c
+        path = [o, lo, hi, cl] if cl >= o else [o, hi, lo, cl]
+        step = 60_000.0 / per_bar
         for k in range(per_bar):
             frac = (k + 1) / per_bar
-            ts = int(t + slot * 1000 * k)
-            price = o + (cl - o) * frac
+            ts = int(t + step * k)
+            price = path[min(int(k * len(path) / per_bar), len(path) - 1)]
             tick = Tick(symbol=symbol, price=price, pct24=0.0,
                         quote_volume=cum - qv * (1 - frac),
-                        trades=None, high=hi, low=lo, vwap=(hi + lo + cl) / 3)
+                        trades=ntr_cum - ntr * (1 - frac),
+                        high=hi, low=lo, vwap=(hi + lo + cl) / 3)
             tick.quote_volume = _as_24h(tick.quote_volume, cum, vol24)
             sigs = engine.on_ticker_batch(mkt, [tick], ts)
             for s in sigs:

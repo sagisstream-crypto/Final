@@ -28,6 +28,9 @@ log = logging.getLogger("volscan.alerts")
 TYPES = {
     "EARLY":     ("⚡ РАННИЙ ПРОБОЙ",
                   "объём и цена только начали расти — вход на раннем этапе"),
+    "BLAST":     ("💥 ВЗРЫВНОЙ СТАРТ",
+                  "после тишины за одну свечу взорвалось число сделок — это вход "
+                  "в уже начавшееся движение, а не до него"),
     "ACCEL":     ("🚀 УСКОРЕНИЕ",
                   "цена И объём растут непрерывно несколько минут подряд, а не одним всплеском"),
     "BLOWOFF":   ("🔥 АНОМАЛЬНЫЙ ВЫНОС — УСКОРЯЕТСЯ",
@@ -65,6 +68,8 @@ class Telegram:
     def allowed(self, kind: str) -> bool:
         if kind in ("EARLY", "ACCEL", "BLOWOFF"):
             return True
+        if kind == "BLAST":
+            return self.cfg.alert_blast
         if kind == "CANDIDATE":
             return self.cfg.alert_candidate
         if kind == "ACCUM":
@@ -146,6 +151,11 @@ def format_signal(sig, cfg: Config) -> str:
         lines.append("")
         lines.append("⚠️ контекст, не сигнал на вход: на истории у этого паттерна "
                      "нет преимущества над случайным входом (см. SIGNALS.md)")
+    if sig.kind == "BLAST":
+        lines.append("")
+        lines.append("⚠️ это догоняющий вход: свеча уже прошла 3-15%, RSI перегрет. "
+                     "На истории медиана хода после входа около +3%, медиана "
+                     "просадки около −3%. Без стопа не торговать.")
     if cfg.dashboard_enabled:
         lines.append("")
         lines.append(f"график: /pair/{sig.key}")

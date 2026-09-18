@@ -60,12 +60,14 @@ PAGE = r"""<!DOCTYPE html>
   tr.row{cursor:pointer}
   tr.row:active{background:#141c14}
   tr.accel{background:#1c2a10}
+  tr.blast{background:#2a1410}
   tr.cand{background:#12240f}
   .sym{color:#e4ece4;font-weight:600}
   .q{color:#4a5a4a;font-size:11px}
   .badge{display:inline-block;font-size:10px;padding:2px 6px;border-radius:3px;
          border:1px solid;margin-right:3px;white-space:nowrap}
   .b-accel{color:#0a0e0a;background:var(--orange);border-color:var(--orange);font-weight:700}
+  .b-blast{color:#0a0e0a;background:var(--red);border-color:var(--red);font-weight:700}
   .b-cand{color:var(--amber);border-color:#4a3a1e;background:#1e1810}
   .b-accum{color:var(--blue);border-color:#2f3a4a;background:#131a24}
   .b-wake{color:var(--dim);border-color:var(--line)}
@@ -147,6 +149,7 @@ PAGE = r"""<!DOCTYPE html>
   <div class="tabs" id="tabs">
     <button data-f="all" class="on">ВСЕ</button>
     <button data-f="accel">🚀 УСКОРЕНИЕ</button>
+    <button data-f="blast">💥 ВЗРЫВНОЙ СТАРТ</button>
     <button data-f="cand">🎯 КАНДИДАТЫ</button>
     <button data-f="accum">🐋 НАКОПЛЕНИЕ</button>
     <button data-f="signals">📜 СИГНАЛЫ</button>
@@ -209,6 +212,7 @@ async function poll() {
 
 function badges(r) {
   let b = "";
+  if (r.blast) b += `<span class="badge b-blast">💥 ВЗРЫВ</span>`;
   if (r.accel) b += `<span class="badge b-accel">🚀 УСКОРЕНИЕ</span>`;
   if (r.candidate) b += `<span class="badge b-cand">🎯 +10%</span>`;
   if (r.accumulating) b += `<span class="badge b-accum">🐋 НАКОПЛ</span>`;
@@ -222,6 +226,7 @@ function render() {
   if (filter === "settings") return renderSettings();
   let list = rows;
   if (filter === "accel") list = rows.filter(r => r.accel);
+  if (filter === "blast") list = rows.filter(r => r.blast);
   if (filter === "cand") list = rows.filter(r => r.candidate);
   if (filter === "accum") list = rows.filter(r => r.accumulating);
   if (!list.length) { $("#view").innerHTML = `<div class="empty">пусто — ждём данные</div>`; return; }
@@ -232,7 +237,7 @@ function render() {
     const sc = r.score ?? 0;
     const cls = sc >= 80 ? "s-hot" : (sc >= 60 ? "s-mid" : "s-low");
     const p1 = r.pct1m;
-    return `<tr class="row ${r.accel ? "accel" : (r.candidate ? "cand" : "")}" data-k="${r.key}">
+    return `<tr class="row ${r.blast ? "blast" : (r.accel ? "accel" : (r.candidate ? "cand" : ""))}" data-k="${r.key}">
       <td><span class="sym">${r.base || r.symbol}</span><span class="q">/${r.market}</span><br>${badges(r)}</td>
       <td><span class="score ${cls}">${sc}</span></td>
       <td>${price(r.price)}</td>
@@ -357,6 +362,8 @@ async function openPair(key) {
     ["тейкер 20м", row.taker_w == null ? "—" : Math.round(row.taker_w*100) + "%"],
     ["до 24ч хая", n(row.dist_high24) + "%"], ["RSI 1ч", n(row.hourly_rsi, 0)],
     ["24ч объём", "$" + money(row.day_qv)], ["ускорение", row.accel ? "ДА 🚀" : "нет"],
+    ["сделок ×к тишине", row.blast_trades_x == null ? "—" : "×" + n(row.blast_trades_x, 0)],
+    ["диапазон свечи", n(row.blast_range) + "%"], ["RSI(6)", n(row.blast_rsi6, 0)],
   ].map(([k, v]) => `<div><span>${k}</span><b>${v ?? "—"}</b></div>`).join("");
   drawChart(d.history || []);
   $("#sh-sigs").innerHTML = (d.signals || []).map(s => `<div class="sig">
