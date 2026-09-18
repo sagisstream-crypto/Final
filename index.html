@@ -96,6 +96,7 @@
   #stats-btn.paused { color: #5eff8f; border-color: #2f4a2f; background: #131f13; }
   #wakelock-btn.paused { color: #5eff8f; border-color: #2f4a2f; background: #131f13; }
   #early-only-btn.paused { color: #ffd85e; border-color: #4a3a1e; background: #1e1810; }
+  #trade-plan-btn.paused { color: #ff6b6b; border-color: #4a1e1e; background: #1e1010; }
   .reset-btn:hover, .sound-btn:hover { background: #232838; }
   .ok-btn:hover { background: #233823; }
   .hint { font-size: 10px; color: #3f4f3f; margin-left: auto; }
@@ -185,6 +186,17 @@
   .shelf-sym { font-size: 12px; font-weight: 600; color: #ffd85e; }
   .shelf-delta { font-size: 11px; color: #ffb454; font-weight: 600; }
   .shelf-time { font-size: 9px; color: #8a7a4a; }
+  .trade-panel { border: 1px solid #1a2a3a; background: #0a0e14; border-radius: 4px; margin: 0 12px 8px; padding: 6px 8px; }
+  .trade-header { font-size: 11px; font-weight: 700; color: #5ec8ff; margin-bottom: 4px; }
+  .trade-summary { color: #8aa8bf; font-weight: 400; }
+  .trade-list { display: flex; flex-wrap: wrap; gap: 6px; max-height: 140px; overflow-y: auto; margin-bottom: 4px; }
+  .trade-empty { font-size: 11px; color: #4a6478; padding: 2px 0; }
+  .trade-item { display: flex; flex-direction: column; gap: 1px; background: #0f1a24; border: 1px solid #1a2a3a; border-radius: 3px; padding: 4px 8px; min-width: 128px; }
+  .trade-item .t-sym { font-size: 12px; font-weight: 600; color: #5ec8ff; }
+  .trade-item .t-line { font-size: 9.5px; color: #6b8494; }
+  .trade-closed-item { display: flex; align-items: center; gap: 8px; background: #0f1a24; border: 1px solid #1a2a3a; border-radius: 3px; padding: 4px 8px; }
+  .trade-closed-item .t-sym { font-size: 11px; font-weight: 600; color: #8aa8bf; min-width: 76px; }
+  .trade-closed-item .t-time { font-size: 9px; color: #4a6478; margin-left: auto; }
   .alerts-tabs {
     display: flex; border-bottom: 1px solid #1e2b1e;
   }
@@ -380,7 +392,16 @@
       <input id="score-threshold-input" value="60">
       <button class="ok-btn" id="apply-score-threshold">OK</button>
     </div>
+    <div class="box">
+      <span>📐</span>
+      <span class="stat-label">стоп −%/цель +%/часов</span>
+      <input id="trade-stop-input" value="8" style="width:34px">
+      <input id="trade-target-input" value="16" style="width:34px">
+      <input id="trade-hours-input" value="2" style="width:28px">
+      <button class="ok-btn" id="apply-trade-params">OK</button>
+    </div>
     <button class="reset-btn" id="score-only-btn">⭐ ТОЛЬКО SCORE: ВЫКЛ</button>
+    <button class="reset-btn" id="trade-plan-btn">📐 ПЛАН СДЕЛКИ: ВКЛ</button>
     <button class="reset-btn" id="taker-btn">🔥 ТЕЙКЕР-ПОТОК: ВКЛ</button>
     <button class="reset-btn" id="sort-btn">⇅ СОРТ: Δ ОБЪЁМА</button>
     <button class="reset-btn" id="csv-btn">💾 CSV</button>
@@ -399,10 +420,16 @@
       <div class="shelf-empty">Пока нет.</div>
     </div>
   </div>
+  <div class="trade-panel" id="trade-panel">
+    <div class="trade-header">📐 ПЛАН СДЕЛКИ <span class="trade-summary" id="trade-summary"></span></div>
+    <div class="trade-list" id="trade-open-list"><div class="trade-empty">Открытых позиций нет.</div></div>
+    <div class="trade-list" id="trade-closed-list"><div class="trade-empty">Закрытых сделок пока нет.</div></div>
+  </div>
   <div class="filters-hint">
-    <b>⭐ SCORE (0–100)</b> — главный сигнал: складывает RVOL (объём против средней минуты суток), Δ% цены за 1м, пробой дневного хая, положение к VWAP, скачок среднего чека сделки, перекос стакана и долю тейкер-покупок. Стреляет только при score ≥ порога И растущей цене. «ТОЛЬКО SCORE» глушит старые пороговые сигналы.
-    <b>Пороговые:</b> SPIKE (10с), VEL1M/VEL2M, ACCEL (наклон за 90с). <b>🪤 Тихая полка</b> — первый вынос у пары, которая долго стояла ровно; в течение 10 мин после неё score получает бонус.
-    <b>🔥 Тейкер-поток</b> — kline_1m по 12 самым горячим спот-парам, даёт долю покупок по рынку. <b>💾 CSV</b> — выгрузка всех сигналов с признаками и MFE/MAE для разбора.
+    <b>⭐ SCORE (0–100)</b> — главный сигнал: складывает RVOL (объём против средней минуты суток), Δ% цены за 1м, пробой дневного хая, положение к VWAP, скачок среднего чека сделки, перекос стакана, долю тейкер-покупок и форму последней 1m свечи горячего потока. Стреляет только при score ≥ порога И растущей цене. «ТОЛЬКО SCORE» глушит старые пороговые сигналы.
+    <b>Пороговые:</b> SPIKE (10с), VEL1M/VEL2M, ACCEL (наклон за 90с). <b>🪤 Тихая полка</b> — первый вынос у пары, которая долго стояла ровно.
+    <b>🔥 Тейкер-поток</b> — kline_1m по 12 самым горячим парам на каждом рынке, даёт долю покупок и форму свечи. <b>💾 CSV</b> — выгрузка всех сигналов с признаками и MFE/MAE для разбора.
+    <b>📐 План сделки</b> — встроенная стратегия из 12-месячного бэктеста (research/binance_pump_patterns): на каждый ⭐ SCORE-сигнал заводится виртуальная позиция (стоп/цель/тайм-аут, риск 1% капитала на сделку, комиссия 0.10% за круг) и ведётся сама, без участия пользователя — это не автоторговля и не финансовая рекомендация, а прозрачная проверка сигнала теми же правилами, что тестировались на истории. Не более одной позиции на пару одновременно.
     Отбор при первом появлении: цена &lt; $10, нач. объём ≤ $3M. UTK и Alpha исключены.
   </div>
   <div id="stats-panel" style="display:none; margin-top:10px; border:1px solid #1e2b1e; border-radius:2px; background:#0a0e0a; padding:10px 12px;">
@@ -614,6 +641,23 @@ let dayLow = {};             // key -> последний виденный 24ч 
 let takerRatio = {};         // key -> { r, at } из kline_1m «горячего» потока
 let candleShape = {};        // key -> { o,h,l,c,v, at } последняя 1m свеча горячего потока
 
+// ---- план сделки: стратегия из research/binance_pump_patterns (12м бэктест, 267 событий)
+// поверх сигнала ⭐ SCORE. Не автоторговля — просто считаем виртуальный P&L теми же
+// параметрами, что были провалидированы в бэктесте (стоп/цель/тайм-аут, риск 1% на
+// сделку, комиссия 0.10% за круг), чтобы видеть вживую, отработала бы сделка или нет.
+// −5% стоп в бэктесте убивал edge на любой цели; −8%/+16–20% за 2ч стабильно давал плюс.
+const TRADE_FEE_PCT = 0.10;              // комиссия+проскальзывание за круг, как в бэктесте
+const TRADE_RISK_PCT = 1;                // риск на сделку, % от текущего виртуального капитала
+const TRADE_STARTING_EQUITY = 10000;     // виртуальный старт, для сравнимости с бэктестом
+const CLOSED_TRADES_MAX = 60;            // сколько закрытых сделок держим в журнале
+let tradePlanOn = true;                  // ВКЛ/ВЫКЛ встроенной стратегии
+let tradeStopPct = 8;                    // −X% от входа
+let tradeTargetPct = 16;                 // +X% от входа
+let tradeTimeHours = 2;                  // тайм-аут, часов
+let tradeEquity = TRADE_STARTING_EQUITY; // виртуальный капитал, компаундится
+let openTrades = {};                     // key -> открытый план сделки (максимум один на пару)
+let closedTrades = [];                   // закрытые сделки, самые новые первыми
+
 // тихая полка — отдельный список над журналом, не смешивается с пороговыми сигналами
 let shelfAlerts = [];
 const SHELF_ALERTS_MAX = 8;
@@ -650,6 +694,42 @@ function purgeKey(key) {
   shelfAlerts = shelfAlerts.filter(e => e.key !== key);
   alertsLog = alertsLog.filter(e => e.key !== key);
   delete outcomesByKey[key];
+  delete openTrades[key];
+}
+
+// ---------- план сделки: открыть/закрыть виртуальную позицию ----------
+function openTradePlan(key, market, parsed, now, score) {
+  const entryPrice = parsed.price;
+  if (!(entryPrice > 0)) return;
+  const riskUsd = tradeEquity * (TRADE_RISK_PCT / 100);
+  const notional = riskUsd / (tradeStopPct / 100);
+  openTrades[key] = {
+    key, market, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
+    entryPrice, entryTime: now,
+    stopPrice: entryPrice * (1 - tradeStopPct / 100),
+    targetPrice: entryPrice * (1 + tradeTargetPct / 100),
+    expireAt: now + tradeTimeHours * 3600000,
+    notional, riskUsd, score,
+  };
+}
+function closeTradePlan(key, exitType, exitPrice, now) {
+  const ot = openTrades[key];
+  if (!ot) return;
+  const rawPct = (exitPrice / ot.entryPrice - 1) * 100;
+  const pnlPct = rawPct - TRADE_FEE_PCT;
+  const pnlUsd = ot.notional * (pnlPct / 100);
+  tradeEquity = Math.max(0, tradeEquity + pnlUsd);
+  closedTrades.unshift({
+    ...ot, exitType, exitPrice, exitTime: now,
+    pnlPct, pnlUsd, R: ot.riskUsd ? pnlUsd / ot.riskUsd : null,
+    equityAfter: tradeEquity,
+  });
+  if (closedTrades.length > CLOSED_TRADES_MAX) closedTrades.length = CLOSED_TRADES_MAX;
+  delete openTrades[key];
+  dataDirty = true;
+  const icon = exitType === "target" ? "✅" : exitType === "stop" ? "🛑" : "⏱";
+  notify(`${icon} План: ${ot.base}/${ot.quote}`,
+         `${exitType === "target" ? "цель" : exitType === "stop" ? "стоп" : "тайм-аут"} · ${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(1)}% · капитал $${tradeEquity.toFixed(0)}`);
 }
 let marketFilter = "ALL";
 let searchTerm = "";
@@ -670,6 +750,8 @@ function buildPayload() {
     threshold, threshold1m, threshold2m, maxInitialPrice, maxInitialVolume,
     scoreThreshold, scoreOnlyMode, sortMode, takerStreamOn,
     everInTop30, everInTop15,
+    tradePlanOn, tradeStopPct, tradeTargetPct, tradeTimeHours, tradeEquity,
+    openTrades, closedTrades,
     startTime, savedAt: Date.now(),
   };
 }
@@ -703,6 +785,13 @@ function applyPayload(payload) {
   takerStreamOn = payload.takerStreamOn !== false;
   everInTop30 = payload.everInTop30 || {};
   everInTop15 = payload.everInTop15 || {};
+  tradePlanOn = payload.tradePlanOn !== false;
+  tradeStopPct = payload.tradeStopPct || tradeStopPct;
+  tradeTargetPct = payload.tradeTargetPct || tradeTargetPct;
+  tradeTimeHours = payload.tradeTimeHours || tradeTimeHours;
+  tradeEquity = typeof payload.tradeEquity === "number" ? payload.tradeEquity : TRADE_STARTING_EQUITY;
+  openTrades = payload.openTrades || {};
+  closedTrades = payload.closedTrades || [];
   startTime = payload.startTime || Date.now();
   return true;
 }
@@ -1404,6 +1493,15 @@ function handleTickerBatch(market, arr) {
         if (outcomesByKey[key].length === 0) delete outcomesByKey[key];
       }
 
+      // план сделки: проверяем стоп/цель/тайм-аут на каждый тик, даже во время resync —
+      // это просто сверка текущей цены с уже зафиксированными уровнями, не новый сигнал.
+      const ot = openTrades[key];
+      if (ot) {
+        if (parsed.price <= ot.stopPrice) closeTradePlan(key, "stop", ot.stopPrice, now);
+        else if (parsed.price >= ot.targetPrice) closeTradePlan(key, "target", ot.targetPrice, now);
+        else if (now >= ot.expireAt) closeTradePlan(key, "time", parsed.price, now);
+      }
+
       if (resyncing) continue; // skip firing on resync cycle
 
       // ---- пороговые сигналы: каждый по своему $ порогу из шапки, прямо в журнал ----
@@ -1491,6 +1589,8 @@ function handleTickerBatch(market, arr) {
         notify(`⭐ SCORE ${scoreObj.score}: ${parsed.base}/${parsed.quote}`,
                `${scoreObj.parts.slice(0, 3).join(" · ")} · Δ1м +$${fmtMoney(d1m)}`);
         startOutcome(key, market.id, parsed, now, "SIGNAL", { rvol, pct1m, ats, atsMedian, imbal, spreadPct, vwapDev, rng, taker, d1m, score: scoreObj.score, parts: scoreObj.parts });
+        // встроенная стратегия: одна виртуальная позиция на пару одновременно
+        if (tradePlanOn && !openTrades[key]) openTradePlan(key, market.id, parsed, now, scoreObj.score);
       }
 
       // doubling sound (kept)
@@ -1628,6 +1728,62 @@ function renderStats() {
     ${byType || "<div>пока нет данных</div>"}
     ${bands ? `<div style="margin:8px 0 2px; color:#5a6b5a;">— SCORE по силе —</div>${bands}` : ""}
   `;
+}
+
+// ---------- план сделки: рендер ----------
+function fmtTimeLeft(ms) {
+  if (ms <= 0) return "0м";
+  const m = Math.round(ms / 60000);
+  if (m < 60) return `${m}м`;
+  return `${Math.floor(m / 60)}ч${m % 60 ? " " + (m % 60) + "м" : ""}`;
+}
+function renderTradePanel() {
+  const summaryEl = document.getElementById("trade-summary");
+  const openEl = document.getElementById("trade-open-list");
+  const closedEl = document.getElementById("trade-closed-list");
+  if (!summaryEl || !openEl || !closedEl) return;
+
+  const totalPnl = tradeEquity - TRADE_STARTING_EQUITY;
+  const totalPnlPct = (totalPnl / TRADE_STARTING_EQUITY) * 100;
+  const n = closedTrades.length;
+  const wins = closedTrades.filter(t => t.pnlUsd > 0).length;
+  const winRate = n ? (wins / n) * 100 : null;
+  summaryEl.innerHTML = ` — капитал $${tradeEquity.toFixed(0)} (${totalPnl >= 0 ? "+" : ""}${totalPnlPct.toFixed(2)}%)`
+    + (n ? ` · сделок ${n} · win-rate ${winRate.toFixed(0)}%` : " · сделок пока нет")
+    + (tradePlanOn ? "" : " · <span style=\"color:#ff6b6b\">выключен</span>");
+
+  const now = Date.now();
+  const open = Object.values(openTrades);
+  if (!open.length) {
+    openEl.innerHTML = `<div class="trade-empty">Открытых позиций нет.</div>`;
+  } else {
+    openEl.innerHTML = open.map(ot => {
+      const row = rows[ot.key];
+      const cur = row ? row.price : ot.entryPrice;
+      const floatPct = ((cur / ot.entryPrice) - 1) * 100;
+      return `
+        <div class="trade-item">
+          <span class="t-sym">${ot.base}/${ot.quote} <span style="color:#4a6478; font-weight:400;">${ot.market}</span></span>
+          <span class="t-line">вход $${fmtPrice(ot.entryPrice)} · сейчас <span class="${floatPct >= 0 ? "pct-pos" : "pct-neg"}">${floatPct >= 0 ? "+" : ""}${floatPct.toFixed(1)}%</span></span>
+          <span class="t-line">стоп $${fmtPrice(ot.stopPrice)} · цель $${fmtPrice(ot.targetPrice)}</span>
+          <span class="t-line">осталось ${fmtTimeLeft(ot.expireAt - now)} · score ${ot.score}</span>
+        </div>`;
+    }).join("");
+  }
+
+  if (!closedTrades.length) {
+    closedEl.innerHTML = `<div class="trade-empty">Закрытых сделок пока нет.</div>`;
+  } else {
+    const icon = t => t.exitType === "target" ? "✅" : t.exitType === "stop" ? "🛑" : "⏱";
+    closedEl.innerHTML = closedTrades.slice(0, 15).map(t => `
+      <div class="trade-closed-item">
+        <span>${icon(t)}</span>
+        <span class="t-sym">${t.base}/${t.quote}</span>
+        <span class="${t.pnlPct >= 0 ? "pct-pos" : "pct-neg"}">${t.pnlPct >= 0 ? "+" : ""}${t.pnlPct.toFixed(1)}%</span>
+        <span style="color:#4a6478; font-size:10px;">R ${t.R === null ? "—" : (t.R >= 0 ? "+" : "") + t.R.toFixed(2)}</span>
+        <span class="t-time">${fmtTimeMinusHour(t.exitTime)}</span>
+      </div>`).join("");
+  }
 }
 
 // ---------- v15 cell renderers ----------
@@ -1827,6 +1983,7 @@ function render() {
   }
 
   renderStats();
+  renderTradePanel();
 }
 
 // ---------- controls ----------
@@ -2046,6 +2203,25 @@ document.getElementById("apply-score-threshold").addEventListener("click", () =>
 document.getElementById("score-threshold-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter") document.getElementById("apply-score-threshold").click();
 });
+document.getElementById("apply-trade-params").addEventListener("click", () => {
+  const stopEl = document.getElementById("trade-stop-input");
+  const targetEl = document.getElementById("trade-target-input");
+  const hoursEl = document.getElementById("trade-hours-input");
+  const stop = parseFloat(stopEl.value), target = parseFloat(targetEl.value), hours = parseFloat(hoursEl.value);
+  if (stop > 0 && stop < 100 && target > 0 && target < 1000 && hours > 0 && hours <= 48) {
+    tradeStopPct = stop; tradeTargetPct = target; tradeTimeHours = hours;
+    saveState();
+    render();
+    flashApplied(stopEl); flashApplied(targetEl); flashApplied(hoursEl);
+  }
+});
+document.getElementById("trade-plan-btn").addEventListener("click", (e) => {
+  tradePlanOn = !tradePlanOn;
+  e.target.textContent = tradePlanOn ? "📐 ПЛАН СДЕЛКИ: ВКЛ" : "📐 ПЛАН СДЕЛКИ: ВЫКЛ";
+  e.target.classList.toggle("paused", !tradePlanOn);
+  saveState();
+  render();
+});
 document.getElementById("score-only-btn").addEventListener("click", (e) => {
   scoreOnlyMode = !scoreOnlyMode;
   e.target.textContent = scoreOnlyMode ? "⭐ ТОЛЬКО SCORE: ВКЛ" : "⭐ ТОЛЬКО SCORE: ВЫКЛ";
@@ -2206,6 +2382,13 @@ loadStateAsync().then((ok) => {
   document.getElementById("max-price-input").value = String(maxInitialPrice);
   document.getElementById("max-volume-input").value = String(maxInitialVolume);
   document.getElementById("score-threshold-input").value = String(scoreThreshold);
+  document.getElementById("trade-stop-input").value = String(tradeStopPct);
+  document.getElementById("trade-target-input").value = String(tradeTargetPct);
+  document.getElementById("trade-hours-input").value = String(tradeTimeHours);
+  if (!tradePlanOn) {
+    const b = document.getElementById("trade-plan-btn");
+    b.textContent = "📐 ПЛАН СДЕЛКИ: ВЫКЛ"; b.classList.add("paused");
+  }
   if (scoreOnlyMode) {
     const b = document.getElementById("score-only-btn");
     b.textContent = "⭐ ТОЛЬКО SCORE: ВКЛ"; b.classList.add("paused");

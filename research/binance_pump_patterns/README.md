@@ -172,8 +172,18 @@ same-unit research data existed to safely recalibrate their exact thresholds
 (the research RVOL is a 5m-candle multiple of a daily median, the live
 scanner's is a per-minute multiple of an expected/1440 baseline — different
 scales). The trade-management side of this research (stop/target/time-exit
-rules, position sizing) has **not** been wired into the live scanner — it
-stayed a research finding, not a scanner feature, pending a separate decision.
+rules, position sizing) **has since been wired into the live scanner too**
+(2026-09-18, a separate decision from the SCORE recalibration above): every
+⭐ SCORE signal now opens a virtual trade plan in `index.html` using the
+backtest's own defaults (−8% stop / +16% target / 2h time-exit, 1% equity risk
+per trade, 0.10% round-trip fee, at most one open position per pair), tracked
+live against real tick prices and shown in the "📐 ПЛАН СДЕЛКИ" panel — not
+order execution, just an always-on, transparent paper-trade of the researched
+rules so the signal's real-world performance stays visible. Stop/target/hours
+are editable in the UI; the fee/risk-per-trade/starting-equity constants match
+this research and are not exposed as settings.
+
 When more data accumulates, rerun the pipeline for a fresher/longer window and
 re-check `feature_separation.csv` + `score_v1_time_split_check.py` before
-touching `computeScore()` again.
+touching `computeScore()` again, and compare the live "📐 ПЛАН СДЕЛКИ" journal
+against a fresh backtest run to see whether the paper results still track.
