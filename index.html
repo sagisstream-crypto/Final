@@ -197,6 +197,18 @@
   .trade-closed-item { display: flex; align-items: center; gap: 8px; background: #0f1a24; border: 1px solid #1a2a3a; border-radius: 3px; padding: 4px 8px; }
   .trade-closed-item .t-sym { font-size: 11px; font-weight: 600; color: #8aa8bf; min-width: 76px; }
   .trade-closed-item .t-time { font-size: 9px; color: #4a6478; margin-left: auto; }
+  .threshold-panel { border: 1px solid #4a2a14; background: #1a0f08; border-radius: 4px; margin: 0 12px 8px; padding: 6px 8px; }
+  .threshold-header { font-size: 11px; font-weight: 700; color: #ff9d4a; margin-bottom: 4px; }
+  .threshold-summary { color: #b37a4a; font-weight: 400; }
+  .threshold-list { display: flex; flex-wrap: wrap; gap: 6px; max-height: 120px; overflow-y: auto; }
+  .threshold-empty { font-size: 11px; color: #7a5a3a; padding: 2px 0; }
+  .threshold-item { display: flex; gap: 8px; align-items: center; background: #221408; border: 1px solid #4a2a14; border-radius: 3px; padding: 4px 8px; cursor: pointer; }
+  .threshold-item:hover { border-color: #ff9d4a; }
+  .threshold-item .th-sym { font-size: 12px; font-weight: 600; color: #ff9d4a; }
+  .threshold-item .th-type { font-size: 9.5px; color: #b37a4a; }
+  .threshold-item .th-amount { font-size: 11px; color: #ffb454; font-weight: 600; }
+  .threshold-item .th-time { font-size: 9px; color: #7a5a3a; }
+  #telegram-btn.paused { color: #5ec8ff; border-color: #1a3a4a; background: #0a1a1f; }
   .alerts-tabs {
     display: flex; border-bottom: 1px solid #1e2b1e;
   }
@@ -363,6 +375,12 @@
       <button class="ok-btn" id="apply-threshold">OK</button>
     </div>
     <div class="box">
+      <span>⚙</span>
+      <span class="stat-label">порог 30с $</span>
+      <input id="threshold-30s-input" value="50000">
+      <button class="ok-btn" id="apply-threshold-30s">OK</button>
+    </div>
+    <div class="box">
       <span>⚡</span>
       <span class="stat-label">порог Δ1м $</span>
       <input id="threshold-1m-input" value="30000">
@@ -400,8 +418,17 @@
       <input id="trade-hours-input" value="2" style="width:28px">
       <button class="ok-btn" id="apply-trade-params">OK</button>
     </div>
+    <div class="box">
+      <span>📨</span>
+      <span class="stat-label">telegram bot token / chat id</span>
+      <input id="telegram-token-input" placeholder="123456:AAExample" style="width:120px">
+      <input id="telegram-chatid-input" placeholder="123456789" style="width:80px">
+      <button class="ok-btn" id="apply-telegram">OK</button>
+      <button class="ok-btn" id="test-telegram">ТЕСТ</button>
+    </div>
     <button class="reset-btn" id="score-only-btn">⭐ ТОЛЬКО SCORE: ВЫКЛ</button>
     <button class="reset-btn" id="trade-plan-btn">📐 ПЛАН СДЕЛКИ: ВКЛ</button>
+    <button class="reset-btn" id="telegram-btn">📨 TELEGRAM: ВЫКЛ</button>
     <button class="reset-btn" id="taker-btn">🔥 ТЕЙКЕР-ПОТОК: ВКЛ</button>
     <button class="reset-btn" id="sort-btn">⇅ СОРТ: Δ ОБЪЁМА</button>
     <button class="reset-btn" id="csv-btn">💾 CSV</button>
@@ -413,6 +440,12 @@
     <button class="reset-btn" id="stats-btn">📊 СТАТИСТИКА</button>
     <button class="reset-btn" id="early-only-btn">⚡ ТОЛЬКО РАННИЕ: ВЫКЛ</button>
     <div class="hint" id="poll-hint">live: websocket</div>
+  </div>
+  <div class="threshold-panel" id="threshold-panel">
+    <div class="threshold-header">🎯 ПОРОГОВЫЙ СИГНАЛ <span class="threshold-summary" id="threshold-summary"></span></div>
+    <div class="threshold-list" id="threshold-list">
+      <div class="threshold-empty">Пока нет.</div>
+    </div>
   </div>
   <div class="shelf-panel" id="shelf-panel">
     <div class="shelf-header">🪤 ТИХАЯ ПОЛКА</div>
@@ -427,9 +460,10 @@
   </div>
   <div class="filters-hint">
     <b>⭐ SCORE (0–100)</b> — главный сигнал: складывает RVOL (объём против средней минуты суток), Δ% цены за 1м, пробой дневного хая, положение к VWAP, скачок среднего чека сделки, перекос стакана, долю тейкер-покупок и форму последней 1m свечи горячего потока. Стреляет только при score ≥ порога И растущей цене. «ТОЛЬКО SCORE» глушит старые пороговые сигналы.
-    <b>Пороговые:</b> SPIKE (10с), VEL1M/VEL2M, ACCEL (наклон за 90с). <b>🪤 Тихая полка</b> — первый вынос у пары, которая долго стояла ровно.
+    <b>Пороговые:</b> SPIKE (10с), SPIKE30 (30с), VEL1M/VEL2M, ACCEL (наклон за 90с) — каждый по своему $ порогу из шапки. <b>🎯 Пороговый сигнал</b> — пришпиленная лента наверху: последние срабатывания этих пяти сигналов, отдельно от старого нижнего журнала. <b>🪤 Тихая полка</b> — первый вынос у пары, которая долго стояла ровно.
     <b>🔥 Тейкер-поток</b> — kline_1m по 12 самым горячим парам на каждом рынке, даёт долю покупок и форму свечи. <b>💾 CSV</b> — выгрузка всех сигналов с признаками и MFE/MAE для разбора.
     <b>📐 План сделки</b> — встроенная стратегия из 12-месячного бэктеста (research/binance_pump_patterns): на каждый ⭐ SCORE-сигнал заводится виртуальная позиция (стоп/цель/тайм-аут, риск 1% капитала на сделку, комиссия 0.10% за круг) и ведётся сама, без участия пользователя — это не автоторговля и не финансовая рекомендация, а прозрачная проверка сигнала теми же правилами, что тестировались на истории. Не более одной позиции на пару одновременно.
+    <b>📨 Telegram</b> — впиши токен бота (у @BotFather) и chat_id, нажми ТЕСТ: если тестовое сообщение дошло, рассылка пороговых сигналов (🎯) включится сама. Токен и chat_id хранятся только в этом браузере (IndexedDB), никуда, кроме Telegram, не уходят.
     Отбор при первом появлении: цена &lt; $10, нач. объём ≤ $3M. UTK и Alpha исключены.
   </div>
   <div id="stats-panel" style="display:none; margin-top:10px; border:1px solid #1e2b1e; border-radius:2px; background:#0a0e0a; padding:10px 12px;">
@@ -572,6 +606,7 @@ async function requestPersistentStorage() {
 }
 
 let threshold = 50000;       // 10-sec spike
+let threshold30 = 50000;     // 30-sec spike
 let threshold1m = 30000;     // 1-minute volume growth
 let threshold2m = 50000;     // 2-minute volume growth
 let soundOn = true;
@@ -588,6 +623,7 @@ let lastFired = {};          // key -> { SPIKE:ts, VEL1M:ts, VEL2M:ts, ACCEL:ts,
 let signalCount = {};
 let history = {};            // key -> [{t, vol}, ...]
 const HISTORY_WINDOW_MS = 10000;
+const HISTORY_30S_MS = 30000;
 const HISTORY_1M_MS = 60000;
 const HISTORY_2M_MS = 120000;
 const HISTORY_MAX_AGE_MS = 150000; // keep ~2.5 min
@@ -657,6 +693,15 @@ let tradeTimeHours = 2;                  // тайм-аут, часов
 let tradeEquity = TRADE_STARTING_EQUITY; // виртуальный капитал, компаундится
 let openTrades = {};                     // key -> открытый план сделки (максимум один на пару)
 let closedTrades = [];                   // закрытые сделки, самые новые первыми
+
+// ---- пороговый сигнал: отдельная пришпиленная лента для SPIKE/VEL1M/VEL2M/ACCEL,
+// в самом верху страницы. Старый "🔔 ЖУРНАЛ СИГНАЛОВ" внизу на pushAlert() не пишет
+// (отключено ранее по отдельному запросу) — это новый, независимый от него список.
+const THRESHOLD_LOG_MAX = 30;
+let thresholdLog = [];                   // последние срабатывания порогов, самые новые первыми
+let telegramOn = false;
+let telegramToken = "";
+let telegramChatId = "";
 
 // тихая полка — отдельный список над журналом, не смешивается с пороговыми сигналами
 let shelfAlerts = [];
@@ -731,6 +776,23 @@ function closeTradePlan(key, exitType, exitPrice, now) {
   notify(`${icon} План: ${ot.base}/${ot.quote}`,
          `${exitType === "target" ? "цель" : exitType === "stop" ? "стоп" : "тайм-аут"} · ${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(1)}% · капитал $${tradeEquity.toFixed(0)}`);
 }
+
+// ---------- пороговый сигнал: лог + телеграм ----------
+function recordThresholdSignal(entry) {
+  thresholdLog.unshift(entry);
+  if (thresholdLog.length > THRESHOLD_LOG_MAX) thresholdLog.length = THRESHOLD_LOG_MAX;
+  dataDirty = true;
+  const icon = entry.type === "SPIKE" || entry.type === "SPIKE30" ? "⚡" : "🚀";
+  sendTelegram(`${icon} ${entry.type} ${entry.base}/${entry.quote} (${entry.market})\n${entry.extra} · +$${fmtMoney(entry.amount)}`);
+}
+function sendTelegram(text) {
+  if (!telegramOn || !telegramToken || !telegramChatId) return;
+  fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: telegramChatId, text }),
+  }).catch(() => {}); // сеть/токен может быть плохим — не роняем сканер из-за этого
+}
 let marketFilter = "ALL";
 let searchTerm = "";
 let startTime = Date.now();
@@ -747,11 +809,12 @@ function buildPayload() {
     alertsLog: [],
     shelfAlerts: [],
     outcomes: [],
-    threshold, threshold1m, threshold2m, maxInitialPrice, maxInitialVolume,
+    threshold, threshold30, threshold1m, threshold2m, maxInitialPrice, maxInitialVolume,
     scoreThreshold, scoreOnlyMode, sortMode, takerStreamOn,
     everInTop30, everInTop15,
     tradePlanOn, tradeStopPct, tradeTargetPct, tradeTimeHours, tradeEquity,
     openTrades, closedTrades,
+    thresholdLog, telegramOn, telegramToken, telegramChatId,
     startTime, savedAt: Date.now(),
   };
 }
@@ -775,6 +838,7 @@ function applyPayload(payload) {
     }
   });
   threshold = payload.threshold || threshold;
+  threshold30 = payload.threshold30 || threshold30;
   threshold1m = payload.threshold1m || threshold1m;
   threshold2m = payload.threshold2m || threshold2m;
   maxInitialPrice = payload.maxInitialPrice || maxInitialPrice;
@@ -792,6 +856,10 @@ function applyPayload(payload) {
   tradeEquity = typeof payload.tradeEquity === "number" ? payload.tradeEquity : TRADE_STARTING_EQUITY;
   openTrades = payload.openTrades || {};
   closedTrades = payload.closedTrades || [];
+  thresholdLog = payload.thresholdLog || [];
+  telegramOn = !!payload.telegramOn;
+  telegramToken = payload.telegramToken || "";
+  telegramChatId = payload.telegramChatId || "";
   startTime = payload.startTime || Date.now();
   return true;
 }
@@ -1380,6 +1448,7 @@ function handleTickerBatch(market, arr) {
       while (history[key].length && now - history[key][0].t > HISTORY_MAX_AGE_MS) history[key].shift();
 
       const rolling10 = rollingDelta(history[key], now, HISTORY_WINDOW_MS, parsed.curVol);
+      const rolling30 = rollingDelta(history[key], now, HISTORY_30S_MS, parsed.curVol);
       const d1m = rollingDelta(history[key], now, HISTORY_1M_MS, parsed.curVol);
       const d2m = rollingDelta(history[key], now, HISTORY_2M_MS, parsed.curVol);
       const accel = computeAccel(history[key], now, parsed.curVol); // now a $/min slope, see linRegSlopePerMin
@@ -1508,21 +1577,39 @@ function handleTickerBatch(market, arr) {
       // SPIKE 10s
       if (!scoreOnlyMode && rolling10 !== null && rolling10 >= threshold && canFire(key, "SPIKE", HISTORY_WINDOW_MS)) {
         markFired(key, "SPIKE");
-        pushAlert({
+        const alertEntry = {
           key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
           amount: rolling10, time: now, type: "SPIKE", extra: "10с",
-        });
+        };
+        pushAlert(alertEntry);
+        recordThresholdSignal(alertEntry);
         notify(`⚡ SPIKE: ${parsed.base}/${parsed.quote}`, `+$${fmtMoney(rolling10)} за 10с (${market.id})`);
         startOutcome(key, market.id, parsed, now, "SPIKE", { rvol, pct1m, ats, atsMedian, imbal, spreadPct, vwapDev, rng, taker, d1m, score: scoreObj.score, parts: scoreObj.parts });
+      }
+
+      // SPIKE 30s — тот же принцип, что 10с, но на более широком окне: ловит выносы,
+      // которые набирают объём чуть медленнее и на 10с-окне остаются незамеченными.
+      if (!scoreOnlyMode && rolling30 !== null && rolling30 >= threshold30 && canFire(key, "SPIKE30", HISTORY_30S_MS)) {
+        markFired(key, "SPIKE30");
+        const alertEntry = {
+          key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
+          amount: rolling30, time: now, type: "SPIKE30", extra: "30с",
+        };
+        pushAlert(alertEntry);
+        recordThresholdSignal(alertEntry);
+        notify(`⚡ SPIKE30: ${parsed.base}/${parsed.quote}`, `+$${fmtMoney(rolling30)} за 30с (${market.id})`);
+        startOutcome(key, market.id, parsed, now, "SPIKE30", { rvol, pct1m, ats, atsMedian, imbal, spreadPct, vwapDev, rng, taker, d1m, score: scoreObj.score, parts: scoreObj.parts });
       }
 
       // VEL 1M
       if (!scoreOnlyMode && d1m !== null && d1m >= threshold1m && baseAge >= 20000 && canFire(key, "VEL1M", 45000)) {
         markFired(key, "VEL1M");
-        pushAlert({
+        const alertEntry = {
           key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
           amount: d1m, time: now, type: "VEL1M", extra: "Δ1м",
-        });
+        };
+        pushAlert(alertEntry);
+        recordThresholdSignal(alertEntry);
         earlyBeep();
         notify(`🚀 VEL1M: ${parsed.base}/${parsed.quote}`, `+$${fmtMoney(d1m)} за 1м (${market.id})`);
         startOutcome(key, market.id, parsed, now, "VEL1M", { rvol, pct1m, ats, atsMedian, imbal, spreadPct, vwapDev, rng, taker, d1m, score: scoreObj.score, parts: scoreObj.parts });
@@ -1531,10 +1618,12 @@ function handleTickerBatch(market, arr) {
       // VEL 2M
       if (!scoreOnlyMode && d2m !== null && d2m >= threshold2m && baseAge >= 30000 && canFire(key, "VEL2M", 60000)) {
         markFired(key, "VEL2M");
-        pushAlert({
+        const alertEntry = {
           key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
           amount: d2m, time: now, type: "VEL2M", extra: "Δ2м",
-        });
+        };
+        pushAlert(alertEntry);
+        recordThresholdSignal(alertEntry);
         earlyBeep();
         notify(`🚀 VEL2M: ${parsed.base}/${parsed.quote}`, `+$${fmtMoney(d2m)} за 2м (${market.id})`);
         startOutcome(key, market.id, parsed, now, "VEL2M", { rvol, pct1m, ats, atsMedian, imbal, spreadPct, vwapDev, rng, taker, d1m, score: scoreObj.score, parts: scoreObj.parts });
@@ -1545,10 +1634,12 @@ function handleTickerBatch(market, arr) {
       // multiples whenever prev30 was ~0.
       if (!scoreOnlyMode && accel !== null && accel >= threshold1m * 0.6 && d1m !== null && d1m >= threshold1m * 0.4 && baseAge >= 40000 && canFire(key, "ACCEL", 50000)) {
         markFired(key, "ACCEL");
-        pushAlert({
+        const alertEntry = {
           key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
           amount: d1m, time: now, type: "ACCEL", extra: `наклон ${accel >= 0 ? "+" : ""}$${fmtMoney(accel)}/мин`,
-        });
+        };
+        pushAlert(alertEntry);
+        recordThresholdSignal(alertEntry);
         earlyBeep();
         notify(`🚀 ACCEL: ${parsed.base}/${parsed.quote}`, `наклон $${fmtMoney(accel)}/мин · Δ1м +$${fmtMoney(d1m)} (${market.id})`);
         startOutcome(key, market.id, parsed, now, "ACCEL", { rvol, pct1m, ats, atsMedian, imbal, spreadPct, vwapDev, rng, taker, d1m, score: scoreObj.score, parts: scoreObj.parts });
@@ -1786,6 +1877,27 @@ function renderTradePanel() {
   }
 }
 
+// ---------- пороговый сигнал: рендер ----------
+const THRESHOLD_TYPE_LABEL = { SPIKE: "10с", SPIKE30: "30с", VEL1M: "Δ1м", VEL2M: "Δ2м", ACCEL: "наклон" };
+function renderThresholdPanel() {
+  const summaryEl = document.getElementById("threshold-summary");
+  const listEl = document.getElementById("threshold-list");
+  if (!summaryEl || !listEl) return;
+  summaryEl.textContent = thresholdLog.length ? ` — сработало ${thresholdLog.length}` : "";
+  if (!thresholdLog.length) {
+    listEl.innerHTML = `<div class="threshold-empty">Пока нет.</div>`;
+  } else {
+    listEl.innerHTML = thresholdLog.map(a => `
+      <div class="threshold-item" data-key="${a.key}" title="Показать пару в таблице">
+        <span class="th-sym">${a.base}/${a.quote} <span style="color:#7a5a3a; font-weight:400;">${a.market}</span></span>
+        <span class="th-type">${THRESHOLD_TYPE_LABEL[a.type] || a.type}</span>
+        <span class="th-amount">+$${fmtMoney(a.amount)}</span>
+        <span class="th-time">${fmtTimeMinusHour(a.time)}</span>
+      </div>
+    `).join("");
+  }
+}
+
 // ---------- v15 cell renderers ----------
 function scoreCell(r) {
   const v = r.score || 0;
@@ -1984,6 +2096,7 @@ function render() {
 
   renderStats();
   renderTradePanel();
+  renderThresholdPanel();
 }
 
 // ---------- controls ----------
@@ -2029,6 +2142,11 @@ document.getElementById("alerts-list").addEventListener("click", (e) => {
 });
 document.getElementById("shelf-list").addEventListener("click", (e) => {
   const item = e.target.closest(".shelf-item");
+  if (!item) return;
+  jumpToPair(item.dataset.key);
+});
+document.getElementById("threshold-list").addEventListener("click", (e) => {
+  const item = e.target.closest(".threshold-item");
   if (!item) return;
   jumpToPair(item.dataset.key);
 });
@@ -2135,6 +2253,20 @@ document.getElementById("apply-threshold").addEventListener("click", () => {
 document.getElementById("threshold-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter") document.getElementById("apply-threshold").click();
 });
+document.getElementById("apply-threshold-30s").addEventListener("click", () => {
+  const inputEl = document.getElementById("threshold-30s-input");
+  const v = parseAmountInput(inputEl.value);
+  if (!isNaN(v) && v > 0) {
+    threshold30 = v;
+    inputEl.value = String(v);
+    saveState();
+    render();
+    flashApplied(inputEl);
+  }
+});
+document.getElementById("threshold-30s-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.getElementById("apply-threshold-30s").click();
+});
 document.getElementById("apply-threshold-1m").addEventListener("click", () => {
   const inputEl = document.getElementById("threshold-1m-input");
   const v = parseAmountInput(inputEl.value);
@@ -2221,6 +2353,46 @@ document.getElementById("trade-plan-btn").addEventListener("click", (e) => {
   e.target.classList.toggle("paused", !tradePlanOn);
   saveState();
   render();
+});
+document.getElementById("apply-telegram").addEventListener("click", () => {
+  const tokenEl = document.getElementById("telegram-token-input");
+  const chatEl = document.getElementById("telegram-chatid-input");
+  telegramToken = tokenEl.value.trim();
+  telegramChatId = chatEl.value.trim();
+  saveState();
+  flashApplied(tokenEl); flashApplied(chatEl);
+});
+document.getElementById("test-telegram").addEventListener("click", async (e) => {
+  const tokenEl = document.getElementById("telegram-token-input");
+  const chatEl = document.getElementById("telegram-chatid-input");
+  telegramToken = tokenEl.value.trim();
+  telegramChatId = chatEl.value.trim();
+  saveState();
+  if (!telegramToken || !telegramChatId) {
+    e.target.textContent = "нет токена/id";
+    setTimeout(() => { e.target.textContent = "ТЕСТ"; }, 2000);
+    return;
+  }
+  e.target.textContent = "…";
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: telegramChatId, text: "✅ VolScan: тестовое сообщение дошло." }),
+    });
+    const ok = res.ok;
+    e.target.textContent = ok ? "✓ ОК" : "✗ ОШИБКА";
+    if (ok && !telegramOn) document.getElementById("telegram-btn").click();
+  } catch (err) {
+    e.target.textContent = "✗ СЕТЬ";
+  }
+  setTimeout(() => { e.target.textContent = "ТЕСТ"; }, 3000);
+});
+document.getElementById("telegram-btn").addEventListener("click", (e) => {
+  telegramOn = !telegramOn;
+  e.target.textContent = telegramOn ? "📨 TELEGRAM: ВКЛ" : "📨 TELEGRAM: ВЫКЛ";
+  e.target.classList.toggle("paused", telegramOn);
+  saveState();
 });
 document.getElementById("score-only-btn").addEventListener("click", (e) => {
   scoreOnlyMode = !scoreOnlyMode;
@@ -2377,6 +2549,7 @@ loadStateAsync().then((ok) => {
   if (!ok) return;
 
   document.getElementById("threshold-input").value = String(threshold);
+  document.getElementById("threshold-30s-input").value = String(threshold30);
   document.getElementById("threshold-1m-input").value = String(threshold1m);
   document.getElementById("threshold-2m-input").value = String(threshold2m);
   document.getElementById("max-price-input").value = String(maxInitialPrice);
@@ -2385,9 +2558,15 @@ loadStateAsync().then((ok) => {
   document.getElementById("trade-stop-input").value = String(tradeStopPct);
   document.getElementById("trade-target-input").value = String(tradeTargetPct);
   document.getElementById("trade-hours-input").value = String(tradeTimeHours);
+  document.getElementById("telegram-token-input").value = telegramToken;
+  document.getElementById("telegram-chatid-input").value = telegramChatId;
   if (!tradePlanOn) {
     const b = document.getElementById("trade-plan-btn");
     b.textContent = "📐 ПЛАН СДЕЛКИ: ВЫКЛ"; b.classList.add("paused");
+  }
+  if (telegramOn) {
+    const b = document.getElementById("telegram-btn");
+    b.textContent = "📨 TELEGRAM: ВКЛ"; b.classList.add("paused");
   }
   if (scoreOnlyMode) {
     const b = document.getElementById("score-only-btn");
