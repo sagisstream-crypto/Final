@@ -812,6 +812,14 @@ function directionEmoji(dirPct) {
   if (dirPct === null || dirPct === undefined || isNaN(dirPct)) return "⚪";
   return dirPct >= 0 ? "🟢" : "🔴";
 }
+// Telegram не умеет менять размер шрифта в тексте сообщения (нет тега size, только
+// b/i/u/s/code/pre/a/spoiler) — ближайший рабочий способ сделать номер реально
+// крупнее остального текста — цифры-эмодзи (keycap): они рисуются как отдельные
+// цветные квадраты заметно крупнее обычного шрифта, а не просто "жирным".
+const KEYCAP_DIGITS = { "0": "0️⃣", "1": "1️⃣", "2": "2️⃣", "3": "3️⃣", "4": "4️⃣", "5": "5️⃣", "6": "6️⃣", "7": "7️⃣", "8": "8️⃣", "9": "9️⃣" };
+function bigNumber(n) {
+  return String(n).split("").map(d => KEYCAP_DIGITS[d] || d).join("");
+}
 function recordThresholdSignal(entry) {
   // Нумеруем только VEL1M, и отдельно для SPOT и для USDT-M — остальные типы (SPIKE/
   // SPIKE30/VEL2M/ACCEL) без номера, как и было до нумерации.
@@ -842,7 +850,7 @@ function recordThresholdSignal(entry) {
   // приближаем жёлтый/зелёный кружками-эмодзи (🟡 у сигнала, 🟢 у объёмов) плюс жирным
   // шрифтом (parse_mode: HTML). 1-я строка — коротко: пара + сумма, всё остальное ниже.
   const amountStr = `${entry.amount >= 0 ? "+" : ""}$${fmtMoney(entry.amount)}`;
-  const pairAmountLine = `<b>${entry.seq ? entry.seq + ". " : ""}${entry.base}/${entry.quote} ${amountStr}</b>`;
+  const pairAmountLine = `${entry.seq ? bigNumber(entry.seq) + " " : ""}<b>${entry.base}/${entry.quote} ${amountStr}</b>`;
   const typeLine = `🟡 ${entry.type} (${entry.market})${entry.extra ? " · " + entry.extra : ""}`;
   sendTelegram(`${pairAmountLine}\n${typeLine}${volLine}${dirLine}${imbalLine}${fundLine}${oiLine}`);
 }
@@ -2107,7 +2115,7 @@ function renderThresholdPanel() {
       if (a.oiChangePct !== null && a.oiChangePct !== undefined && !isNaN(a.oiChangePct)) extraBits.push(`OI ${a.oiChangePct >= 0 ? "+" : ""}${a.oiChangePct.toFixed(1)}%`);
       return `
       <div class="threshold-item" data-key="${a.key}" title="Показать пару в таблице">
-        <span class="th-sym">${a.seq ? a.seq + ". " : ""}${a.base}/${a.quote} <span style="color:#7a5a3a; font-weight:400;">${a.market}</span></span>
+        <span class="th-sym">${a.seq ? bigNumber(a.seq) + " " : ""}${a.base}/${a.quote} <span style="color:#7a5a3a; font-weight:400;">${a.market}</span></span>
         <span class="th-type">${THRESHOLD_TYPE_LABEL[a.type] || a.type}</span>
         <span class="th-amount">+$${fmtMoney(a.amount)}</span>
         ${dirText ? `<span class="${dirCls}">${dirText}</span>` : ""}
