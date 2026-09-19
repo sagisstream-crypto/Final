@@ -810,14 +810,6 @@ function directionEmoji(dirPct) {
   if (dirPct === null || dirPct === undefined || isNaN(dirPct)) return "⚪";
   return dirPct >= 0 ? "🟢" : "🔴";
 }
-// Telegram не умеет в настоящее выравнивание по центру — приближаем пробелами.
-// Считаем длину по code point'ам (спред строки), а не .length, чтобы эмодзи
-// не считался за 2 символа и не сбивал отступ.
-function centerPad(text, width = 30) {
-  const len = [...text].length;
-  const pad = Math.max(0, Math.floor((width - len) / 2));
-  return " ".repeat(pad) + text;
-}
 function recordThresholdSignal(entry) {
   thresholdLog.unshift(entry);
   if (thresholdLog.length > THRESHOLD_LOG_MAX) thresholdLog.length = THRESHOLD_LOG_MAX;
@@ -840,14 +832,12 @@ function recordThresholdSignal(entry) {
     ? ` · OI: ${entry.oiChangePct >= 0 ? "+" : ""}${entry.oiChangePct.toFixed(1)}%`
     : "";
   // Telegram не даёт красить произвольный текст в сообщениях бота (нет тега color) —
-  // приближаем жёлтый/зелёный кружками-эмодзи (🟡 у названия сигнала, 🟢 у объёмов) плюс
-  // жирным шрифтом (parse_mode: HTML), чтобы название+сумма реально выделялись.
+  // приближаем жёлтый/зелёный кружками-эмодзи (🟡 у сигнала, 🟢 у объёмов) плюс жирным
+  // шрифтом (parse_mode: HTML). 1-я строка — коротко: пара + сумма, всё остальное ниже.
   const amountStr = `${entry.amount >= 0 ? "+" : ""}$${fmtMoney(entry.amount)}`;
-  const label = `${entry.type} ${amountStr}`;
-  const headerPlain = centerPad(`🟡 ${label}`);
-  const header = headerPlain.replace(label, `<b>${label}</b>`);
-  const pairLine = `${entry.base}/${entry.quote} (${entry.market})`;
-  sendTelegram(`${header}\n${pairLine}\n${entry.extra}${volLine}${dirLine}${imbalLine}${fundLine}${oiLine}`);
+  const pairAmountLine = `<b>${entry.base}/${entry.quote} ${amountStr}</b>`;
+  const typeLine = `🟡 ${entry.type} (${entry.market})${entry.extra ? " · " + entry.extra : ""}`;
+  sendTelegram(`${pairAmountLine}\n${typeLine}${volLine}${dirLine}${imbalLine}${fundLine}${oiLine}`);
 }
 function sendTelegram(text) {
   if (!telegramOn || !telegramToken || !telegramChatId) return;
