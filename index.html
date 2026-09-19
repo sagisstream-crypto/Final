@@ -215,6 +215,7 @@
   .threshold-item .th-sym { font-size: 12px; font-weight: 600; color: #ff9d4a; }
   .threshold-item .th-type { font-size: 9.5px; color: #b37a4a; }
   .threshold-item .th-amount { font-size: 11px; color: #ffb454; font-weight: 600; }
+  .threshold-item .th-vol { font-size: 10px; color: #b37a4a; }
   .threshold-item .th-time { font-size: 9px; color: #7a5a3a; }
   #telegram-btn.paused { color: #5ec8ff; border-color: #1a3a4a; background: #0a1a1f; }
   .alerts-tabs {
@@ -796,7 +797,11 @@ function recordThresholdSignal(entry) {
   if (thresholdLog.length > THRESHOLD_LOG_MAX) thresholdLog.length = THRESHOLD_LOG_MAX;
   dataDirty = true;
   const icon = entry.type === "SPIKE" || entry.type === "SPIKE30" ? "⚡" : "🚀";
-  sendTelegram(`${icon} ${entry.type} ${entry.base}/${entry.quote} (${entry.market})\n${entry.extra} · +$${fmtMoney(entry.amount)}`);
+  const volLine = entry.curVol !== null && entry.curVol !== undefined
+    ? `\nОбъём 24ч: $${fmtMoney(entry.curVol)}` + (entry.pct24h !== null && entry.pct24h !== undefined && !isNaN(entry.pct24h)
+        ? ` (${entry.pct24h >= 0 ? "+" : ""}${entry.pct24h.toFixed(2)}%)` : "")
+    : "";
+  sendTelegram(`${icon} ${entry.type} ${entry.base}/${entry.quote} (${entry.market})\n${entry.extra} · +$${fmtMoney(entry.amount)}${volLine}`);
 }
 function sendTelegram(text) {
   if (!telegramOn || !telegramToken || !telegramChatId) return;
@@ -1595,6 +1600,7 @@ function handleTickerBatch(market, arr) {
         const alertEntry = {
           key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
           amount: rolling10, time: now, type: "SPIKE", extra: "10с",
+          curVol: parsed.curVol, pct24h: parsed.pct,
         };
         pushAlert(alertEntry);
         recordThresholdSignal(alertEntry);
@@ -1609,6 +1615,7 @@ function handleTickerBatch(market, arr) {
         const alertEntry = {
           key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
           amount: rolling30, time: now, type: "SPIKE30", extra: "30с",
+          curVol: parsed.curVol, pct24h: parsed.pct,
         };
         pushAlert(alertEntry);
         recordThresholdSignal(alertEntry);
@@ -1622,6 +1629,7 @@ function handleTickerBatch(market, arr) {
         const alertEntry = {
           key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
           amount: d1m, time: now, type: "VEL1M", extra: "Δ1м",
+          curVol: parsed.curVol, pct24h: parsed.pct,
         };
         pushAlert(alertEntry);
         recordThresholdSignal(alertEntry);
@@ -1636,6 +1644,7 @@ function handleTickerBatch(market, arr) {
         const alertEntry = {
           key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
           amount: d2m, time: now, type: "VEL2M", extra: "Δ2м",
+          curVol: parsed.curVol, pct24h: parsed.pct,
         };
         pushAlert(alertEntry);
         recordThresholdSignal(alertEntry);
@@ -1652,6 +1661,7 @@ function handleTickerBatch(market, arr) {
         const alertEntry = {
           key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
           amount: d1m, time: now, type: "ACCEL", extra: `наклон ${accel >= 0 ? "+" : ""}$${fmtMoney(accel)}/мин`,
+          curVol: parsed.curVol, pct24h: parsed.pct,
         };
         pushAlert(alertEntry);
         recordThresholdSignal(alertEntry);
@@ -1902,14 +1912,21 @@ function renderThresholdPanel() {
   if (!thresholdLog.length) {
     listEl.innerHTML = `<div class="threshold-empty">Пока нет.</div>`;
   } else {
-    listEl.innerHTML = thresholdLog.map(a => `
+    listEl.innerHTML = thresholdLog.map(a => {
+      const hasVol = a.curVol !== null && a.curVol !== undefined;
+      const hasPct = hasVol && a.pct24h !== null && a.pct24h !== undefined && !isNaN(a.pct24h);
+      const volText = hasVol
+        ? `24ч $${fmtMoney(a.curVol)}` + (hasPct ? ` (${a.pct24h >= 0 ? "+" : ""}${a.pct24h.toFixed(2)}%)` : "")
+        : "";
+      return `
       <div class="threshold-item" data-key="${a.key}" title="Показать пару в таблице">
         <span class="th-sym">${a.base}/${a.quote} <span style="color:#7a5a3a; font-weight:400;">${a.market}</span></span>
         <span class="th-type">${THRESHOLD_TYPE_LABEL[a.type] || a.type}</span>
         <span class="th-amount">+$${fmtMoney(a.amount)}</span>
+        ${volText ? `<span class="th-vol">${volText}</span>` : ""}
         <span class="th-time">${fmtTimeMinusHour(a.time)}</span>
-      </div>
-    `).join("");
+      </div>`;
+    }).join("");
   }
 }
 
