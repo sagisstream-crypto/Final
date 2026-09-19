@@ -690,6 +690,8 @@ let dayHighAt = {};          // key -> когда максимум в после
 let dayLow = {};             // key -> последний виденный 24ч минимум
 let takerRatio = {};         // key -> { r, at } из kline_1m «горячего» потока
 let candleShape = {};        // key -> { o,h,l,c,v, at } последняя 1m свеча горячего потока
+let fundingRate = {};        // symbol (USDT-M, без префикса рынка) -> { r, price, at }
+let oiHistory = {};          // symbol -> [{t, oi_usd}, ...] только для горячих USDT-M пар
 
 // ---- план сделки: стратегия из research/binance_pump_patterns (12м бэктест, 267 событий)
 // поверх сигнала ⭐ SCORE. Не автоторговля — просто считаем виртуальный P&L теми же
@@ -792,16 +794,35 @@ function closeTradePlan(key, exitType, exitPrice, now) {
 }
 
 // ---------- пороговый сигнал: лог + телеграм ----------
+// направление: цена (1м, либо 24ч если 1м ещё не набежала) — это то, что реально
+// отвечает "вверх или вниз", а не тейкер (P(REAL>FAIL) ≈ 0.51 на 12-месячном прогоне,
+// то есть монетка). 🟢/🔴 в тексте — прямой ответ на "куда упор".
+function directionEmoji(dirPct) {
+  if (dirPct === null || dirPct === undefined || isNaN(dirPct)) return "⚪";
+  return dirPct >= 0 ? "🟢" : "🔴";
+}
 function recordThresholdSignal(entry) {
   thresholdLog.unshift(entry);
   if (thresholdLog.length > THRESHOLD_LOG_MAX) thresholdLog.length = THRESHOLD_LOG_MAX;
   dataDirty = true;
-  const icon = entry.type === "SPIKE" || entry.type === "SPIKE30" ? "⚡" : "🚀";
+  const dot = directionEmoji(entry.dirPct);
   const volLine = entry.curVol !== null && entry.curVol !== undefined
     ? `\nОбъём 24ч: $${fmtMoney(entry.curVol)}` + (entry.pct24h !== null && entry.pct24h !== undefined && !isNaN(entry.pct24h)
         ? ` (${entry.pct24h >= 0 ? "+" : ""}${entry.pct24h.toFixed(2)}%)` : "")
     : "";
-  sendTelegram(`${icon} ${entry.type} ${entry.base}/${entry.quote} (${entry.market})\n${entry.extra} · +$${fmtMoney(entry.amount)}${volLine}`);
+  const dirLine = entry.dirPct !== null && entry.dirPct !== undefined && !isNaN(entry.dirPct)
+    ? `\nЦена: ${entry.dirPct >= 0 ? "+" : ""}${entry.dirPct.toFixed(2)}%`
+    : "";
+  const imbalLine = entry.imbal !== null && entry.imbal !== undefined && !isNaN(entry.imbal)
+    ? ` · стакан ${Math.round(entry.imbal * 100)}% bid`
+    : "";
+  const fundLine = entry.fundingPct !== null && entry.fundingPct !== undefined && !isNaN(entry.fundingPct)
+    ? `\nФандинг: ${entry.fundingPct >= 0 ? "+" : ""}${entry.fundingPct.toFixed(3)}%` + (Math.abs(entry.fundingPct) >= 0.05 ? " ⚠ перегрето" : "")
+    : "";
+  const oiLine = entry.oiChangePct !== null && entry.oiChangePct !== undefined && !isNaN(entry.oiChangePct)
+    ? ` · OI: ${entry.oiChangePct >= 0 ? "+" : ""}${entry.oiChangePct.toFixed(1)}%`
+    : "";
+  sendTelegram(`${dot} ${entry.type} ${entry.base}/${entry.quote} (${entry.market})\n${entry.extra} · +$${fmtMoney(entry.amount)}${volLine}${dirLine}${imbalLine}${fundLine}${oiLine}`);
 }
 function sendTelegram(text) {
   if (!telegramOn || !telegramToken || !telegramChatId) return;
@@ -1290,6 +1311,78 @@ function rebuildHotStream(marketId) {
 function rebuildAllHotStreams() { MARKETS.forEach(m => rebuildHotStream(m.id)); }
 setInterval(rebuildAllHotStreams, 15000);
 
+// ---------- funding rate + open interest (только USDT-M) ----------
+// !markPrice@arr — один поток на весь рынок фьючерсов сразу (без подписки по парам),
+// даёт funding rate и mark price бесплатно и в реальном времени. Это гораздо честнее
+// как индикатор "куда ставят деньги", чем taker_buy_share — 12-месячный бэктест
+// (research/binance_pump_patterns) показал, что доля тейкера почти не отличает
+// вынос от слива (P(REAL>FAIL) ≈ 0.51), а funding отражает реальный перекос лонг/шорт
+// по всему рынку. Open Interest в тикере не отдаётся вообще — только REST, поэтому
+// опрашиваем его не по всем 400+ парам (упрёмся в лимиты), а только по тем же 12
+// «горячим» USDT-M парам, что уже опрашивает тейкер-поток.
+let markPriceSocket = null;
+function connectMarkPriceStream() {
+  if (paused) return;
+  if (markPriceSocket && markPriceSocket.readyState === WebSocket.OPEN) return;
+  let sock;
+  try { sock = new WebSocket("wss://fstream.binance.com/ws/!markPrice@arr@1s"); }
+  catch (e) { return; }
+  markPriceSocket = sock;
+  sock.onmessage = (ev) => {
+    try {
+      const arr = JSON.parse(ev.data);
+      if (!Array.isArray(arr)) return;
+      const now = Date.now();
+      for (const m of arr) {
+        const r = parseFloat(m.r), p = parseFloat(m.p);
+        if (!isNaN(r)) fundingRate[m.s] = { r, price: isNaN(p) ? null : p, at: now };
+      }
+    } catch (e) {}
+  };
+  sock.onerror = () => {};
+  sock.onclose = () => { if (markPriceSocket === sock) markPriceSocket = null; };
+}
+function closeMarkPriceStream() {
+  if (markPriceSocket) { try { markPriceSocket.onclose = null; markPriceSocket.close(); } catch (e) {} }
+  markPriceSocket = null;
+}
+setInterval(() => { if (paused) closeMarkPriceStream(); else connectMarkPriceStream(); }, 10000);
+connectMarkPriceStream();
+
+const OI_HISTORY_MAX = 8;     // ~4 минуты при опросе раз в 30с
+const OI_POLL_MS = 30000;
+let oiPolling = false;
+async function pollOpenInterestOnce() {
+  if (paused || oiPolling) return;
+  const symbols = (hotSymbols["USDT-M"] || []).map(s => s.toUpperCase());
+  if (!symbols.length) return;
+  oiPolling = true;
+  try {
+    for (const sym of symbols) {
+      try {
+        const res = await fetch(`https://fapi.binance.com/fapi/v1/openInterest?symbol=${sym}`, { cache: "no-store" });
+        if (!res.ok) continue;
+        const data = await res.json();
+        const qty = parseFloat(data.openInterest);
+        const mark = fundingRate[sym] && fundingRate[sym].price;
+        if (isNaN(qty) || !mark) continue;
+        const usd = qty * mark;
+        if (!oiHistory[sym]) oiHistory[sym] = [];
+        oiHistory[sym].push({ t: Date.now(), oi: usd });
+        if (oiHistory[sym].length > OI_HISTORY_MAX) oiHistory[sym].shift();
+      } catch (e) {}
+    }
+  } finally {
+    oiPolling = false;
+  }
+}
+setInterval(pollOpenInterestOnce, OI_POLL_MS);
+function getOiChangePct(symbol) {
+  const h = oiHistory[symbol];
+  if (!h || h.length < 2 || !h[0].oi) return null;
+  return (h[h.length - 1].oi / h[0].oi - 1) * 100;
+}
+
 // ---------- websocket feed ----------
 function wsTickerToTick(item) {
   // Normalize Binance !ticker@arr fields (s/c/P/q/n/b/B/a/A/w/h/l) to the shape parseTick() expects.
@@ -1601,6 +1694,10 @@ function handleTickerBatch(market, arr) {
           key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
           amount: rolling10, time: now, type: "SPIKE", extra: "10с",
           curVol: parsed.curVol, pct24h: parsed.pct,
+          dirPct: pct1m !== null ? pct1m : (parsed.pct !== null && parsed.pct !== undefined && !isNaN(parsed.pct) ? parsed.pct : null),
+          imbal,
+          fundingPct: market.id === "USDT-M" && fundingRate[parsed.symbol] ? fundingRate[parsed.symbol].r * 100 : null,
+          oiChangePct: market.id === "USDT-M" ? getOiChangePct(parsed.symbol) : null,
         };
         pushAlert(alertEntry);
         recordThresholdSignal(alertEntry);
@@ -1616,6 +1713,10 @@ function handleTickerBatch(market, arr) {
           key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
           amount: rolling30, time: now, type: "SPIKE30", extra: "30с",
           curVol: parsed.curVol, pct24h: parsed.pct,
+          dirPct: pct1m !== null ? pct1m : (parsed.pct !== null && parsed.pct !== undefined && !isNaN(parsed.pct) ? parsed.pct : null),
+          imbal,
+          fundingPct: market.id === "USDT-M" && fundingRate[parsed.symbol] ? fundingRate[parsed.symbol].r * 100 : null,
+          oiChangePct: market.id === "USDT-M" ? getOiChangePct(parsed.symbol) : null,
         };
         pushAlert(alertEntry);
         recordThresholdSignal(alertEntry);
@@ -1630,6 +1731,10 @@ function handleTickerBatch(market, arr) {
           key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
           amount: d1m, time: now, type: "VEL1M", extra: "Δ1м",
           curVol: parsed.curVol, pct24h: parsed.pct,
+          dirPct: pct1m !== null ? pct1m : (parsed.pct !== null && parsed.pct !== undefined && !isNaN(parsed.pct) ? parsed.pct : null),
+          imbal,
+          fundingPct: market.id === "USDT-M" && fundingRate[parsed.symbol] ? fundingRate[parsed.symbol].r * 100 : null,
+          oiChangePct: market.id === "USDT-M" ? getOiChangePct(parsed.symbol) : null,
         };
         pushAlert(alertEntry);
         recordThresholdSignal(alertEntry);
@@ -1645,6 +1750,10 @@ function handleTickerBatch(market, arr) {
           key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
           amount: d2m, time: now, type: "VEL2M", extra: "Δ2м",
           curVol: parsed.curVol, pct24h: parsed.pct,
+          dirPct: pct1m !== null ? pct1m : (parsed.pct !== null && parsed.pct !== undefined && !isNaN(parsed.pct) ? parsed.pct : null),
+          imbal,
+          fundingPct: market.id === "USDT-M" && fundingRate[parsed.symbol] ? fundingRate[parsed.symbol].r * 100 : null,
+          oiChangePct: market.id === "USDT-M" ? getOiChangePct(parsed.symbol) : null,
         };
         pushAlert(alertEntry);
         recordThresholdSignal(alertEntry);
@@ -1662,6 +1771,10 @@ function handleTickerBatch(market, arr) {
           key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
           amount: d1m, time: now, type: "ACCEL", extra: `наклон ${accel >= 0 ? "+" : ""}$${fmtMoney(accel)}/мин`,
           curVol: parsed.curVol, pct24h: parsed.pct,
+          dirPct: pct1m !== null ? pct1m : (parsed.pct !== null && parsed.pct !== undefined && !isNaN(parsed.pct) ? parsed.pct : null),
+          imbal,
+          fundingPct: market.id === "USDT-M" && fundingRate[parsed.symbol] ? fundingRate[parsed.symbol].r * 100 : null,
+          oiChangePct: market.id === "USDT-M" ? getOiChangePct(parsed.symbol) : null,
         };
         pushAlert(alertEntry);
         recordThresholdSignal(alertEntry);
@@ -1918,12 +2031,22 @@ function renderThresholdPanel() {
       const volText = hasVol
         ? `24ч $${fmtMoney(a.curVol)}` + (hasPct ? ` (${a.pct24h >= 0 ? "+" : ""}${a.pct24h.toFixed(2)}%)` : "")
         : "";
+      const hasDir = a.dirPct !== null && a.dirPct !== undefined && !isNaN(a.dirPct);
+      const dirCls = hasDir ? (a.dirPct >= 0 ? "pct-pos" : "pct-neg") : "";
+      const dirText = hasDir ? `${directionEmoji(a.dirPct)} ${a.dirPct >= 0 ? "+" : ""}${a.dirPct.toFixed(2)}%` : "";
+      const hasImbal = a.imbal !== null && a.imbal !== undefined && !isNaN(a.imbal);
+      const extraBits = [];
+      if (hasImbal) extraBits.push(`стакан ${Math.round(a.imbal * 100)}%`);
+      if (a.fundingPct !== null && a.fundingPct !== undefined && !isNaN(a.fundingPct)) extraBits.push(`фандинг ${a.fundingPct >= 0 ? "+" : ""}${a.fundingPct.toFixed(3)}%`);
+      if (a.oiChangePct !== null && a.oiChangePct !== undefined && !isNaN(a.oiChangePct)) extraBits.push(`OI ${a.oiChangePct >= 0 ? "+" : ""}${a.oiChangePct.toFixed(1)}%`);
       return `
       <div class="threshold-item" data-key="${a.key}" title="Показать пару в таблице">
         <span class="th-sym">${a.base}/${a.quote} <span style="color:#7a5a3a; font-weight:400;">${a.market}</span></span>
         <span class="th-type">${THRESHOLD_TYPE_LABEL[a.type] || a.type}</span>
         <span class="th-amount">+$${fmtMoney(a.amount)}</span>
+        ${dirText ? `<span class="${dirCls}">${dirText}</span>` : ""}
         ${volText ? `<span class="th-vol">${volText}</span>` : ""}
+        ${extraBits.length ? `<span class="th-vol">${extraBits.join(" · ")}</span>` : ""}
         <span class="th-time">${fmtTimeMinusHour(a.time)}</span>
       </div>`;
     }).join("");
@@ -2641,6 +2764,7 @@ function pauseForBackground() {
     if (restTimer[m.id]) { clearInterval(restTimer[m.id]); restTimer[m.id] = null; }
   });
   closeAllHotStreams();
+  closeMarkPriceStream();
 }
 function resumeFromBackground() {
   appHidden = false;
@@ -2653,6 +2777,7 @@ function resumeFromBackground() {
   });
   lastHotRebuild = {};
   rebuildAllHotStreams();
+  connectMarkPriceStream();
   dataDirty = true;
   render();
 }
