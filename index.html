@@ -635,6 +635,13 @@ let priceBase = {};
 let doubleLevel = {};
 let lastFired = {};          // key -> { SPIKE:ts, VEL1M:ts, VEL2M:ts, ACCEL:ts, RANK:ts, TOP30:ts, TOP15:ts }
 let signalCount = {};
+// TRIGGERED/EARLY в шапке считались от alertsLog.length — alertsLog никогда не
+// растёт (pushAlert его не пишет, "не копить журнал" было отдельным решением
+// ранее), поэтому счётчики в шапке всегда показывали 0, даже когда сигналы
+// реально срабатывали (пороговые уходили в 🎯-ленту и Telegram, ⭐ SCORE — в
+// уведомление). Это не имеет отношения к Telegram — считаем отдельно и честно.
+let totalTriggeredCount = 0;  // сколько сигналов всего сработало (любых типов)
+let totalEarlyCount = 0;      // из них — «ранних» (VEL1M/VEL2M/ACCEL/SIGNAL)
 let history = {};            // key -> [{t, vol}, ...]
 const HISTORY_WINDOW_MS = 10000;
 const HISTORY_30S_MS = 30000;
@@ -864,7 +871,7 @@ function buildPayload() {
     tradePlanOn, tradeStopPct, tradeTargetPct, tradeTimeHours, tradeEquity,
     openTrades, closedTrades,
     thresholdLog, telegramOn, telegramToken, telegramChatId,
-    filtersCollapsed,
+    filtersCollapsed, totalTriggeredCount, totalEarlyCount,
     startTime, savedAt: Date.now(),
   };
 }
@@ -911,6 +918,8 @@ function applyPayload(payload) {
   telegramToken = payload.telegramToken || "";
   telegramChatId = payload.telegramChatId || "";
   filtersCollapsed = payload.filtersCollapsed !== false;
+  totalTriggeredCount = typeof payload.totalTriggeredCount === "number" ? payload.totalTriggeredCount : 0;
+  totalEarlyCount = typeof payload.totalEarlyCount === "number" ? payload.totalEarlyCount : 0;
   startTime = payload.startTime || Date.now();
   return true;
 }
@@ -1155,8 +1164,12 @@ function markFired(key, type) {
   ensureLastFired(key)[type] = Date.now();
 }
 function pushAlert(entry) {
-  // запись сигналов отключена по запросу — не копить журнал и не писать на диск
+  // журнал (alertsLog) сознательно не копим — не писать на диск лишнее, по
+  // отдельному решению ранее. Но счётчики в шапке считать обязаны честно.
   signalCount[entry.key] = (signalCount[entry.key] || 0) + 1;
+  totalTriggeredCount++;
+  if (isEarlyType(entry.type)) totalEarlyCount++;
+  dataDirty = true;
 }
 function pushShelfAlert(entry) {
   // полка тоже без записи
@@ -1543,6 +1556,7 @@ function handleTickerBatch(market, arr) {
     lastPollAt[market.id] = now;
 
     for (const t of arr) {
+      try {
       if (isExcluded(t.symbol)) {
         const exKey = `${market.id}:${t.symbol}`;
         if (rows[exKey]) purgeKey(exKey);
@@ -1838,6 +1852,15 @@ function handleTickerBatch(market, arr) {
         doubleLevel[key] = Math.floor(currentMultiple);
         doubleBeep();
         notify(`Объём x${doubleLevel[key]}: ${parsed.base}/${parsed.quote}`, `×${doubleLevel[key]} от начального (${market.id})`);
+      }
+      } catch (e) {
+        // Защита: раньше необработанное исключение на одной паре прерывало
+        // весь for-loop и обработка остальных пар в этом тике не доходила
+        // до VEL1M/ACCEL и т.д. Стресс-тестами (150 синтетических тикеров,
+        // намеренно битые данные) такого исключения не найдено ни в старой,
+        // ни в новой версии — так что это подстраховка на будущее, а не
+        // подтверждённая причина реже приходящих ACCEL/VEL1M.
+        console.error("VolScan: ошибка обработки тика", t && t.symbol, e);
       }
     }
     updateStatusLine();
@@ -2213,9 +2236,8 @@ function render() {
   }
 
   document.getElementById("tracked-count").textContent = Object.keys(rows).length;
-  document.getElementById("triggered-count").textContent = alertsLog.length;
-  const earlyN = alertsLog.filter(a => isEarlyType(a.type)).length;
-  document.getElementById("early-count").textContent = earlyN;
+  document.getElementById("triggered-count").textContent = totalTriggeredCount;
+  document.getElementById("early-count").textContent = totalEarlyCount;
 
   // alerts list
   const alertsList = document.getElementById("alerts-list");
@@ -2344,6 +2366,8 @@ function resetBaseline() {
   outcomes = [];
   outcomesByKey = {};
   shelfAlerts = [];
+  totalTriggeredCount = 0;
+  totalEarlyCount = 0;
   startTime = Date.now();
   clearState();
   render();
