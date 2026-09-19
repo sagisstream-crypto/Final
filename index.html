@@ -96,10 +96,19 @@
   #stats-btn.paused { color: #5eff8f; border-color: #2f4a2f; background: #131f13; }
   #wakelock-btn.paused { color: #5eff8f; border-color: #2f4a2f; background: #131f13; }
   #early-only-btn.paused { color: #ffd85e; border-color: #4a3a1e; background: #1e1810; }
+  #trade-plan-btn.paused { color: #ff6b6b; border-color: #4a1e1e; background: #1e1010; }
   .reset-btn:hover, .sound-btn:hover { background: #232838; }
   .ok-btn:hover { background: #233823; }
   .hint { font-size: 10px; color: #3f4f3f; margin-left: auto; }
-  .body-wrap { flex: 1; display: flex; overflow: hidden; }
+  .body-wrap { flex: 1; display: flex; overflow: hidden; min-height: 320px; }
+  .filters-collapsible { overflow-y: auto; max-height: 60vh; }
+  .filters-collapsible.collapsed { display: none; }
+  .filters-toggle-btn {
+    background: #0a0e0a; border: 1px solid #1e2b1e; border-radius: 2px;
+    color: #5eff8f; font-family: inherit; font-size: 11px; padding: 6px 10px;
+    cursor: pointer; white-space: nowrap;
+  }
+  .filters-toggle-btn:hover { border-color: #2f4a2f; }
   .table-wrap { flex: 1; overflow: auto; min-width: 0; }
   table { width: 100%; border-collapse: collapse; }
   thead { position: sticky; top: 0; background: #0d120d; border-bottom: 1px solid #1e2b1e; z-index: 5; }
@@ -185,6 +194,30 @@
   .shelf-sym { font-size: 12px; font-weight: 600; color: #ffd85e; }
   .shelf-delta { font-size: 11px; color: #ffb454; font-weight: 600; }
   .shelf-time { font-size: 9px; color: #8a7a4a; }
+  .trade-panel { border: 1px solid #1a2a3a; background: #0a0e14; border-radius: 4px; margin: 0 12px 8px; padding: 6px 8px; }
+  .trade-header { font-size: 11px; font-weight: 700; color: #5ec8ff; margin-bottom: 4px; }
+  .trade-summary { color: #8aa8bf; font-weight: 400; }
+  .trade-list { display: flex; flex-wrap: wrap; gap: 6px; max-height: 140px; overflow-y: auto; margin-bottom: 4px; }
+  .trade-empty { font-size: 11px; color: #4a6478; padding: 2px 0; }
+  .trade-item { display: flex; flex-direction: column; gap: 1px; background: #0f1a24; border: 1px solid #1a2a3a; border-radius: 3px; padding: 4px 8px; min-width: 128px; }
+  .trade-item .t-sym { font-size: 12px; font-weight: 600; color: #5ec8ff; }
+  .trade-item .t-line { font-size: 9.5px; color: #6b8494; }
+  .trade-closed-item { display: flex; align-items: center; gap: 8px; background: #0f1a24; border: 1px solid #1a2a3a; border-radius: 3px; padding: 4px 8px; }
+  .trade-closed-item .t-sym { font-size: 11px; font-weight: 600; color: #8aa8bf; min-width: 76px; }
+  .trade-closed-item .t-time { font-size: 9px; color: #4a6478; margin-left: auto; }
+  .threshold-panel { border: 1px solid #4a2a14; background: #1a0f08; border-radius: 4px; margin: 0 12px 8px; padding: 6px 8px; }
+  .threshold-header { font-size: 11px; font-weight: 700; color: #ff9d4a; margin-bottom: 4px; }
+  .threshold-summary { color: #b37a4a; font-weight: 400; }
+  .threshold-list { display: flex; flex-wrap: wrap; gap: 6px; max-height: 120px; overflow-y: auto; }
+  .threshold-empty { font-size: 11px; color: #7a5a3a; padding: 2px 0; }
+  .threshold-item { display: flex; gap: 8px; align-items: center; background: #221408; border: 1px solid #4a2a14; border-radius: 3px; padding: 4px 8px; cursor: pointer; }
+  .threshold-item:hover { border-color: #ff9d4a; }
+  .threshold-item .th-sym { font-size: 12px; font-weight: 600; color: #ff9d4a; }
+  .threshold-item .th-type { font-size: 9.5px; color: #b37a4a; }
+  .threshold-item .th-amount { font-size: 11px; color: #ffb454; font-weight: 600; }
+  .threshold-item .th-vol { font-size: 10px; color: #b37a4a; }
+  .threshold-item .th-time { font-size: 9px; color: #7a5a3a; }
+  #telegram-btn.paused { color: #5ec8ff; border-color: #1a3a4a; background: #0a1a1f; }
   .alerts-tabs {
     display: flex; border-bottom: 1px solid #1e2b1e;
   }
@@ -297,8 +330,9 @@
     .stats { gap: 8px; font-size: 10px; }
     .controls { gap: 6px; }
     .hint { display: none; }
-    .body-wrap { flex-direction: column; flex: 1; overflow: hidden; min-height: 0; }
+    .body-wrap { flex-direction: column; flex: 1; overflow: hidden; min-height: 280px; }
     .table-wrap { flex: 1; max-height: none; overflow: auto; -webkit-overflow-scrolling: touch; }
+    .filters-collapsible { max-height: 50vh; }
     thead { position: sticky; top: 0; }
     .alerts-panel {
       width: 100%; border-left: none; flex: 1; min-height: 0;
@@ -333,7 +367,9 @@
       <span class="stat-label">TRIGGERED <span class="stat-val warn" id="triggered-count">0</span></span>
       <span class="stat-label">EARLY <span class="stat-val early" id="early-count">0</span></span>
     </div>
+    <button class="filters-toggle-btn" id="filters-toggle-btn">⚙ Фильтры ▾</button>
   </div>
+  <div class="filters-collapsible collapsed" id="filters-collapsible">
   <div class="controls">
     <div class="market-toggle" id="market-toggle">
       <button data-market="ALL" class="active">ВСЕ</button>
@@ -349,6 +385,12 @@
       <span class="stat-label">порог 10с $</span>
       <input id="threshold-input" value="50000">
       <button class="ok-btn" id="apply-threshold">OK</button>
+    </div>
+    <div class="box">
+      <span>⚙</span>
+      <span class="stat-label">порог 30с $</span>
+      <input id="threshold-30s-input" value="50000">
+      <button class="ok-btn" id="apply-threshold-30s">OK</button>
     </div>
     <div class="box">
       <span>⚡</span>
@@ -380,7 +422,25 @@
       <input id="score-threshold-input" value="60">
       <button class="ok-btn" id="apply-score-threshold">OK</button>
     </div>
+    <div class="box">
+      <span>📐</span>
+      <span class="stat-label">стоп −%/цель +%/часов</span>
+      <input id="trade-stop-input" value="8" style="width:34px">
+      <input id="trade-target-input" value="16" style="width:34px">
+      <input id="trade-hours-input" value="2" style="width:28px">
+      <button class="ok-btn" id="apply-trade-params">OK</button>
+    </div>
+    <div class="box">
+      <span>📨</span>
+      <span class="stat-label">telegram bot token / chat id</span>
+      <input id="telegram-token-input" placeholder="123456:AAExample" style="width:120px">
+      <input id="telegram-chatid-input" placeholder="123456789" style="width:80px">
+      <button class="ok-btn" id="apply-telegram">OK</button>
+      <button class="ok-btn" id="test-telegram">ТЕСТ</button>
+    </div>
     <button class="reset-btn" id="score-only-btn">⭐ ТОЛЬКО SCORE: ВЫКЛ</button>
+    <button class="reset-btn" id="trade-plan-btn">📐 ПЛАН СДЕЛКИ: ВКЛ</button>
+    <button class="reset-btn" id="telegram-btn">📨 TELEGRAM: ВЫКЛ</button>
     <button class="reset-btn" id="taker-btn">🔥 ТЕЙКЕР-ПОТОК: ВКЛ</button>
     <button class="reset-btn" id="sort-btn">⇅ СОРТ: Δ ОБЪЁМА</button>
     <button class="reset-btn" id="csv-btn">💾 CSV</button>
@@ -393,21 +453,35 @@
     <button class="reset-btn" id="early-only-btn">⚡ ТОЛЬКО РАННИЕ: ВЫКЛ</button>
     <div class="hint" id="poll-hint">live: websocket</div>
   </div>
+  <div class="threshold-panel" id="threshold-panel">
+    <div class="threshold-header">🎯 ПОРОГОВЫЙ СИГНАЛ <span class="threshold-summary" id="threshold-summary"></span></div>
+    <div class="threshold-list" id="threshold-list">
+      <div class="threshold-empty">Пока нет.</div>
+    </div>
+  </div>
   <div class="shelf-panel" id="shelf-panel">
     <div class="shelf-header">🪤 ТИХАЯ ПОЛКА</div>
     <div class="shelf-list" id="shelf-list">
       <div class="shelf-empty">Пока нет.</div>
     </div>
   </div>
+  <div class="trade-panel" id="trade-panel">
+    <div class="trade-header">📐 ПЛАН СДЕЛКИ <span class="trade-summary" id="trade-summary"></span></div>
+    <div class="trade-list" id="trade-open-list"><div class="trade-empty">Открытых позиций нет.</div></div>
+    <div class="trade-list" id="trade-closed-list"><div class="trade-empty">Закрытых сделок пока нет.</div></div>
+  </div>
   <div class="filters-hint">
-    <b>⭐ SCORE (0–100)</b> — главный сигнал: складывает RVOL (объём против средней минуты суток), Δ% цены за 1м, пробой дневного хая, положение к VWAP, скачок среднего чека сделки, перекос стакана и долю тейкер-покупок. Стреляет только при score ≥ порога И растущей цене. «ТОЛЬКО SCORE» глушит старые пороговые сигналы.
-    <b>Пороговые:</b> SPIKE (10с), VEL1M/VEL2M, ACCEL (наклон за 90с). <b>🪤 Тихая полка</b> — первый вынос у пары, которая долго стояла ровно; в течение 10 мин после неё score получает бонус.
-    <b>🔥 Тейкер-поток</b> — kline_1m по 12 самым горячим спот-парам, даёт долю покупок по рынку. <b>💾 CSV</b> — выгрузка всех сигналов с признаками и MFE/MAE для разбора.
+    <b>⭐ SCORE (0–100)</b> — главный сигнал: складывает RVOL (объём против средней минуты суток), Δ% цены за 1м, пробой дневного хая, положение к VWAP, скачок среднего чека сделки, перекос стакана, долю тейкер-покупок и форму последней 1m свечи горячего потока. Стреляет только при score ≥ порога И растущей цене. «ТОЛЬКО SCORE» глушит старые пороговые сигналы.
+    <b>Пороговые:</b> SPIKE (10с), SPIKE30 (30с), VEL1M/VEL2M, ACCEL (наклон за 90с) — каждый по своему $ порогу из шапки. <b>🎯 Пороговый сигнал</b> — пришпиленная лента наверху: последние срабатывания этих пяти сигналов, отдельно от старого нижнего журнала. <b>🪤 Тихая полка</b> — первый вынос у пары, которая долго стояла ровно.
+    <b>🔥 Тейкер-поток</b> — kline_1m по 12 самым горячим парам на каждом рынке, даёт долю покупок и форму свечи. <b>💾 CSV</b> — выгрузка всех сигналов с признаками и MFE/MAE для разбора.
+    <b>📐 План сделки</b> — встроенная стратегия из 12-месячного бэктеста (research/binance_pump_patterns): на каждый ⭐ SCORE-сигнал заводится виртуальная позиция (стоп/цель/тайм-аут, риск 1% капитала на сделку, комиссия 0.10% за круг) и ведётся сама, без участия пользователя — это не автоторговля и не финансовая рекомендация, а прозрачная проверка сигнала теми же правилами, что тестировались на истории. Не более одной позиции на пару одновременно.
+    <b>📨 Telegram</b> — впиши токен бота (у @BotFather) и chat_id, нажми ТЕСТ: если тестовое сообщение дошло, рассылка пороговых сигналов (🎯) включится сама. Токен и chat_id хранятся только в этом браузере (IndexedDB), никуда, кроме Telegram, не уходят.
     Отбор при первом появлении: цена &lt; $10, нач. объём ≤ $3M. UTK и Alpha исключены.
   </div>
   <div id="stats-panel" style="display:none; margin-top:10px; border:1px solid #1e2b1e; border-radius:2px; background:#0a0e0a; padding:10px 12px;">
     <div style="font-size:10px; color:#5a6b5a; letter-spacing:0.05em; margin-bottom:8px;">📊 СТАТИСТИКА ПО СИГНАЛАМ — что было с ценой ПОСЛЕ срабатывания (не рекомендация)</div>
     <div id="stats-content" style="font-size:11px; line-height:1.7;"></div>
+  </div>
   </div>
 </div>
 
@@ -545,11 +619,13 @@ async function requestPersistentStorage() {
 }
 
 let threshold = 50000;       // 10-sec spike
+let threshold30 = 50000;     // 30-sec spike
 let threshold1m = 30000;     // 1-minute volume growth
 let threshold2m = 50000;     // 2-minute volume growth
 let soundOn = true;
 let paused = false;
 let earlyOnlyMode = false;   // table shows only pairs with recent early signals
+let filtersCollapsed = true; // фильтры/пороги/панели свёрнуты по умолчанию — таблица сразу на всю страницу
 let alertsTab = "all";       // "all" | "early"
 
 let rows = {};
@@ -559,8 +635,16 @@ let priceBase = {};
 let doubleLevel = {};
 let lastFired = {};          // key -> { SPIKE:ts, VEL1M:ts, VEL2M:ts, ACCEL:ts, RANK:ts, TOP30:ts, TOP15:ts }
 let signalCount = {};
+// TRIGGERED/EARLY в шапке считались от alertsLog.length — alertsLog никогда не
+// растёт (pushAlert его не пишет, "не копить журнал" было отдельным решением
+// ранее), поэтому счётчики в шапке всегда показывали 0, даже когда сигналы
+// реально срабатывали (пороговые уходили в 🎯-ленту и Telegram, ⭐ SCORE — в
+// уведомление). Это не имеет отношения к Telegram — считаем отдельно и честно.
+let totalTriggeredCount = 0;  // сколько сигналов всего сработало (любых типов)
+let totalEarlyCount = 0;      // из них — «ранних» (VEL1M/VEL2M/ACCEL/SIGNAL)
 let history = {};            // key -> [{t, vol}, ...]
 const HISTORY_WINDOW_MS = 10000;
+const HISTORY_30S_MS = 30000;
 const HISTORY_1M_MS = 60000;
 const HISTORY_2M_MS = 120000;
 const HISTORY_MAX_AGE_MS = 150000; // keep ~2.5 min
@@ -612,6 +696,35 @@ let dayHigh = {};            // key -> последний виденный 24ч 
 let dayHighAt = {};          // key -> когда максимум в последний раз обновился (= пробой)
 let dayLow = {};             // key -> последний виденный 24ч минимум
 let takerRatio = {};         // key -> { r, at } из kline_1m «горячего» потока
+let candleShape = {};        // key -> { o,h,l,c,v, at } последняя 1m свеча горячего потока
+let fundingRate = {};        // symbol (USDT-M, без префикса рынка) -> { r, price, at }
+let oiHistory = {};          // symbol -> [{t, oi_usd}, ...] только для горячих USDT-M пар
+
+// ---- план сделки: стратегия из research/binance_pump_patterns (12м бэктест, 267 событий)
+// поверх сигнала ⭐ SCORE. Не автоторговля — просто считаем виртуальный P&L теми же
+// параметрами, что были провалидированы в бэктесте (стоп/цель/тайм-аут, риск 1% на
+// сделку, комиссия 0.10% за круг), чтобы видеть вживую, отработала бы сделка или нет.
+// −5% стоп в бэктесте убивал edge на любой цели; −8%/+16–20% за 2ч стабильно давал плюс.
+const TRADE_FEE_PCT = 0.10;              // комиссия+проскальзывание за круг, как в бэктесте
+const TRADE_RISK_PCT = 1;                // риск на сделку, % от текущего виртуального капитала
+const TRADE_STARTING_EQUITY = 10000;     // виртуальный старт, для сравнимости с бэктестом
+const CLOSED_TRADES_MAX = 60;            // сколько закрытых сделок держим в журнале
+let tradePlanOn = true;                  // ВКЛ/ВЫКЛ встроенной стратегии
+let tradeStopPct = 8;                    // −X% от входа
+let tradeTargetPct = 16;                 // +X% от входа
+let tradeTimeHours = 2;                  // тайм-аут, часов
+let tradeEquity = TRADE_STARTING_EQUITY; // виртуальный капитал, компаундится
+let openTrades = {};                     // key -> открытый план сделки (максимум один на пару)
+let closedTrades = [];                   // закрытые сделки, самые новые первыми
+
+// ---- пороговый сигнал: отдельная пришпиленная лента для SPIKE/VEL1M/VEL2M/ACCEL,
+// в самом верху страницы. Старый "🔔 ЖУРНАЛ СИГНАЛОВ" внизу на pushAlert() не пишет
+// (отключено ранее по отдельному запросу) — это новый, независимый от него список.
+const THRESHOLD_LOG_MAX = 30;
+let thresholdLog = [];                   // последние срабатывания порогов, самые новые первыми
+let telegramOn = false;
+let telegramToken = "";
+let telegramChatId = "";
 
 // тихая полка — отдельный список над журналом, не смешивается с пороговыми сигналами
 let shelfAlerts = [];
@@ -645,10 +758,96 @@ function purgeKey(key) {
   delete everInTop30[key]; delete everInTop15[key]; delete lastRankSignalAt[key];
   delete rateHistory[key]; delete lastRateSampleAt[key];
   delete atsHistory[key]; delete spreadHistory[key]; delete imbalHistory[key];
-  delete dayHigh[key]; delete dayHighAt[key]; delete dayLow[key]; delete takerRatio[key];
+  delete dayHigh[key]; delete dayHighAt[key]; delete dayLow[key]; delete takerRatio[key]; delete candleShape[key];
   shelfAlerts = shelfAlerts.filter(e => e.key !== key);
   alertsLog = alertsLog.filter(e => e.key !== key);
   delete outcomesByKey[key];
+  delete openTrades[key];
+}
+
+// ---------- план сделки: открыть/закрыть виртуальную позицию ----------
+function openTradePlan(key, market, parsed, now, score) {
+  const entryPrice = parsed.price;
+  if (!(entryPrice > 0)) return;
+  const riskUsd = tradeEquity * (TRADE_RISK_PCT / 100);
+  const notional = riskUsd / (tradeStopPct / 100);
+  openTrades[key] = {
+    key, market, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
+    entryPrice, entryTime: now,
+    stopPrice: entryPrice * (1 - tradeStopPct / 100),
+    targetPrice: entryPrice * (1 + tradeTargetPct / 100),
+    expireAt: now + tradeTimeHours * 3600000,
+    notional, riskUsd, score,
+  };
+}
+function closeTradePlan(key, exitType, exitPrice, now) {
+  const ot = openTrades[key];
+  if (!ot) return;
+  const rawPct = (exitPrice / ot.entryPrice - 1) * 100;
+  const pnlPct = rawPct - TRADE_FEE_PCT;
+  const pnlUsd = ot.notional * (pnlPct / 100);
+  tradeEquity = Math.max(0, tradeEquity + pnlUsd);
+  closedTrades.unshift({
+    ...ot, exitType, exitPrice, exitTime: now,
+    pnlPct, pnlUsd, R: ot.riskUsd ? pnlUsd / ot.riskUsd : null,
+    equityAfter: tradeEquity,
+  });
+  if (closedTrades.length > CLOSED_TRADES_MAX) closedTrades.length = CLOSED_TRADES_MAX;
+  delete openTrades[key];
+  dataDirty = true;
+  const icon = exitType === "target" ? "✅" : exitType === "stop" ? "🛑" : "⏱";
+  notify(`${icon} План: ${ot.base}/${ot.quote}`,
+         `${exitType === "target" ? "цель" : exitType === "stop" ? "стоп" : "тайм-аут"} · ${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(1)}% · капитал $${tradeEquity.toFixed(0)}`);
+}
+
+// ---------- пороговый сигнал: лог + телеграм ----------
+// направление: цена (1м, либо 24ч если 1м ещё не набежала) — это то, что реально
+// отвечает "вверх или вниз", а не тейкер (P(REAL>FAIL) ≈ 0.51 на 12-месячном прогоне,
+// то есть монетка). 🟢/🔴 в тексте — прямой ответ на "куда упор".
+function directionEmoji(dirPct) {
+  if (dirPct === null || dirPct === undefined || isNaN(dirPct)) return "⚪";
+  return dirPct >= 0 ? "🟢" : "🔴";
+}
+// Telegram не умеет в настоящее выравнивание по центру — приближаем пробелами.
+// Считаем длину по code point'ам (спред строки), а не .length, чтобы эмодзи
+// не считался за 2 символа и не сбивал отступ.
+function centerPad(text, width = 30) {
+  const len = [...text].length;
+  const pad = Math.max(0, Math.floor((width - len) / 2));
+  return " ".repeat(pad) + text;
+}
+function recordThresholdSignal(entry) {
+  thresholdLog.unshift(entry);
+  if (thresholdLog.length > THRESHOLD_LOG_MAX) thresholdLog.length = THRESHOLD_LOG_MAX;
+  dataDirty = true;
+  const dot = directionEmoji(entry.dirPct);
+  const volLine = entry.curVol !== null && entry.curVol !== undefined
+    ? `\nОбъём 24ч: $${fmtMoney(entry.curVol)}` + (entry.pct24h !== null && entry.pct24h !== undefined && !isNaN(entry.pct24h)
+        ? ` (${entry.pct24h >= 0 ? "+" : ""}${entry.pct24h.toFixed(2)}%)` : "")
+    : "";
+  const dirLine = entry.dirPct !== null && entry.dirPct !== undefined && !isNaN(entry.dirPct)
+    ? `\nЦена: ${entry.dirPct >= 0 ? "+" : ""}${entry.dirPct.toFixed(2)}%`
+    : "";
+  const imbalLine = entry.imbal !== null && entry.imbal !== undefined && !isNaN(entry.imbal)
+    ? ` · стакан ${Math.round(entry.imbal * 100)}% bid`
+    : "";
+  const fundLine = entry.fundingPct !== null && entry.fundingPct !== undefined && !isNaN(entry.fundingPct)
+    ? `\nФандинг: ${entry.fundingPct >= 0 ? "+" : ""}${entry.fundingPct.toFixed(3)}%` + (Math.abs(entry.fundingPct) >= 0.05 ? " ⚠ перегрето" : "")
+    : "";
+  const oiLine = entry.oiChangePct !== null && entry.oiChangePct !== undefined && !isNaN(entry.oiChangePct)
+    ? ` · OI: ${entry.oiChangePct >= 0 ? "+" : ""}${entry.oiChangePct.toFixed(1)}%`
+    : "";
+  const header = centerPad(`${dot} ${entry.type}`);
+  const pairLine = `${entry.base}/${entry.quote} (${entry.market})`;
+  sendTelegram(`${header}\n${pairLine}\n${entry.extra} · +$${fmtMoney(entry.amount)}${volLine}${dirLine}${imbalLine}${fundLine}${oiLine}`);
+}
+function sendTelegram(text) {
+  if (!telegramOn || !telegramToken || !telegramChatId) return;
+  fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: telegramChatId, text }),
+  }).catch(() => {}); // сеть/токен может быть плохим — не роняем сканер из-за этого
 }
 let marketFilter = "ALL";
 let searchTerm = "";
@@ -666,9 +865,13 @@ function buildPayload() {
     alertsLog: [],
     shelfAlerts: [],
     outcomes: [],
-    threshold, threshold1m, threshold2m, maxInitialPrice, maxInitialVolume,
+    threshold, threshold30, threshold1m, threshold2m, maxInitialPrice, maxInitialVolume,
     scoreThreshold, scoreOnlyMode, sortMode, takerStreamOn,
     everInTop30, everInTop15,
+    tradePlanOn, tradeStopPct, tradeTargetPct, tradeTimeHours, tradeEquity,
+    openTrades, closedTrades,
+    thresholdLog, telegramOn, telegramToken, telegramChatId,
+    filtersCollapsed, totalTriggeredCount, totalEarlyCount,
     startTime, savedAt: Date.now(),
   };
 }
@@ -692,6 +895,7 @@ function applyPayload(payload) {
     }
   });
   threshold = payload.threshold || threshold;
+  threshold30 = payload.threshold30 || threshold30;
   threshold1m = payload.threshold1m || threshold1m;
   threshold2m = payload.threshold2m || threshold2m;
   maxInitialPrice = payload.maxInitialPrice || maxInitialPrice;
@@ -702,6 +906,20 @@ function applyPayload(payload) {
   takerStreamOn = payload.takerStreamOn !== false;
   everInTop30 = payload.everInTop30 || {};
   everInTop15 = payload.everInTop15 || {};
+  tradePlanOn = payload.tradePlanOn !== false;
+  tradeStopPct = payload.tradeStopPct || tradeStopPct;
+  tradeTargetPct = payload.tradeTargetPct || tradeTargetPct;
+  tradeTimeHours = payload.tradeTimeHours || tradeTimeHours;
+  tradeEquity = typeof payload.tradeEquity === "number" ? payload.tradeEquity : TRADE_STARTING_EQUITY;
+  openTrades = payload.openTrades || {};
+  closedTrades = payload.closedTrades || [];
+  thresholdLog = payload.thresholdLog || [];
+  telegramOn = !!payload.telegramOn;
+  telegramToken = payload.telegramToken || "";
+  telegramChatId = payload.telegramChatId || "";
+  filtersCollapsed = payload.filtersCollapsed !== false;
+  totalTriggeredCount = typeof payload.totalTriggeredCount === "number" ? payload.totalTriggeredCount : 0;
+  totalEarlyCount = typeof payload.totalEarlyCount === "number" ? payload.totalEarlyCount : 0;
   startTime = payload.startTime || Date.now();
   return true;
 }
@@ -946,8 +1164,12 @@ function markFired(key, type) {
   ensureLastFired(key)[type] = Date.now();
 }
 function pushAlert(entry) {
-  // запись сигналов отключена по запросу — не копить журнал и не писать на диск
+  // журнал (alertsLog) сознательно не копим — не писать на диск лишнее, по
+  // отдельному решению ранее. Но счётчики в шапке считать обязаны честно.
   signalCount[entry.key] = (signalCount[entry.key] || 0) + 1;
+  totalTriggeredCount++;
+  if (isEarlyType(entry.type)) totalEarlyCount++;
+  dataDirty = true;
 }
 function pushShelfAlert(entry) {
   // полка тоже без записи
@@ -960,7 +1182,12 @@ function isEarlyType(type) {
 // ---------- v15: composite score ----------
 // Каждый компонент даёт баллы (или отнимает), сумма зажимается в 0..100.
 // Смысл шкалы: 60+ — совпало объёмное И ценовое подтверждение; 80+ — совпало почти всё.
-// Веса подобраны на глаз, их специально держим в одном месте, чтобы крутить по статистике.
+// Веса держим в одном месте, чтобы крутить по статистике. Часть из них калибровалась
+// по 12-месячному прогону research/binance_pump_patterns/ (267 событий на низколиквидных
+// USD-M фьючерсах + потрейдовый бэктест с комиссией/стопом) — см. README там же:
+// сильнее всего REAL_CONTINUATION отделяют размер импульсной свечи и её форма
+// (close_pos/body%), тейкер-доля почти не работает (P(REAL>FAIL) ≈ 0.51), а «тихая
+// полка» — шумный, нестабильный признак (меняет знак между кусками времени).
 function computeScore(f) {
   const parts = [];
   let s = 0;
@@ -1009,15 +1236,32 @@ function computeScore(f) {
     else if (f.imbal <= 0.25) { s -= 8; parts.push("аск давит"); }
   }
 
-  // 7) Доля тейкер-покупок из kline_1m (только по «горячим» парам).
+  // 7) Доля тейкер-покупок из kline_1m (только по «горячим» парам). На 267 событиях
+  // 12-месячного прогона этот признак почти не отличает REAL от FAIL (P(REAL>FAIL)
+  // ≈ 0.51, т.е. как монетка) — раньше вес был как у сильного сигнала, занижаем.
   if (f.taker !== null) {
-    if (f.taker >= 0.7)       { s += 15; parts.push("тейкер " + Math.round(f.taker * 100) + "%"); }
-    else if (f.taker >= 0.58) { s += 7; }
-    else if (f.taker <= 0.35) { s -= 12; parts.push("тейкер продаёт"); }
+    if (f.taker >= 0.7)       { s += 5; parts.push("тейкер " + Math.round(f.taker * 100) + "%"); }
+    else if (f.taker >= 0.58) { s += 2; }
+    else if (f.taker <= 0.35) { s -= 4; parts.push("тейкер продаёт"); }
   }
 
-  // 8) Выход из тихой полки ценнее, чем продолжение уже начавшегося движения.
-  if (f.wasQuiet) { s += 12; parts.push("из тихой полки"); }
+  // 8) Выход из тихой полки. На полном 12-месячном прогоне признак нестабилен —
+  // на одном куске времени компрессия перед импульсом идёт в плюс к REAL, на другом
+  // в минус; держим как маленький тай-брейкер, не как уверенный сигнал.
+  if (f.wasQuiet) { s += 3; parts.push("из тихой полки"); }
+
+  // 9) Форма последней 1m свечи горячего потока (только для 12 самых горячих пар
+  // на каждом рынке — иначе не потянуть). Настоящий вынос обычно закрывается
+  // близко к своему максимуму с широким телом; ложный — прокалывает верх и утаскивает
+  // закрытие вниз длинной верхней тенью, объём "съеден" без продолжения. Это один из
+  // самых надёжных признаков в 12-месячном прогоне (close_pos/body% стабильно
+  // отделяют REAL от FAIL на любом срезе времени) — вес усилен, добавлена средняя
+  // ступень для не самой крайней, но всё равно уверенной формы.
+  if (f.closePosCandle !== null && f.wickPct !== null) {
+    if (f.closePosCandle >= 0.75 && f.wickPct <= 0.15)      { s += 14; parts.push("закрытие у хая свечи"); }
+    else if (f.closePosCandle >= 0.55 && f.wickPct <= 0.30) { s += 6; }
+    else if (f.closePosCandle <= 0.35 && f.wickPct >= 0.4)  { s -= 18; parts.push("длинная тень сверху"); }
+  }
 
   // штраф: широкий спред = неликвид, вход будет дороже сигнала
   if (f.spreadPct !== null && f.spreadPct >= 1.5) { s -= 10; parts.push("широкий спред"); }
@@ -1025,55 +1269,142 @@ function computeScore(f) {
   return { score: Math.max(0, Math.min(100, Math.round(s))), parts };
 }
 
-// ---------- v15: kline_1m по «горячим» парам (taker buy ratio) ----------
-// Полный aggTrade по 400 парам машина не потянет, а вот 12 самых горячих —
-// легко. kline_1m отдаёт поле V (taker buy base volume) уже посчитанным.
+// ---------- v15: kline_1m по «горячим» парам (taker buy ratio + форма свечи) ----------
+// Полный aggTrade по 400 парам машина не потянет, а вот 12 самых горячих на КАЖДОМ
+// рынке — легко. kline_1m отдаёт taker buy base volume (V) и OHLC уже посчитанными.
+// До этого фикса горячий поток открывался только на spot-хосте и фильтровал
+// r.market === "SPOT" — фьючерсные пары (USDT-M) никогда не получали долю тейкера
+// в SCORE, хотя именно на низколиквидных фьючерсах она отделяет вынос от шпильки.
 const HOT_MAX = 12;
 const HOT_REBUILD_MS = 45000;
-let hotSocket = null;
-let hotSymbols = [];
-let lastHotRebuild = 0;
-function pickHotSymbols() {
+const HOT_WS_HOST = { "SPOT": "wss://stream.binance.com:9443", "USDT-M": "wss://fstream.binance.com" };
+let hotSocket = {};          // market.id -> WebSocket
+let hotSymbols = {};         // market.id -> [symbol,...] в нижнем регистре
+let lastHotRebuild = {};     // market.id -> ts последней пересборки
+function pickHotSymbols(marketId) {
   return Object.values(rows)
-    .filter(r => r.market === "SPOT" && r.d1m !== null && r.d1m > 0)
+    .filter(r => r.market === marketId && r.d1m !== null && r.d1m > 0)
     .sort((a, b) => (b.score || 0) - (a.score || 0) || (b.d1m - a.d1m))
     .slice(0, HOT_MAX)
     .map(r => r.symbol.toLowerCase());
 }
-function closeHotStream() {
-  if (hotSocket) { try { hotSocket.onclose = null; hotSocket.close(); } catch (e) {} }
-  hotSocket = null;
-  hotSymbols = [];
+function closeHotStream(marketId) {
+  const s = hotSocket[marketId];
+  if (s) { try { s.onclose = null; s.close(); } catch (e) {} }
+  hotSocket[marketId] = null;
+  hotSymbols[marketId] = [];
 }
-function rebuildHotStream() {
-  if (!takerStreamOn || paused) { if (hotSocket) closeHotStream(); return; }
+function closeAllHotStreams() { MARKETS.forEach(m => closeHotStream(m.id)); }
+function rebuildHotStream(marketId) {
+  if (!takerStreamOn || paused) { if (hotSocket[marketId]) closeHotStream(marketId); return; }
   const now = Date.now();
-  if (now - lastHotRebuild < HOT_REBUILD_MS) return;
-  const next = pickHotSymbols();
+  if (now - (lastHotRebuild[marketId] || 0) < HOT_REBUILD_MS) return;
+  const next = pickHotSymbols(marketId);
   if (!next.length) return;
-  if (next.join(",") === hotSymbols.join(",") && hotSocket && hotSocket.readyState === WebSocket.OPEN) {
-    lastHotRebuild = now;
+  const cur = hotSymbols[marketId] || [];
+  if (next.join(",") === cur.join(",") && hotSocket[marketId] && hotSocket[marketId].readyState === WebSocket.OPEN) {
+    lastHotRebuild[marketId] = now;
     return;
   }
-  lastHotRebuild = now;
-  if (hotSocket) { try { hotSocket.onclose = null; hotSocket.close(); } catch (e) {} }
-  hotSymbols = next;
-  const url = "wss://stream.binance.com:9443/stream?streams=" + hotSymbols.map(x => x + "@kline_1m").join("/");
-  try { hotSocket = new WebSocket(url); } catch (e) { hotSocket = null; return; }
-  hotSocket.onmessage = (ev) => {
+  lastHotRebuild[marketId] = now;
+  if (hotSocket[marketId]) { try { hotSocket[marketId].onclose = null; hotSocket[marketId].close(); } catch (e) {} }
+  hotSymbols[marketId] = next;
+  const host = HOT_WS_HOST[marketId];
+  const url = host + "/stream?streams=" + next.map(x => x + "@kline_1m").join("/");
+  let sock;
+  try { sock = new WebSocket(url); } catch (e) { hotSocket[marketId] = null; return; }
+  hotSocket[marketId] = sock;
+  sock.onmessage = (ev) => {
     try {
       const msg = JSON.parse(ev.data);
       const k = msg && msg.data && msg.data.k;
       if (!k) return;
       const vol = parseFloat(k.v), buy = parseFloat(k.V);
-      if (!(vol > 0) || isNaN(buy)) return;
-      takerRatio["SPOT:" + k.s] = { r: buy / vol, at: Date.now() };
+      const key = marketId + ":" + k.s;
+      if (vol > 0 && !isNaN(buy)) takerRatio[key] = { r: buy / vol, at: Date.now() };
+      const o = parseFloat(k.o), h = parseFloat(k.h), l = parseFloat(k.l), c = parseFloat(k.c);
+      if (h > l && !isNaN(o) && !isNaN(c)) {
+        candleShape[key] = { o, h, l, c, v: vol, closed: !!k.x, at: Date.now() };
+      }
     } catch (e) {}
   };
-  hotSocket.onerror = () => {};
-  hotSocket.onclose = () => { hotSocket = null; };
+  sock.onerror = () => {};
+  sock.onclose = () => { if (hotSocket[marketId] === sock) hotSocket[marketId] = null; };
 }
-setInterval(rebuildHotStream, 15000);
+function rebuildAllHotStreams() { MARKETS.forEach(m => rebuildHotStream(m.id)); }
+setInterval(rebuildAllHotStreams, 15000);
+
+// ---------- funding rate + open interest (только USDT-M) ----------
+// !markPrice@arr — один поток на весь рынок фьючерсов сразу (без подписки по парам),
+// даёт funding rate и mark price бесплатно и в реальном времени. Это гораздо честнее
+// как индикатор "куда ставят деньги", чем taker_buy_share — 12-месячный бэктест
+// (research/binance_pump_patterns) показал, что доля тейкера почти не отличает
+// вынос от слива (P(REAL>FAIL) ≈ 0.51), а funding отражает реальный перекос лонг/шорт
+// по всему рынку. Open Interest в тикере не отдаётся вообще — только REST, поэтому
+// опрашиваем его не по всем 400+ парам (упрёмся в лимиты), а только по тем же 12
+// «горячим» USDT-M парам, что уже опрашивает тейкер-поток.
+let markPriceSocket = null;
+function connectMarkPriceStream() {
+  if (paused) return;
+  if (markPriceSocket && markPriceSocket.readyState === WebSocket.OPEN) return;
+  let sock;
+  try { sock = new WebSocket("wss://fstream.binance.com/ws/!markPrice@arr@1s"); }
+  catch (e) { return; }
+  markPriceSocket = sock;
+  sock.onmessage = (ev) => {
+    try {
+      const arr = JSON.parse(ev.data);
+      if (!Array.isArray(arr)) return;
+      const now = Date.now();
+      for (const m of arr) {
+        const r = parseFloat(m.r), p = parseFloat(m.p);
+        if (!isNaN(r)) fundingRate[m.s] = { r, price: isNaN(p) ? null : p, at: now };
+      }
+    } catch (e) {}
+  };
+  sock.onerror = () => {};
+  sock.onclose = () => { if (markPriceSocket === sock) markPriceSocket = null; };
+}
+function closeMarkPriceStream() {
+  if (markPriceSocket) { try { markPriceSocket.onclose = null; markPriceSocket.close(); } catch (e) {} }
+  markPriceSocket = null;
+}
+setInterval(() => { if (paused) closeMarkPriceStream(); else connectMarkPriceStream(); }, 10000);
+connectMarkPriceStream();
+
+const OI_HISTORY_MAX = 8;     // ~4 минуты при опросе раз в 30с
+const OI_POLL_MS = 30000;
+let oiPolling = false;
+async function pollOpenInterestOnce() {
+  if (paused || oiPolling) return;
+  const symbols = (hotSymbols["USDT-M"] || []).map(s => s.toUpperCase());
+  if (!symbols.length) return;
+  oiPolling = true;
+  try {
+    for (const sym of symbols) {
+      try {
+        const res = await fetch(`https://fapi.binance.com/fapi/v1/openInterest?symbol=${sym}`, { cache: "no-store" });
+        if (!res.ok) continue;
+        const data = await res.json();
+        const qty = parseFloat(data.openInterest);
+        const mark = fundingRate[sym] && fundingRate[sym].price;
+        if (isNaN(qty) || !mark) continue;
+        const usd = qty * mark;
+        if (!oiHistory[sym]) oiHistory[sym] = [];
+        oiHistory[sym].push({ t: Date.now(), oi: usd });
+        if (oiHistory[sym].length > OI_HISTORY_MAX) oiHistory[sym].shift();
+      } catch (e) {}
+    }
+  } finally {
+    oiPolling = false;
+  }
+}
+setInterval(pollOpenInterestOnce, OI_POLL_MS);
+function getOiChangePct(symbol) {
+  const h = oiHistory[symbol];
+  if (!h || h.length < 2 || !h[0].oi) return null;
+  return (h[h.length - 1].oi / h[0].oi - 1) * 100;
+}
 
 // ---------- websocket feed ----------
 function wsTickerToTick(item) {
@@ -1225,6 +1556,7 @@ function handleTickerBatch(market, arr) {
     lastPollAt[market.id] = now;
 
     for (const t of arr) {
+      try {
       if (isExcluded(t.symbol)) {
         const exKey = `${market.id}:${t.symbol}`;
         if (rows[exKey]) purgeKey(exKey);
@@ -1253,6 +1585,7 @@ function handleTickerBatch(market, arr) {
       while (history[key].length && now - history[key][0].t > HISTORY_MAX_AGE_MS) history[key].shift();
 
       const rolling10 = rollingDelta(history[key], now, HISTORY_WINDOW_MS, parsed.curVol);
+      const rolling30 = rollingDelta(history[key], now, HISTORY_30S_MS, parsed.curVol);
       const d1m = rollingDelta(history[key], now, HISTORY_1M_MS, parsed.curVol);
       const d2m = rollingDelta(history[key], now, HISTORY_2M_MS, parsed.curVol);
       const accel = computeAccel(history[key], now, parsed.curVol); // now a $/min slope, see linRegSlopePerMin
@@ -1297,6 +1630,14 @@ function handleTickerBatch(market, arr) {
       const tk = takerRatio[key];
       const taker = (tk && (now - tk.at) <= TAKER_STALE_MS) ? tk.r : null;
 
+      // форма последней 1m свечи горячего потока: закрытие у хая vs длинная тень.
+      // Реальный вынос обычно закрывается близко к своему максимуму; шпилька —
+      // прокалывает верх на объёме и утаскивает закрытие вниз длинной тенью.
+      const cs = candleShape[key];
+      const csFresh = cs && (now - cs.at) <= TAKER_STALE_MS && cs.h > cs.l;
+      const closePosCandle = csFresh ? (cs.c - cs.l) / (cs.h - cs.l) : null;
+      const wickPct = csFresh ? (cs.h - Math.max(cs.o, cs.c)) / (cs.h - cs.l) : null;
+
       // periodic baseline sampling for QUIET (mirrors how history[] already isn't persisted)
       if (d1m !== null && (now - (lastRateSampleAt[key] || 0)) >= RATE_SAMPLE_INTERVAL_MS) {
         if (!rateHistory[key]) rateHistory[key] = [];
@@ -1318,6 +1659,7 @@ function handleTickerBatch(market, arr) {
 
       const scoreObj = computeScore({
         rvol, pct1m, pct2m, rng, vwapDev, ats, atsMedian, imbal, spreadPct, highFresh, taker, wasQuiet,
+        closePosCandle, wickPct,
       });
 
       // age of base — ignore very first minutes for some signals to reduce noise
@@ -1331,6 +1673,7 @@ function handleTickerBatch(market, arr) {
         rollingDelta: rolling10, d1m, d2m, accel,
         // v15
         pct1m, pct2m, rvol, ats, atsMedian, rng, vwapDev, spreadPct, imbal, taker,
+        closePosCandle, wickPct,
         highFresh, trades: parsed.trades,
         score: scoreObj.score, scoreParts: scoreObj.parts,
         lastTick: now,
@@ -1356,27 +1699,69 @@ function handleTickerBatch(market, arr) {
         if (outcomesByKey[key].length === 0) delete outcomesByKey[key];
       }
 
+      // план сделки: проверяем стоп/цель/тайм-аут на каждый тик, даже во время resync —
+      // это просто сверка текущей цены с уже зафиксированными уровнями, не новый сигнал.
+      const ot = openTrades[key];
+      if (ot) {
+        if (parsed.price <= ot.stopPrice) closeTradePlan(key, "stop", ot.stopPrice, now);
+        else if (parsed.price >= ot.targetPrice) closeTradePlan(key, "target", ot.targetPrice, now);
+        else if (now >= ot.expireAt) closeTradePlan(key, "time", parsed.price, now);
+      }
+
       if (resyncing) continue; // skip firing on resync cycle
 
       // ---- пороговые сигналы: каждый по своему $ порогу из шапки, прямо в журнал ----
       // SPIKE 10s
       if (!scoreOnlyMode && rolling10 !== null && rolling10 >= threshold && canFire(key, "SPIKE", HISTORY_WINDOW_MS)) {
         markFired(key, "SPIKE");
-        pushAlert({
+        const alertEntry = {
           key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
           amount: rolling10, time: now, type: "SPIKE", extra: "10с",
-        });
+          curVol: parsed.curVol, pct24h: parsed.pct,
+          dirPct: pct1m !== null ? pct1m : (parsed.pct !== null && parsed.pct !== undefined && !isNaN(parsed.pct) ? parsed.pct : null),
+          imbal,
+          fundingPct: market.id === "USDT-M" && fundingRate[parsed.symbol] ? fundingRate[parsed.symbol].r * 100 : null,
+          oiChangePct: market.id === "USDT-M" ? getOiChangePct(parsed.symbol) : null,
+        };
+        pushAlert(alertEntry);
+        recordThresholdSignal(alertEntry);
         notify(`⚡ SPIKE: ${parsed.base}/${parsed.quote}`, `+$${fmtMoney(rolling10)} за 10с (${market.id})`);
         startOutcome(key, market.id, parsed, now, "SPIKE", { rvol, pct1m, ats, atsMedian, imbal, spreadPct, vwapDev, rng, taker, d1m, score: scoreObj.score, parts: scoreObj.parts });
+      }
+
+      // SPIKE 30s — тот же принцип, что 10с, но на более широком окне: ловит выносы,
+      // которые набирают объём чуть медленнее и на 10с-окне остаются незамеченными.
+      if (!scoreOnlyMode && rolling30 !== null && rolling30 >= threshold30 && canFire(key, "SPIKE30", HISTORY_30S_MS)) {
+        markFired(key, "SPIKE30");
+        const alertEntry = {
+          key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
+          amount: rolling30, time: now, type: "SPIKE30", extra: "30с",
+          curVol: parsed.curVol, pct24h: parsed.pct,
+          dirPct: pct1m !== null ? pct1m : (parsed.pct !== null && parsed.pct !== undefined && !isNaN(parsed.pct) ? parsed.pct : null),
+          imbal,
+          fundingPct: market.id === "USDT-M" && fundingRate[parsed.symbol] ? fundingRate[parsed.symbol].r * 100 : null,
+          oiChangePct: market.id === "USDT-M" ? getOiChangePct(parsed.symbol) : null,
+        };
+        pushAlert(alertEntry);
+        recordThresholdSignal(alertEntry);
+        notify(`⚡ SPIKE30: ${parsed.base}/${parsed.quote}`, `+$${fmtMoney(rolling30)} за 30с (${market.id})`);
+        startOutcome(key, market.id, parsed, now, "SPIKE30", { rvol, pct1m, ats, atsMedian, imbal, spreadPct, vwapDev, rng, taker, d1m, score: scoreObj.score, parts: scoreObj.parts });
       }
 
       // VEL 1M
       if (!scoreOnlyMode && d1m !== null && d1m >= threshold1m && baseAge >= 20000 && canFire(key, "VEL1M", 45000)) {
         markFired(key, "VEL1M");
-        pushAlert({
+        const alertEntry = {
           key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
           amount: d1m, time: now, type: "VEL1M", extra: "Δ1м",
-        });
+          curVol: parsed.curVol, pct24h: parsed.pct,
+          dirPct: pct1m !== null ? pct1m : (parsed.pct !== null && parsed.pct !== undefined && !isNaN(parsed.pct) ? parsed.pct : null),
+          imbal,
+          fundingPct: market.id === "USDT-M" && fundingRate[parsed.symbol] ? fundingRate[parsed.symbol].r * 100 : null,
+          oiChangePct: market.id === "USDT-M" ? getOiChangePct(parsed.symbol) : null,
+        };
+        pushAlert(alertEntry);
+        recordThresholdSignal(alertEntry);
         earlyBeep();
         notify(`🚀 VEL1M: ${parsed.base}/${parsed.quote}`, `+$${fmtMoney(d1m)} за 1м (${market.id})`);
         startOutcome(key, market.id, parsed, now, "VEL1M", { rvol, pct1m, ats, atsMedian, imbal, spreadPct, vwapDev, rng, taker, d1m, score: scoreObj.score, parts: scoreObj.parts });
@@ -1385,10 +1770,17 @@ function handleTickerBatch(market, arr) {
       // VEL 2M
       if (!scoreOnlyMode && d2m !== null && d2m >= threshold2m && baseAge >= 30000 && canFire(key, "VEL2M", 60000)) {
         markFired(key, "VEL2M");
-        pushAlert({
+        const alertEntry = {
           key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
           amount: d2m, time: now, type: "VEL2M", extra: "Δ2м",
-        });
+          curVol: parsed.curVol, pct24h: parsed.pct,
+          dirPct: pct1m !== null ? pct1m : (parsed.pct !== null && parsed.pct !== undefined && !isNaN(parsed.pct) ? parsed.pct : null),
+          imbal,
+          fundingPct: market.id === "USDT-M" && fundingRate[parsed.symbol] ? fundingRate[parsed.symbol].r * 100 : null,
+          oiChangePct: market.id === "USDT-M" ? getOiChangePct(parsed.symbol) : null,
+        };
+        pushAlert(alertEntry);
+        recordThresholdSignal(alertEntry);
         earlyBeep();
         notify(`🚀 VEL2M: ${parsed.base}/${parsed.quote}`, `+$${fmtMoney(d2m)} за 2м (${market.id})`);
         startOutcome(key, market.id, parsed, now, "VEL2M", { rvol, pct1m, ats, atsMedian, imbal, spreadPct, vwapDev, rng, taker, d1m, score: scoreObj.score, parts: scoreObj.parts });
@@ -1399,10 +1791,17 @@ function handleTickerBatch(market, arr) {
       // multiples whenever prev30 was ~0.
       if (!scoreOnlyMode && accel !== null && accel >= threshold1m * 0.6 && d1m !== null && d1m >= threshold1m * 0.4 && baseAge >= 40000 && canFire(key, "ACCEL", 50000)) {
         markFired(key, "ACCEL");
-        pushAlert({
+        const alertEntry = {
           key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
           amount: d1m, time: now, type: "ACCEL", extra: `наклон ${accel >= 0 ? "+" : ""}$${fmtMoney(accel)}/мин`,
-        });
+          curVol: parsed.curVol, pct24h: parsed.pct,
+          dirPct: pct1m !== null ? pct1m : (parsed.pct !== null && parsed.pct !== undefined && !isNaN(parsed.pct) ? parsed.pct : null),
+          imbal,
+          fundingPct: market.id === "USDT-M" && fundingRate[parsed.symbol] ? fundingRate[parsed.symbol].r * 100 : null,
+          oiChangePct: market.id === "USDT-M" ? getOiChangePct(parsed.symbol) : null,
+        };
+        pushAlert(alertEntry);
+        recordThresholdSignal(alertEntry);
         earlyBeep();
         notify(`🚀 ACCEL: ${parsed.base}/${parsed.quote}`, `наклон $${fmtMoney(accel)}/мин · Δ1м +$${fmtMoney(d1m)} (${market.id})`);
         startOutcome(key, market.id, parsed, now, "ACCEL", { rvol, pct1m, ats, atsMedian, imbal, spreadPct, vwapDev, rng, taker, d1m, score: scoreObj.score, parts: scoreObj.parts });
@@ -1443,6 +1842,8 @@ function handleTickerBatch(market, arr) {
         notify(`⭐ SCORE ${scoreObj.score}: ${parsed.base}/${parsed.quote}`,
                `${scoreObj.parts.slice(0, 3).join(" · ")} · Δ1м +$${fmtMoney(d1m)}`);
         startOutcome(key, market.id, parsed, now, "SIGNAL", { rvol, pct1m, ats, atsMedian, imbal, spreadPct, vwapDev, rng, taker, d1m, score: scoreObj.score, parts: scoreObj.parts });
+        // встроенная стратегия: одна виртуальная позиция на пару одновременно
+        if (tradePlanOn && !openTrades[key]) openTradePlan(key, market.id, parsed, now, scoreObj.score);
       }
 
       // doubling sound (kept)
@@ -1451,6 +1852,15 @@ function handleTickerBatch(market, arr) {
         doubleLevel[key] = Math.floor(currentMultiple);
         doubleBeep();
         notify(`Объём x${doubleLevel[key]}: ${parsed.base}/${parsed.quote}`, `×${doubleLevel[key]} от начального (${market.id})`);
+      }
+      } catch (e) {
+        // Защита: раньше необработанное исключение на одной паре прерывало
+        // весь for-loop и обработка остальных пар в этом тике не доходила
+        // до VEL1M/ACCEL и т.д. Стресс-тестами (150 синтетических тикеров,
+        // намеренно битые данные) такого исключения не найдено ни в старой,
+        // ни в новой версии — так что это подстраховка на будущее, а не
+        // подтверждённая причина реже приходящих ACCEL/VEL1M.
+        console.error("VolScan: ошибка обработки тика", t && t.symbol, e);
       }
     }
     updateStatusLine();
@@ -1580,6 +1990,100 @@ function renderStats() {
     ${byType || "<div>пока нет данных</div>"}
     ${bands ? `<div style="margin:8px 0 2px; color:#5a6b5a;">— SCORE по силе —</div>${bands}` : ""}
   `;
+}
+
+// ---------- план сделки: рендер ----------
+function fmtTimeLeft(ms) {
+  if (ms <= 0) return "0м";
+  const m = Math.round(ms / 60000);
+  if (m < 60) return `${m}м`;
+  return `${Math.floor(m / 60)}ч${m % 60 ? " " + (m % 60) + "м" : ""}`;
+}
+function renderTradePanel() {
+  const summaryEl = document.getElementById("trade-summary");
+  const openEl = document.getElementById("trade-open-list");
+  const closedEl = document.getElementById("trade-closed-list");
+  if (!summaryEl || !openEl || !closedEl) return;
+
+  const totalPnl = tradeEquity - TRADE_STARTING_EQUITY;
+  const totalPnlPct = (totalPnl / TRADE_STARTING_EQUITY) * 100;
+  const n = closedTrades.length;
+  const wins = closedTrades.filter(t => t.pnlUsd > 0).length;
+  const winRate = n ? (wins / n) * 100 : null;
+  summaryEl.innerHTML = ` — капитал $${tradeEquity.toFixed(0)} (${totalPnl >= 0 ? "+" : ""}${totalPnlPct.toFixed(2)}%)`
+    + (n ? ` · сделок ${n} · win-rate ${winRate.toFixed(0)}%` : " · сделок пока нет")
+    + (tradePlanOn ? "" : " · <span style=\"color:#ff6b6b\">выключен</span>");
+
+  const now = Date.now();
+  const open = Object.values(openTrades);
+  if (!open.length) {
+    openEl.innerHTML = `<div class="trade-empty">Открытых позиций нет.</div>`;
+  } else {
+    openEl.innerHTML = open.map(ot => {
+      const row = rows[ot.key];
+      const cur = row ? row.price : ot.entryPrice;
+      const floatPct = ((cur / ot.entryPrice) - 1) * 100;
+      return `
+        <div class="trade-item">
+          <span class="t-sym">${ot.base}/${ot.quote} <span style="color:#4a6478; font-weight:400;">${ot.market}</span></span>
+          <span class="t-line">вход $${fmtPrice(ot.entryPrice)} · сейчас <span class="${floatPct >= 0 ? "pct-pos" : "pct-neg"}">${floatPct >= 0 ? "+" : ""}${floatPct.toFixed(1)}%</span></span>
+          <span class="t-line">стоп $${fmtPrice(ot.stopPrice)} · цель $${fmtPrice(ot.targetPrice)}</span>
+          <span class="t-line">осталось ${fmtTimeLeft(ot.expireAt - now)} · score ${ot.score}</span>
+        </div>`;
+    }).join("");
+  }
+
+  if (!closedTrades.length) {
+    closedEl.innerHTML = `<div class="trade-empty">Закрытых сделок пока нет.</div>`;
+  } else {
+    const icon = t => t.exitType === "target" ? "✅" : t.exitType === "stop" ? "🛑" : "⏱";
+    closedEl.innerHTML = closedTrades.slice(0, 15).map(t => `
+      <div class="trade-closed-item">
+        <span>${icon(t)}</span>
+        <span class="t-sym">${t.base}/${t.quote}</span>
+        <span class="${t.pnlPct >= 0 ? "pct-pos" : "pct-neg"}">${t.pnlPct >= 0 ? "+" : ""}${t.pnlPct.toFixed(1)}%</span>
+        <span style="color:#4a6478; font-size:10px;">R ${t.R === null ? "—" : (t.R >= 0 ? "+" : "") + t.R.toFixed(2)}</span>
+        <span class="t-time">${fmtTimeMinusHour(t.exitTime)}</span>
+      </div>`).join("");
+  }
+}
+
+// ---------- пороговый сигнал: рендер ----------
+const THRESHOLD_TYPE_LABEL = { SPIKE: "10с", SPIKE30: "30с", VEL1M: "Δ1м", VEL2M: "Δ2м", ACCEL: "наклон" };
+function renderThresholdPanel() {
+  const summaryEl = document.getElementById("threshold-summary");
+  const listEl = document.getElementById("threshold-list");
+  if (!summaryEl || !listEl) return;
+  summaryEl.textContent = thresholdLog.length ? ` — сработало ${thresholdLog.length}` : "";
+  if (!thresholdLog.length) {
+    listEl.innerHTML = `<div class="threshold-empty">Пока нет.</div>`;
+  } else {
+    listEl.innerHTML = thresholdLog.map(a => {
+      const hasVol = a.curVol !== null && a.curVol !== undefined;
+      const hasPct = hasVol && a.pct24h !== null && a.pct24h !== undefined && !isNaN(a.pct24h);
+      const volText = hasVol
+        ? `24ч $${fmtMoney(a.curVol)}` + (hasPct ? ` (${a.pct24h >= 0 ? "+" : ""}${a.pct24h.toFixed(2)}%)` : "")
+        : "";
+      const hasDir = a.dirPct !== null && a.dirPct !== undefined && !isNaN(a.dirPct);
+      const dirCls = hasDir ? (a.dirPct >= 0 ? "pct-pos" : "pct-neg") : "";
+      const dirText = hasDir ? `${directionEmoji(a.dirPct)} ${a.dirPct >= 0 ? "+" : ""}${a.dirPct.toFixed(2)}%` : "";
+      const hasImbal = a.imbal !== null && a.imbal !== undefined && !isNaN(a.imbal);
+      const extraBits = [];
+      if (hasImbal) extraBits.push(`стакан ${Math.round(a.imbal * 100)}%`);
+      if (a.fundingPct !== null && a.fundingPct !== undefined && !isNaN(a.fundingPct)) extraBits.push(`фандинг ${a.fundingPct >= 0 ? "+" : ""}${a.fundingPct.toFixed(3)}%`);
+      if (a.oiChangePct !== null && a.oiChangePct !== undefined && !isNaN(a.oiChangePct)) extraBits.push(`OI ${a.oiChangePct >= 0 ? "+" : ""}${a.oiChangePct.toFixed(1)}%`);
+      return `
+      <div class="threshold-item" data-key="${a.key}" title="Показать пару в таблице">
+        <span class="th-sym">${a.base}/${a.quote} <span style="color:#7a5a3a; font-weight:400;">${a.market}</span></span>
+        <span class="th-type">${THRESHOLD_TYPE_LABEL[a.type] || a.type}</span>
+        <span class="th-amount">+$${fmtMoney(a.amount)}</span>
+        ${dirText ? `<span class="${dirCls}">${dirText}</span>` : ""}
+        ${volText ? `<span class="th-vol">${volText}</span>` : ""}
+        ${extraBits.length ? `<span class="th-vol">${extraBits.join(" · ")}</span>` : ""}
+        <span class="th-time">${fmtTimeMinusHour(a.time)}</span>
+      </div>`;
+    }).join("");
+  }
 }
 
 // ---------- v15 cell renderers ----------
@@ -1732,9 +2236,8 @@ function render() {
   }
 
   document.getElementById("tracked-count").textContent = Object.keys(rows).length;
-  document.getElementById("triggered-count").textContent = alertsLog.length;
-  const earlyN = alertsLog.filter(a => isEarlyType(a.type)).length;
-  document.getElementById("early-count").textContent = earlyN;
+  document.getElementById("triggered-count").textContent = totalTriggeredCount;
+  document.getElementById("early-count").textContent = totalEarlyCount;
 
   // alerts list
   const alertsList = document.getElementById("alerts-list");
@@ -1779,6 +2282,8 @@ function render() {
   }
 
   renderStats();
+  renderTradePanel();
+  renderThresholdPanel();
 }
 
 // ---------- controls ----------
@@ -1827,6 +2332,11 @@ document.getElementById("shelf-list").addEventListener("click", (e) => {
   if (!item) return;
   jumpToPair(item.dataset.key);
 });
+document.getElementById("threshold-list").addEventListener("click", (e) => {
+  const item = e.target.closest(".threshold-item");
+  if (!item) return;
+  jumpToPair(item.dataset.key);
+});
 
 function resetBaseline() {
   rows = {};
@@ -1856,6 +2366,8 @@ function resetBaseline() {
   outcomes = [];
   outcomesByKey = {};
   shelfAlerts = [];
+  totalTriggeredCount = 0;
+  totalEarlyCount = 0;
   startTime = Date.now();
   clearState();
   render();
@@ -1930,6 +2442,20 @@ document.getElementById("apply-threshold").addEventListener("click", () => {
 document.getElementById("threshold-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter") document.getElementById("apply-threshold").click();
 });
+document.getElementById("apply-threshold-30s").addEventListener("click", () => {
+  const inputEl = document.getElementById("threshold-30s-input");
+  const v = parseAmountInput(inputEl.value);
+  if (!isNaN(v) && v > 0) {
+    threshold30 = v;
+    inputEl.value = String(v);
+    saveState();
+    render();
+    flashApplied(inputEl);
+  }
+});
+document.getElementById("threshold-30s-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.getElementById("apply-threshold-30s").click();
+});
 document.getElementById("apply-threshold-1m").addEventListener("click", () => {
   const inputEl = document.getElementById("threshold-1m-input");
   const v = parseAmountInput(inputEl.value);
@@ -1998,6 +2524,71 @@ document.getElementById("apply-score-threshold").addEventListener("click", () =>
 document.getElementById("score-threshold-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter") document.getElementById("apply-score-threshold").click();
 });
+document.getElementById("apply-trade-params").addEventListener("click", () => {
+  const stopEl = document.getElementById("trade-stop-input");
+  const targetEl = document.getElementById("trade-target-input");
+  const hoursEl = document.getElementById("trade-hours-input");
+  const stop = parseFloat(stopEl.value), target = parseFloat(targetEl.value), hours = parseFloat(hoursEl.value);
+  if (stop > 0 && stop < 100 && target > 0 && target < 1000 && hours > 0 && hours <= 48) {
+    tradeStopPct = stop; tradeTargetPct = target; tradeTimeHours = hours;
+    saveState();
+    render();
+    flashApplied(stopEl); flashApplied(targetEl); flashApplied(hoursEl);
+  }
+});
+document.getElementById("trade-plan-btn").addEventListener("click", (e) => {
+  tradePlanOn = !tradePlanOn;
+  e.target.textContent = tradePlanOn ? "📐 ПЛАН СДЕЛКИ: ВКЛ" : "📐 ПЛАН СДЕЛКИ: ВЫКЛ";
+  e.target.classList.toggle("paused", !tradePlanOn);
+  saveState();
+  render();
+});
+document.getElementById("apply-telegram").addEventListener("click", () => {
+  const tokenEl = document.getElementById("telegram-token-input");
+  const chatEl = document.getElementById("telegram-chatid-input");
+  telegramToken = tokenEl.value.trim();
+  telegramChatId = chatEl.value.trim();
+  saveState();
+  flashApplied(tokenEl); flashApplied(chatEl);
+});
+document.getElementById("test-telegram").addEventListener("click", async (e) => {
+  const tokenEl = document.getElementById("telegram-token-input");
+  const chatEl = document.getElementById("telegram-chatid-input");
+  telegramToken = tokenEl.value.trim();
+  telegramChatId = chatEl.value.trim();
+  saveState();
+  if (!telegramToken || !telegramChatId) {
+    e.target.textContent = "нет токена/id";
+    setTimeout(() => { e.target.textContent = "ТЕСТ"; }, 2000);
+    return;
+  }
+  e.target.textContent = "…";
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: telegramChatId, text: "✅ VolScan: тестовое сообщение дошло." }),
+    });
+    const ok = res.ok;
+    e.target.textContent = ok ? "✓ ОК" : "✗ ОШИБКА";
+    if (ok && !telegramOn) document.getElementById("telegram-btn").click();
+  } catch (err) {
+    e.target.textContent = "✗ СЕТЬ";
+  }
+  setTimeout(() => { e.target.textContent = "ТЕСТ"; }, 3000);
+});
+document.getElementById("telegram-btn").addEventListener("click", (e) => {
+  telegramOn = !telegramOn;
+  e.target.textContent = telegramOn ? "📨 TELEGRAM: ВКЛ" : "📨 TELEGRAM: ВЫКЛ";
+  e.target.classList.toggle("paused", telegramOn);
+  saveState();
+});
+document.getElementById("filters-toggle-btn").addEventListener("click", (e) => {
+  filtersCollapsed = !filtersCollapsed;
+  document.getElementById("filters-collapsible").classList.toggle("collapsed", filtersCollapsed);
+  e.target.textContent = filtersCollapsed ? "⚙ Фильтры ▾" : "⚙ Фильтры ▴";
+  saveState();
+});
 document.getElementById("score-only-btn").addEventListener("click", (e) => {
   scoreOnlyMode = !scoreOnlyMode;
   e.target.textContent = scoreOnlyMode ? "⭐ ТОЛЬКО SCORE: ВКЛ" : "⭐ ТОЛЬКО SCORE: ВЫКЛ";
@@ -2008,8 +2599,8 @@ document.getElementById("taker-btn").addEventListener("click", (e) => {
   takerStreamOn = !takerStreamOn;
   e.target.textContent = takerStreamOn ? "🔥 ТЕЙКЕР-ПОТОК: ВКЛ" : "🔥 ТЕЙКЕР-ПОТОК: ВЫКЛ";
   e.target.classList.toggle("off", !takerStreamOn);
-  if (!takerStreamOn) { closeHotStream(); takerRatio = {}; }
-  else { lastHotRebuild = 0; rebuildHotStream(); }
+  if (!takerStreamOn) { closeAllHotStreams(); takerRatio = {}; candleShape = {}; }
+  else { lastHotRebuild = {}; rebuildAllHotStreams(); }
   saveState();
 });
 document.getElementById("sort-btn").addEventListener("click", (e) => {
@@ -2122,7 +2713,8 @@ setInterval(() => {
   if (!badge) return;
   if (!takerStreamOn) { badge.textContent = ""; return; }
   const live = Object.keys(takerRatio).filter(k => Date.now() - takerRatio[k].at <= TAKER_STALE_MS).length;
-  badge.textContent = hotSymbols.length ? `· 🔥 ${live}/${hotSymbols.length}` : "";
+  const total = MARKETS.reduce((n, m) => n + (hotSymbols[m.id] || []).length, 0);
+  badge.textContent = total ? `· 🔥 ${live}/${total}` : "";
 }, 3000);
 setInterval(() => {
   const now = Date.now();
@@ -2152,11 +2744,27 @@ loadStateAsync().then((ok) => {
   if (!ok) return;
 
   document.getElementById("threshold-input").value = String(threshold);
+  document.getElementById("threshold-30s-input").value = String(threshold30);
   document.getElementById("threshold-1m-input").value = String(threshold1m);
   document.getElementById("threshold-2m-input").value = String(threshold2m);
   document.getElementById("max-price-input").value = String(maxInitialPrice);
   document.getElementById("max-volume-input").value = String(maxInitialVolume);
   document.getElementById("score-threshold-input").value = String(scoreThreshold);
+  document.getElementById("trade-stop-input").value = String(tradeStopPct);
+  document.getElementById("trade-target-input").value = String(tradeTargetPct);
+  document.getElementById("trade-hours-input").value = String(tradeTimeHours);
+  document.getElementById("telegram-token-input").value = telegramToken;
+  document.getElementById("telegram-chatid-input").value = telegramChatId;
+  if (!tradePlanOn) {
+    const b = document.getElementById("trade-plan-btn");
+    b.textContent = "📐 ПЛАН СДЕЛКИ: ВЫКЛ"; b.classList.add("paused");
+  }
+  if (telegramOn) {
+    const b = document.getElementById("telegram-btn");
+    b.textContent = "📨 TELEGRAM: ВКЛ"; b.classList.add("paused");
+  }
+  document.getElementById("filters-collapsible").classList.toggle("collapsed", filtersCollapsed);
+  document.getElementById("filters-toggle-btn").textContent = filtersCollapsed ? "⚙ Фильтры ▾" : "⚙ Фильтры ▴";
   if (scoreOnlyMode) {
     const b = document.getElementById("score-only-btn");
     b.textContent = "⭐ ТОЛЬКО SCORE: ВКЛ"; b.classList.add("paused");
@@ -2189,7 +2797,8 @@ function pauseForBackground() {
     }
     if (restTimer[m.id]) { clearInterval(restTimer[m.id]); restTimer[m.id] = null; }
   });
-  closeHotStream();
+  closeAllHotStreams();
+  closeMarkPriceStream();
 }
 function resumeFromBackground() {
   appHidden = false;
@@ -2200,8 +2809,9 @@ function resumeFromBackground() {
     wsFailStreak[m.id] = 0;
     connectMarket(m);
   });
-  lastHotRebuild = 0;
-  rebuildHotStream();
+  lastHotRebuild = {};
+  rebuildAllHotStreams();
+  connectMarkPriceStream();
   dataDirty = true;
   render();
 }
