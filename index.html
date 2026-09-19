@@ -130,6 +130,8 @@
   }
   .badge-SPOT { color: #7ab8ff; border-color: #2f3a4a; background: #131a24; }
   .badge-USDT-M { color: #ffb454; border-color: #4a3a1e; background: #1e1810; }
+  .price-cell-SPOT { background: #16283a; }
+  .price-cell-USDT-M { background: #3a2410; color: #ffb454; }
   .sym-base { color: #e4ece4; font-weight: 600; }
   .sym-quote { color: #4a5a4a; }
   .pct-pos { color: #5eff8f; }
@@ -1917,6 +1919,7 @@ let dataDirty = false;
 function scheduleRender() { dataDirty = true; }
 
 function badgeClass(m) { return "badge badge-" + m; }
+function priceCellClass(m) { return "price-cell-" + m; }
 
 function pctChange(from, to) {
   if (!from) return null;
@@ -2219,8 +2222,8 @@ function render() {
       return `<tr id="row-${r.key}" class="${rowClasses.join(" ")}">
         <td><span class="${badgeClass(r.market)}">${r.market}</span></td>
         <td><span class="sym-base">${r.base}</span><span class="sym-quote">/${r.quote}</span></td>
-        <td>${fmtPrice(r.priceBase)}<span class="base-time">${fmtTime(r.priceAt)}</span></td>
-        <td>${fmtPrice(r.price)}</td>
+        <td class="${priceCellClass(r.market)}">${fmtPrice(r.priceBase)}<span class="base-time">${fmtTime(r.priceAt)}</span></td>
+        <td class="${priceCellClass(r.market)}">${fmtPrice(r.price)}</td>
         <td class="${pctClass}">${isNaN(r.pct) ? "—" : (r.pct >= 0 ? "+" : "") + r.pct.toFixed(2) + "%"}</td>
         <td class="base-vol">$${fmtMoney(r.baseVol)}<span class="base-time">${fmtTime(r.baseAt)}</span></td>
         <td>$${fmtMoney(r.curVol)}</td>
