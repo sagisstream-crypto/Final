@@ -725,7 +725,13 @@ let closedTrades = [];                   // закрытые сделки, са�
 // (отключено ранее по отдельному запросу) — это новый, независимый от него список.
 const THRESHOLD_LOG_MAX = 30;
 let thresholdLog = [];                   // последние срабатывания порогов, самые новые первыми
-let vel1mSeq = { SPOT: 0, "USDT-M": 0 };  // номер VEL1M — отдельный счётчик на SPOT и на USDT-M
+// номер сигнала — отдельный счётчик на каждый (тип, рынок): SPIKE/SPIKE30/VEL1M
+const NUMBERED_SIGNAL_TYPES = ["SPIKE", "SPIKE30", "VEL1M"];
+let signalSeq = {
+  SPIKE: { SPOT: 0, "USDT-M": 0 },
+  SPIKE30: { SPOT: 0, "USDT-M": 0 },
+  VEL1M: { SPOT: 0, "USDT-M": 0 },
+};
 let telegramOn = false;
 let telegramToken = "";
 let telegramChatId = "";
@@ -821,10 +827,9 @@ function bigNumber(n) {
   return String(n).split("").map(d => KEYCAP_DIGITS[d] || d).join("");
 }
 function recordThresholdSignal(entry) {
-  // Нумеруем только VEL1M, и отдельно для SPOT и для USDT-M — остальные типы (SPIKE/
-  // SPIKE30/VEL2M/ACCEL) без номера, как и было до нумерации.
-  if (entry.type === "VEL1M" && vel1mSeq[entry.market] !== undefined) {
-    entry.seq = ++vel1mSeq[entry.market];
+  // Нумеруем SPIKE/SPIKE30/VEL1M, и отдельно для SPOT и для USDT-M — VEL2M/ACCEL без номера.
+  if (signalSeq[entry.type] && signalSeq[entry.type][entry.market] !== undefined) {
+    entry.seq = ++signalSeq[entry.type][entry.market];
   }
   thresholdLog.unshift(entry);
   if (thresholdLog.length > THRESHOLD_LOG_MAX) thresholdLog.length = THRESHOLD_LOG_MAX;
@@ -883,7 +888,7 @@ function buildPayload() {
     everInTop30, everInTop15,
     tradePlanOn, tradeStopPct, tradeTargetPct, tradeTimeHours, tradeEquity,
     openTrades, closedTrades,
-    thresholdLog, telegramOn, telegramToken, telegramChatId, vel1mSeq,
+    thresholdLog, telegramOn, telegramToken, telegramChatId, signalSeq,
     filtersCollapsed, totalTriggeredCount, totalEarlyCount,
     startTime, savedAt: Date.now(),
   };
@@ -927,10 +932,15 @@ function applyPayload(payload) {
   openTrades = payload.openTrades || {};
   closedTrades = payload.closedTrades || [];
   thresholdLog = payload.thresholdLog || [];
-  vel1mSeq = {
-    SPOT: (payload.vel1mSeq && typeof payload.vel1mSeq.SPOT === "number") ? payload.vel1mSeq.SPOT : 0,
-    "USDT-M": (payload.vel1mSeq && typeof payload.vel1mSeq["USDT-M"] === "number") ? payload.vel1mSeq["USDT-M"] : 0,
-  };
+  // payload.vel1mSeq — старое поле (нумерация была только у VEL1M), переносим при апгрейде
+  signalSeq = {};
+  for (const t of NUMBERED_SIGNAL_TYPES) {
+    const saved = (payload.signalSeq && payload.signalSeq[t]) || (t === "VEL1M" ? payload.vel1mSeq : null);
+    signalSeq[t] = {
+      SPOT: (saved && typeof saved.SPOT === "number") ? saved.SPOT : 0,
+      "USDT-M": (saved && typeof saved["USDT-M"] === "number") ? saved["USDT-M"] : 0,
+    };
+  }
   telegramOn = !!payload.telegramOn;
   telegramToken = payload.telegramToken || "";
   telegramChatId = payload.telegramChatId || "";
@@ -2409,7 +2419,11 @@ function resetBaseline() {
   shelfAlerts = [];
   totalTriggeredCount = 0;
   totalEarlyCount = 0;
-  vel1mSeq = { SPOT: 0, "USDT-M": 0 };
+  signalSeq = {
+    SPIKE: { SPOT: 0, "USDT-M": 0 },
+    SPIKE30: { SPOT: 0, "USDT-M": 0 },
+    VEL1M: { SPOT: 0, "USDT-M": 0 },
+  };
   startTime = Date.now();
   clearState();
   render();
