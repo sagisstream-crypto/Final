@@ -700,7 +700,8 @@ let dayLow = {};             // key -> последний виденный 24ч 
 let takerRatio = {};         // key -> { r, at } из kline_1m «горячего» потока
 let candleShape = {};        // key -> { o,h,l,c,v, at } последняя 1m свеча горячего потока
 let fundingRate = {};        // symbol (USDT-M, без префикса рынка) -> { r, price, at }
-let oiHistory = {};          // symbol -> [{t, oi_usd}, ...] только для горячих USDT-M пар
+let oiHistory = {};          // symbol -> [{t, oi_usd}, ...] горячие пары + те, что дали сигнал
+let oiWatchSymbols = {};     // symbol -> ts последнего сигнала (держим в опросе OI_WATCH_TTL_MS)
 
 // ---- план сделки: стратегия из research/binance_pump_patterns (12м бэктест, 267 событий)
 // поверх сигнала ⭐ SCORE. Не автоторговля — просто считаем виртуальный P&L теми же
@@ -1372,27 +1373,40 @@ connectMarkPriceStream();
 
 const OI_HISTORY_MAX = 8;     // ~4 минуты при опросе раз в 30с
 const OI_POLL_MS = 30000;
+const OI_WATCH_TTL_MS = 10 * 60 * 1000; // держим пару в опросе 10 минут после последнего сигнала
 let oiPolling = false;
+async function pollOiSymbol(sym) {
+  try {
+    const res = await fetch(`https://fapi.binance.com/fapi/v1/openInterest?symbol=${sym}`, { cache: "no-store" });
+    if (!res.ok) return;
+    const data = await res.json();
+    const qty = parseFloat(data.openInterest);
+    const mark = fundingRate[sym] && fundingRate[sym].price;
+    if (isNaN(qty) || !mark) return;
+    const usd = qty * mark;
+    if (!oiHistory[sym]) oiHistory[sym] = [];
+    oiHistory[sym].push({ t: Date.now(), oi: usd });
+    if (oiHistory[sym].length > OI_HISTORY_MAX) oiHistory[sym].shift();
+  } catch (e) {}
+}
 async function pollOpenInterestOnce() {
   if (paused || oiPolling) return;
-  const symbols = (hotSymbols["USDT-M"] || []).map(s => s.toUpperCase());
-  if (!symbols.length) return;
+  const now = Date.now();
+  for (const sym in oiWatchSymbols) {
+    if (now - oiWatchSymbols[sym] > OI_WATCH_TTL_MS) delete oiWatchSymbols[sym];
+  }
+  // Раньше опрашивали только "горячие" топ-12 пар (по score/Δ1м) — но пара, которая
+  // выстрелила сигналом, почти всегда НЕ входит в этот рейтинг заранее, поэтому OI
+  // в телеграм почти никогда не приходил. Теперь дополнительно опрашиваем все пары,
+  // по которым недавно сработал хоть один сигнал (см. oiChangePctForSignal).
+  const symbols = new Set([
+    ...(hotSymbols["USDT-M"] || []).map(s => s.toUpperCase()),
+    ...Object.keys(oiWatchSymbols),
+  ]);
+  if (!symbols.size) return;
   oiPolling = true;
   try {
-    for (const sym of symbols) {
-      try {
-        const res = await fetch(`https://fapi.binance.com/fapi/v1/openInterest?symbol=${sym}`, { cache: "no-store" });
-        if (!res.ok) continue;
-        const data = await res.json();
-        const qty = parseFloat(data.openInterest);
-        const mark = fundingRate[sym] && fundingRate[sym].price;
-        if (isNaN(qty) || !mark) continue;
-        const usd = qty * mark;
-        if (!oiHistory[sym]) oiHistory[sym] = [];
-        oiHistory[sym].push({ t: Date.now(), oi: usd });
-        if (oiHistory[sym].length > OI_HISTORY_MAX) oiHistory[sym].shift();
-      } catch (e) {}
-    }
+    for (const sym of symbols) await pollOiSymbol(sym);
   } finally {
     oiPolling = false;
   }
@@ -1402,6 +1416,16 @@ function getOiChangePct(symbol) {
   const h = oiHistory[symbol];
   if (!h || h.length < 2 || !h[0].oi) return null;
   return (h[h.length - 1].oi / h[0].oi - 1) * 100;
+}
+// Вызывается из каждого порогового сигнала: ставит пару в очередь опроса OI (если
+// её там ещё нет) и сразу же дёргает первый замер, не дожидаясь общего 30-секундного
+// цикла — так следующий сигнал по этой же паре (а во время памп-серии их обычно
+// несколько подряд) уже получит реальный % изменения OI.
+function oiChangePctForSignal(marketId, symbol) {
+  if (marketId !== "USDT-M") return null;
+  oiWatchSymbols[symbol] = Date.now();
+  if (!oiHistory[symbol]) pollOiSymbol(symbol);
+  return getOiChangePct(symbol);
 }
 
 // ---------- websocket feed ----------
@@ -1719,7 +1743,7 @@ function handleTickerBatch(market, arr) {
           dirPct: pct1m !== null ? pct1m : (parsed.pct !== null && parsed.pct !== undefined && !isNaN(parsed.pct) ? parsed.pct : null),
           imbal,
           fundingPct: market.id === "USDT-M" && fundingRate[parsed.symbol] ? fundingRate[parsed.symbol].r * 100 : null,
-          oiChangePct: market.id === "USDT-M" ? getOiChangePct(parsed.symbol) : null,
+          oiChangePct: oiChangePctForSignal(market.id, parsed.symbol),
         };
         pushAlert(alertEntry);
         recordThresholdSignal(alertEntry);
@@ -1738,7 +1762,7 @@ function handleTickerBatch(market, arr) {
           dirPct: pct1m !== null ? pct1m : (parsed.pct !== null && parsed.pct !== undefined && !isNaN(parsed.pct) ? parsed.pct : null),
           imbal,
           fundingPct: market.id === "USDT-M" && fundingRate[parsed.symbol] ? fundingRate[parsed.symbol].r * 100 : null,
-          oiChangePct: market.id === "USDT-M" ? getOiChangePct(parsed.symbol) : null,
+          oiChangePct: oiChangePctForSignal(market.id, parsed.symbol),
         };
         pushAlert(alertEntry);
         recordThresholdSignal(alertEntry);
@@ -1756,7 +1780,7 @@ function handleTickerBatch(market, arr) {
           dirPct: pct1m !== null ? pct1m : (parsed.pct !== null && parsed.pct !== undefined && !isNaN(parsed.pct) ? parsed.pct : null),
           imbal,
           fundingPct: market.id === "USDT-M" && fundingRate[parsed.symbol] ? fundingRate[parsed.symbol].r * 100 : null,
-          oiChangePct: market.id === "USDT-M" ? getOiChangePct(parsed.symbol) : null,
+          oiChangePct: oiChangePctForSignal(market.id, parsed.symbol),
         };
         pushAlert(alertEntry);
         recordThresholdSignal(alertEntry);
@@ -1775,7 +1799,7 @@ function handleTickerBatch(market, arr) {
           dirPct: pct1m !== null ? pct1m : (parsed.pct !== null && parsed.pct !== undefined && !isNaN(parsed.pct) ? parsed.pct : null),
           imbal,
           fundingPct: market.id === "USDT-M" && fundingRate[parsed.symbol] ? fundingRate[parsed.symbol].r * 100 : null,
-          oiChangePct: market.id === "USDT-M" ? getOiChangePct(parsed.symbol) : null,
+          oiChangePct: oiChangePctForSignal(market.id, parsed.symbol),
         };
         pushAlert(alertEntry);
         recordThresholdSignal(alertEntry);
@@ -1796,7 +1820,7 @@ function handleTickerBatch(market, arr) {
           dirPct: pct1m !== null ? pct1m : (parsed.pct !== null && parsed.pct !== undefined && !isNaN(parsed.pct) ? parsed.pct : null),
           imbal,
           fundingPct: market.id === "USDT-M" && fundingRate[parsed.symbol] ? fundingRate[parsed.symbol].r * 100 : null,
-          oiChangePct: market.id === "USDT-M" ? getOiChangePct(parsed.symbol) : null,
+          oiChangePct: oiChangePctForSignal(market.id, parsed.symbol),
         };
         pushAlert(alertEntry);
         recordThresholdSignal(alertEntry);
