@@ -822,11 +822,11 @@ function recordThresholdSignal(entry) {
   dataDirty = true;
   const dot = directionEmoji(entry.dirPct);
   const volLine = entry.curVol !== null && entry.curVol !== undefined
-    ? `\nОбъём 24ч: $${fmtMoney(entry.curVol)}` + (entry.pct24h !== null && entry.pct24h !== undefined && !isNaN(entry.pct24h)
+    ? `\n🟢 Объём 24ч: <b>$${fmtMoney(entry.curVol)}</b>` + (entry.pct24h !== null && entry.pct24h !== undefined && !isNaN(entry.pct24h)
         ? ` (${entry.pct24h >= 0 ? "+" : ""}${entry.pct24h.toFixed(2)}%)` : "")
     : "";
   const dirLine = entry.dirPct !== null && entry.dirPct !== undefined && !isNaN(entry.dirPct)
-    ? `\nЦена: ${entry.dirPct >= 0 ? "+" : ""}${entry.dirPct.toFixed(2)}%`
+    ? `\nЦена: ${dot} ${entry.dirPct >= 0 ? "+" : ""}${entry.dirPct.toFixed(2)}%`
     : "";
   const imbalLine = entry.imbal !== null && entry.imbal !== undefined && !isNaN(entry.imbal)
     ? ` · стакан ${Math.round(entry.imbal * 100)}% bid`
@@ -837,16 +837,22 @@ function recordThresholdSignal(entry) {
   const oiLine = entry.oiChangePct !== null && entry.oiChangePct !== undefined && !isNaN(entry.oiChangePct)
     ? ` · OI: ${entry.oiChangePct >= 0 ? "+" : ""}${entry.oiChangePct.toFixed(1)}%`
     : "";
-  const header = centerPad(`${dot} ${entry.type}`);
+  // Telegram не даёт красить произвольный текст в сообщениях бота (нет тега color) —
+  // приближаем жёлтый/зелёный кружками-эмодзи (🟡 у названия сигнала, 🟢 у объёмов) плюс
+  // жирным шрифтом (parse_mode: HTML), чтобы название+сумма реально выделялись.
+  const amountStr = `${entry.amount >= 0 ? "+" : ""}$${fmtMoney(entry.amount)}`;
+  const label = `${entry.type} ${amountStr}`;
+  const headerPlain = centerPad(`🟡 ${label}`);
+  const header = headerPlain.replace(label, `<b>${label}</b>`);
   const pairLine = `${entry.base}/${entry.quote} (${entry.market})`;
-  sendTelegram(`${header}\n${pairLine}\n${entry.extra} · +$${fmtMoney(entry.amount)}${volLine}${dirLine}${imbalLine}${fundLine}${oiLine}`);
+  sendTelegram(`${header}\n${pairLine}\n${entry.extra}${volLine}${dirLine}${imbalLine}${fundLine}${oiLine}`);
 }
 function sendTelegram(text) {
   if (!telegramOn || !telegramToken || !telegramChatId) return;
   fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: telegramChatId, text }),
+    body: JSON.stringify({ chat_id: telegramChatId, text, parse_mode: "HTML" }),
   }).catch(() => {}); // сеть/токен может быть плохим — не роняем сканер из-за этого
 }
 let marketFilter = "ALL";
