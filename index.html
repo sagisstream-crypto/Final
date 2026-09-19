@@ -725,7 +725,7 @@ let closedTrades = [];                   // закрытые сделки, са�
 // (отключено ранее по отдельному запросу) — это новый, независимый от него список.
 const THRESHOLD_LOG_MAX = 30;
 let thresholdLog = [];                   // последние срабатывания порогов, самые новые первыми
-let telegramMsgSeq = 0;                  // сквозной номер сигнала — один счётчик на все пары и оба рынка
+let vel1mSeq = { SPOT: 0, "USDT-M": 0 };  // номер VEL1M — отдельный счётчик на SPOT и на USDT-M
 let telegramOn = false;
 let telegramToken = "";
 let telegramChatId = "";
@@ -813,7 +813,11 @@ function directionEmoji(dirPct) {
   return dirPct >= 0 ? "🟢" : "🔴";
 }
 function recordThresholdSignal(entry) {
-  entry.seq = ++telegramMsgSeq; // один сквозной номер на все сигналы — и SPOT, и USDT-M, и любые пары
+  // Нумеруем только VEL1M, и отдельно для SPOT и для USDT-M — остальные типы (SPIKE/
+  // SPIKE30/VEL2M/ACCEL) без номера, как и было до нумерации.
+  if (entry.type === "VEL1M" && vel1mSeq[entry.market] !== undefined) {
+    entry.seq = ++vel1mSeq[entry.market];
+  }
   thresholdLog.unshift(entry);
   if (thresholdLog.length > THRESHOLD_LOG_MAX) thresholdLog.length = THRESHOLD_LOG_MAX;
   dataDirty = true;
@@ -838,7 +842,7 @@ function recordThresholdSignal(entry) {
   // приближаем жёлтый/зелёный кружками-эмодзи (🟡 у сигнала, 🟢 у объёмов) плюс жирным
   // шрифтом (parse_mode: HTML). 1-я строка — коротко: пара + сумма, всё остальное ниже.
   const amountStr = `${entry.amount >= 0 ? "+" : ""}$${fmtMoney(entry.amount)}`;
-  const pairAmountLine = `<b>${entry.seq}. ${entry.base}/${entry.quote} ${amountStr}</b>`;
+  const pairAmountLine = `<b>${entry.seq ? entry.seq + ". " : ""}${entry.base}/${entry.quote} ${amountStr}</b>`;
   const typeLine = `🟡 ${entry.type} (${entry.market})${entry.extra ? " · " + entry.extra : ""}`;
   sendTelegram(`${pairAmountLine}\n${typeLine}${volLine}${dirLine}${imbalLine}${fundLine}${oiLine}`);
 }
@@ -871,7 +875,7 @@ function buildPayload() {
     everInTop30, everInTop15,
     tradePlanOn, tradeStopPct, tradeTargetPct, tradeTimeHours, tradeEquity,
     openTrades, closedTrades,
-    thresholdLog, telegramOn, telegramToken, telegramChatId, telegramMsgSeq,
+    thresholdLog, telegramOn, telegramToken, telegramChatId, vel1mSeq,
     filtersCollapsed, totalTriggeredCount, totalEarlyCount,
     startTime, savedAt: Date.now(),
   };
@@ -915,7 +919,10 @@ function applyPayload(payload) {
   openTrades = payload.openTrades || {};
   closedTrades = payload.closedTrades || [];
   thresholdLog = payload.thresholdLog || [];
-  telegramMsgSeq = typeof payload.telegramMsgSeq === "number" ? payload.telegramMsgSeq : 0;
+  vel1mSeq = {
+    SPOT: (payload.vel1mSeq && typeof payload.vel1mSeq.SPOT === "number") ? payload.vel1mSeq.SPOT : 0,
+    "USDT-M": (payload.vel1mSeq && typeof payload.vel1mSeq["USDT-M"] === "number") ? payload.vel1mSeq["USDT-M"] : 0,
+  };
   telegramOn = !!payload.telegramOn;
   telegramToken = payload.telegramToken || "";
   telegramChatId = payload.telegramChatId || "";
@@ -2394,7 +2401,7 @@ function resetBaseline() {
   shelfAlerts = [];
   totalTriggeredCount = 0;
   totalEarlyCount = 0;
-  telegramMsgSeq = 0;
+  vel1mSeq = { SPOT: 0, "USDT-M": 0 };
   startTime = Date.now();
   clearState();
   render();
