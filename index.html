@@ -100,7 +100,15 @@
   .reset-btn:hover, .sound-btn:hover { background: #232838; }
   .ok-btn:hover { background: #233823; }
   .hint { font-size: 10px; color: #3f4f3f; margin-left: auto; }
-  .body-wrap { flex: 1; display: flex; overflow: hidden; }
+  .body-wrap { flex: 1; display: flex; overflow: hidden; min-height: 320px; }
+  .filters-collapsible { overflow-y: auto; max-height: 60vh; }
+  .filters-collapsible.collapsed { display: none; }
+  .filters-toggle-btn {
+    background: #0a0e0a; border: 1px solid #1e2b1e; border-radius: 2px;
+    color: #5eff8f; font-family: inherit; font-size: 11px; padding: 6px 10px;
+    cursor: pointer; white-space: nowrap;
+  }
+  .filters-toggle-btn:hover { border-color: #2f4a2f; }
   .table-wrap { flex: 1; overflow: auto; min-width: 0; }
   table { width: 100%; border-collapse: collapse; }
   thead { position: sticky; top: 0; background: #0d120d; border-bottom: 1px solid #1e2b1e; z-index: 5; }
@@ -321,8 +329,9 @@
     .stats { gap: 8px; font-size: 10px; }
     .controls { gap: 6px; }
     .hint { display: none; }
-    .body-wrap { flex-direction: column; flex: 1; overflow: hidden; min-height: 0; }
+    .body-wrap { flex-direction: column; flex: 1; overflow: hidden; min-height: 280px; }
     .table-wrap { flex: 1; max-height: none; overflow: auto; -webkit-overflow-scrolling: touch; }
+    .filters-collapsible { max-height: 50vh; }
     thead { position: sticky; top: 0; }
     .alerts-panel {
       width: 100%; border-left: none; flex: 1; min-height: 0;
@@ -357,7 +366,9 @@
       <span class="stat-label">TRIGGERED <span class="stat-val warn" id="triggered-count">0</span></span>
       <span class="stat-label">EARLY <span class="stat-val early" id="early-count">0</span></span>
     </div>
+    <button class="filters-toggle-btn" id="filters-toggle-btn">⚙ Фильтры ▾</button>
   </div>
+  <div class="filters-collapsible collapsed" id="filters-collapsible">
   <div class="controls">
     <div class="market-toggle" id="market-toggle">
       <button data-market="ALL" class="active">ВСЕ</button>
@@ -469,6 +480,7 @@
   <div id="stats-panel" style="display:none; margin-top:10px; border:1px solid #1e2b1e; border-radius:2px; background:#0a0e0a; padding:10px 12px;">
     <div style="font-size:10px; color:#5a6b5a; letter-spacing:0.05em; margin-bottom:8px;">📊 СТАТИСТИКА ПО СИГНАЛАМ — что было с ценой ПОСЛЕ срабатывания (не рекомендация)</div>
     <div id="stats-content" style="font-size:11px; line-height:1.7;"></div>
+  </div>
   </div>
 </div>
 
@@ -612,6 +624,7 @@ let threshold2m = 50000;     // 2-minute volume growth
 let soundOn = true;
 let paused = false;
 let earlyOnlyMode = false;   // table shows only pairs with recent early signals
+let filtersCollapsed = true; // фильтры/пороги/панели свёрнуты по умолчанию — таблица сразу на всю страницу
 let alertsTab = "all";       // "all" | "early"
 
 let rows = {};
@@ -815,6 +828,7 @@ function buildPayload() {
     tradePlanOn, tradeStopPct, tradeTargetPct, tradeTimeHours, tradeEquity,
     openTrades, closedTrades,
     thresholdLog, telegramOn, telegramToken, telegramChatId,
+    filtersCollapsed,
     startTime, savedAt: Date.now(),
   };
 }
@@ -860,6 +874,7 @@ function applyPayload(payload) {
   telegramOn = !!payload.telegramOn;
   telegramToken = payload.telegramToken || "";
   telegramChatId = payload.telegramChatId || "";
+  filtersCollapsed = payload.filtersCollapsed !== false;
   startTime = payload.startTime || Date.now();
   return true;
 }
@@ -2394,6 +2409,12 @@ document.getElementById("telegram-btn").addEventListener("click", (e) => {
   e.target.classList.toggle("paused", telegramOn);
   saveState();
 });
+document.getElementById("filters-toggle-btn").addEventListener("click", (e) => {
+  filtersCollapsed = !filtersCollapsed;
+  document.getElementById("filters-collapsible").classList.toggle("collapsed", filtersCollapsed);
+  e.target.textContent = filtersCollapsed ? "⚙ Фильтры ▾" : "⚙ Фильтры ▴";
+  saveState();
+});
 document.getElementById("score-only-btn").addEventListener("click", (e) => {
   scoreOnlyMode = !scoreOnlyMode;
   e.target.textContent = scoreOnlyMode ? "⭐ ТОЛЬКО SCORE: ВКЛ" : "⭐ ТОЛЬКО SCORE: ВЫКЛ";
@@ -2568,6 +2589,8 @@ loadStateAsync().then((ok) => {
     const b = document.getElementById("telegram-btn");
     b.textContent = "📨 TELEGRAM: ВКЛ"; b.classList.add("paused");
   }
+  document.getElementById("filters-collapsible").classList.toggle("collapsed", filtersCollapsed);
+  document.getElementById("filters-toggle-btn").textContent = filtersCollapsed ? "⚙ Фильтры ▾" : "⚙ Фильтры ▴";
   if (scoreOnlyMode) {
     const b = document.getElementById("score-only-btn");
     b.textContent = "⭐ ТОЛЬКО SCORE: ВКЛ"; b.classList.add("paused");
