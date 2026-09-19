@@ -70,9 +70,29 @@
 
 Пока телефон свёрнут, **новые** тики не приходят. Для круглосуточного фона нужен нативный Android Foreground Service (Capacitor) — это уже отдельная обёртка.
 
+## Деплой на Cloudflare Pages
+
+Самый быстрый способ получить https-адрес для установки на телефон.
+
+**Вариант A — через GitHub (автодеплой на каждый push, рекомендуется):**
+
+1. [dash.cloudflare.com](https://dash.cloudflare.com) → **Workers & Pages** → **Create** → **Pages** → **Connect to Git**.
+2. Выбрать репозиторий `sagisstream-crypto/Final`, ветку — эту (`claude/binance-futures-pump-patterns-cbvvfk`) или `main`, если ветку смёржили.
+3. Build settings: **Framework preset — None**, **Build command — оставить пустым**, **Build output directory — `/`** (корень репозитория, здесь нет отдельной папки сборки).
+4. **Save and Deploy**. Через ~30 секунд будет ссылка вида `https://final-xxx.pages.dev` — это готовый https-хостинг, ничего больше не нужно.
+5. Дальше каждый `git push` в подключённую ветку сам передеплоит сайт.
+
+**Вариант B — перетащить папку (без GitHub, разово):**
+
+1. **Workers & Pages** → **Create** → **Pages** → **Upload assets**.
+2. Перетащить в окно файлы `index.html`, `manifest.json`, `sw.js`, `_headers` и папку `icons/` (со всей структурой, не только содержимое) — все вместе, одним заходом.
+3. **Deploy site** → получаете `https://....pages.dev`.
+
+`_headers` в корне репозитория уже настроен так, что Cloudflare не закэширует `sw.js`/`manifest.json`/`index.html` на CDN надолго — иначе после обновления сайта телефон мог бы ещё долго открывать старую версию из кэша.
+
 ## Установка на телефон
 
-Нужен https-хостинг (GitHub Pages, Cloudflare Pages, любой nginx с SSL). `file://` PWA не ставится.
+Нужен https-хостинг (Cloudflare Pages — см. выше, либо GitHub Pages, либо любой nginx с SSL). `file://` PWA не ставится.
 
 ### Android (Chrome)
 
