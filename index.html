@@ -2118,7 +2118,20 @@ function renderPairColumns() {
     scrollEl.innerHTML = `<div class="pair-columns-empty">Пока нет.</div>`;
     return;
   }
-  scrollEl.innerHTML = pairColumnOrder.map(key => {
+  // Порядок колонок — не "кто недавно стрельнул", а "у кого сейчас крупнее объём и
+  // сильнее движение за 24ч" (по последнему известному сигналу пары). Так при большом
+  // числе пар самые заметные всегда видны первыми, а не тонут где-то в середине списка.
+  const sortedKeys = [...pairColumnOrder].sort((ka, kb) => {
+    const la = pairSignalLog[ka] && pairSignalLog[ka][0];
+    const lb = pairSignalLog[kb] && pairSignalLog[kb][0];
+    const va = (la && la.curVol) || 0;
+    const vb = (lb && lb.curVol) || 0;
+    if (vb !== va) return vb - va;
+    const pa = Math.abs((la && la.pct24h) || 0);
+    const pb = Math.abs((lb && lb.pct24h) || 0);
+    return pb - pa;
+  });
+  scrollEl.innerHTML = sortedKeys.map(key => {
     const list = pairSignalLog[key];
     if (!list || !list.length) return "";
     const head = list[0];
