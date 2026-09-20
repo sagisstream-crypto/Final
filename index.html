@@ -70,6 +70,7 @@
   #search-input { width: 120px; }
   #threshold-input { width: 80px; }
   #threshold-1m-input { width: 80px; }
+  #threshold-vel1m30-input { width: 80px; }
   #max-price-input { width: 60px; }
   #max-volume-input { width: 90px; }
   .market-toggle { display: flex; border: 1px solid #1e2b1e; border-radius: 2px; overflow: hidden; }
@@ -229,6 +230,7 @@
   .pcc-price { color: #8ab8b8; }
   .pcc-24h { color: #3a8a8a; }
   .pcc-time { color: #2a6a6a; font-size: 9px; text-align: right; }
+  .pcc-type { color: #8ab8b8; font-size: 9.5px; }
   .threshold-panel { border: 1px solid #4a2a14; background: #1a0f08; border-radius: 4px; margin: 0 12px 8px; padding: 6px 8px; }
   .threshold-header { font-size: 11px; font-weight: 700; color: #ff9d4a; margin-bottom: 4px; }
   .threshold-summary { color: #b37a4a; font-weight: 400; }
@@ -375,6 +377,12 @@
       <button class="ok-btn" id="apply-threshold-1m">OK</button>
     </div>
     <div class="box">
+      <span>⚡</span>
+      <span class="stat-label">порог VEL1M 30с $</span>
+      <input id="threshold-vel1m30-input" value="20000">
+      <button class="ok-btn" id="apply-threshold-vel1m30">OK</button>
+    </div>
+    <div class="box">
       <span>⚙</span>
       <span class="stat-label">макс. цена $</span>
       <input id="max-price-input" value="10">
@@ -442,7 +450,7 @@
   </div>
   <div class="filters-hint">
     <b>⭐ SCORE (0–100)</b> — главный сигнал: складывает RVOL (объём против средней минуты суток), Δ% цены за 1м, пробой дневного хая, положение к VWAP, скачок среднего чека сделки, перекос стакана, долю тейкер-покупок и форму последней 1m свечи горячего потока. Стреляет только при score ≥ порога И растущей цене. «ТОЛЬКО SCORE» глушит старые пороговые сигналы.
-    <b>Пороговые:</b> SPIKE (10с), SPIKE30 (30с), VEL1M, ACCEL (наклон за 90с) — каждый по своему $ порогу из шапки. <b>🎯 Пороговый сигнал</b> — пришпиленная лента наверху: последние срабатывания этих четырёх сигналов. <b>📶 По парам (VEL1M)</b> — на телефоне, во вкладке «СИГНАЛЫ»: та же лента, но сгруппированная по паре — своя таблица на каждую, а не общий список вперемешку. <b>🪤 Тихая полка</b> — первый вынос у пары, которая долго стояла ровно.
+    <b>Пороговые:</b> SPIKE (10с), SPIKE30 (30с), VEL1M (60с), VEL1M30 (30с, тот же VEL1M, но раньше), ACCEL (наклон за 90с) — каждый по своему $ порогу из шапки. <b>🎯 Пороговый сигнал</b> — пришпиленная лента наверху: последние срабатывания этих пяти сигналов. <b>📶 По парам (VEL1M/VEL1M30)</b> — на телефоне, во вкладке «СИГНАЛЫ»: та же лента, но сгруппированная по паре — своя таблица на каждую, а не общий список вперемешку. <b>🪤 Тихая полка</b> — первый вынос у пары, которая долго стояла ровно.
     <b>🔥 Тейкер-поток</b> — kline_1m по 12 самым горячим парам на каждом рынке, даёт долю покупок и форму свечи. <b>💾 CSV</b> — выгрузка всех сигналов с признаками и MFE/MAE для разбора.
     <b>📐 План сделки</b> — встроенная стратегия из 12-месячного бэктеста (research/binance_pump_patterns): на каждый ⭐ SCORE-сигнал заводится виртуальная позиция (стоп/цель/тайм-аут, риск 1% капитала на сделку, комиссия 0.10% за круг) и ведётся сама, без участия пользователя — это не автоторговля и не финансовая рекомендация, а прозрачная проверка сигнала теми же правилами, что тестировались на истории. Не более одной позиции на пару одновременно.
     <b>📨 Telegram</b> — впиши токен бота (у @BotFather) и chat_id, нажми ТЕСТ: если тестовое сообщение дошло, рассылка пороговых сигналов (🎯) включится сама. Токен и chat_id хранятся только в этом браузере (IndexedDB), никуда, кроме Telegram, не уходят.
@@ -488,7 +496,7 @@
   </div>
   <div class="alerts-panel">
     <div class="pair-columns-panel" id="pair-columns-panel">
-      <div class="pair-columns-header">📶 ПО ПАРАМ (VEL1M) <span class="pair-columns-summary" id="pair-columns-summary"></span></div>
+      <div class="pair-columns-header">📶 ПО ПАРАМ (VEL1M/VEL1M30) <span class="pair-columns-summary" id="pair-columns-summary"></span></div>
       <div class="pair-columns-scroll" id="pair-columns-scroll">
         <div class="pair-columns-empty">Пока нет.</div>
       </div>
@@ -588,6 +596,7 @@ async function requestPersistentStorage() {
 let threshold = 50000;       // 10-sec spike
 let threshold30 = 50000;     // 30-sec spike
 let threshold1m = 30000;     // 1-minute volume growth
+let thresholdVel1m30 = 20000; // VEL1M30 — тот же принцип, что VEL1M, но на 30-секундном окне (rolling30)
 let soundOn = true;
 let paused = false;
 let earlyOnlyMode = false;   // table shows only pairs with recent early signals
@@ -684,15 +693,15 @@ let thresholdLog = [];                   // последние срабатыв�
 // номер сигнала — отдельный счётчик на каждую конкретную пару (по entry.key = рынок:символ),
 // а не общий на весь рынок: чтобы "5" значило "пятый VEL1M именно по этой паре", а не
 // "пятый VEL1M вообще среди всех пар". Только для SPIKE/SPIKE30/VEL1M.
-const NUMBERED_SIGNAL_TYPES = ["SPIKE", "SPIKE30", "VEL1M"];
-let signalSeq = { SPIKE: {}, SPIKE30: {}, VEL1M: {} }; // type -> key -> count
+const NUMBERED_SIGNAL_TYPES = ["SPIKE", "SPIKE30", "VEL1M", "VEL1M30"];
+let signalSeq = { SPIKE: {}, SPIKE30: {}, VEL1M: {}, VEL1M30: {} }; // type -> key -> count
 let lastSignalPct24h = {}; // key -> 24ч% на прошлом сигнале ЛЮБОГО типа по этой паре (для 🔥/⬇️)
 
 // ---- "ПО ПАРАМ" — альтернатива Telegram-ленте: не общий поток вперемешку, а своя
 // колонка на каждую пару, в ней снизу вверх видно, как менялась цена/объём именно
 // у неё. Пока только VEL1M — чтобы список колонок не захламлялся; чтобы вернуть
 // ACCEL, достаточно дописать "ACCEL" в PAIR_VIEW_TYPES, больше ничего менять не нужно.
-const PAIR_VIEW_TYPES = ["VEL1M"];
+const PAIR_VIEW_TYPES = ["VEL1M", "VEL1M30"];
 const PAIR_COLUMN_MAX = 12;      // сколько последних активных пар держим одновременно
 const PAIR_COLUMN_LOG_MAX = 20;  // сколько карточек храним в каждой колонке
 let pairSignalLog = {};          // key -> [entry,...] новые сверху
@@ -877,7 +886,7 @@ function buildPayload() {
     rows, sessionBase, baseTime, priceBase, doubleLevel, lastFired, signalCount,
     shelfAlerts: [],
     outcomes: [],
-    threshold, threshold30, threshold1m, maxInitialPrice, maxInitialVolume,
+    threshold, threshold30, threshold1m, thresholdVel1m30, maxInitialPrice, maxInitialVolume,
     scoreThreshold, scoreOnlyMode, sortMode, takerStreamOn,
     everInTop30, everInTop15,
     tradePlanOn, tradeStopPct, tradeTargetPct, tradeTimeHours, tradeEquity,
@@ -909,6 +918,7 @@ function applyPayload(payload) {
   threshold = payload.threshold || threshold;
   threshold30 = payload.threshold30 || threshold30;
   threshold1m = payload.threshold1m || threshold1m;
+  thresholdVel1m30 = payload.thresholdVel1m30 || thresholdVel1m30;
   maxInitialPrice = payload.maxInitialPrice || maxInitialPrice;
   maxInitialVolume = payload.maxInitialVolume || maxInitialVolume;
   scoreThreshold = payload.scoreThreshold || scoreThreshold;
@@ -927,7 +937,7 @@ function applyPayload(payload) {
   thresholdLog = payload.thresholdLog || [];
   // старый формат signalSeq был { SPOT, "USDT-M" } (счётчик на весь рынок, не на пару) —
   // если сохранённое значение в этой форме, не переносим его, просто считаем заново по парам.
-  signalSeq = { SPIKE: {}, SPIKE30: {}, VEL1M: {} };
+  signalSeq = { SPIKE: {}, SPIKE30: {}, VEL1M: {}, VEL1M30: {} };
   for (const t of NUMBERED_SIGNAL_TYPES) {
     const saved = payload.signalSeq && payload.signalSeq[t];
     const isOldShape = saved && Object.keys(saved).every(k => k === "SPOT" || k === "USDT-M");
@@ -1194,7 +1204,7 @@ function pushAlert(entry) {
 function pushShelfAlert(entry) {
   // полка тоже без записи
 }
-const EARLY_TYPES = new Set(["VEL1M", "ACCEL", "SIGNAL"]); // "ранние" = быстрее, чем базовый SPIKE
+const EARLY_TYPES = new Set(["VEL1M", "VEL1M30", "ACCEL", "SIGNAL"]); // "ранние" = быстрее, чем базовый SPIKE
 function isEarlyType(type) {
   return EARLY_TYPES.has(type);
 }
@@ -1812,6 +1822,27 @@ function handleTickerBatch(market, arr) {
         startOutcome(key, market.id, parsed, now, "VEL1M", { rvol, pct1m, ats, atsMedian, imbal, spreadPct, vwapDev, rng, taker, d1m, score: scoreObj.score, parts: scoreObj.parts });
       }
 
+      // VEL1M30 — тот же VEL1M, но на 30-секундном окне (rolling30, как у SPIKE30), со своим
+      // отдельным порогом: ловит то же ускорение объёма, но раньше, чем 60-секундный VEL1M.
+      if (!scoreOnlyMode && rolling30 !== null && rolling30 >= thresholdVel1m30 && canFire(key, "VEL1M30", 30000)) {
+        markFired(key, "VEL1M30");
+        const alertEntry = {
+          key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
+          amount: rolling30, time: now, type: "VEL1M30", extra: "Δ30с",
+          curVol: parsed.curVol, pct24h: parsed.pct, price: parsed.price,
+          dirPct: pct1m !== null ? pct1m : (parsed.pct !== null && parsed.pct !== undefined && !isNaN(parsed.pct) ? parsed.pct : null),
+          imbal,
+          fundingPct: market.id === "USDT-M" && fundingRate[parsed.symbol] ? fundingRate[parsed.symbol].r * 100 : null,
+          oiChangePct: oiChangePctForSignal(market.id, parsed.symbol),
+        };
+        pushAlert(alertEntry);
+        recordThresholdSignal(alertEntry);
+        recordPairSignal(alertEntry);
+        earlyBeep();
+        notify(`🚀 VEL1M30: ${parsed.base}/${parsed.quote}`, `+$${fmtMoney(rolling30)} за 30с (${market.id})`);
+        startOutcome(key, market.id, parsed, now, "VEL1M30", { rvol, pct1m, ats, atsMedian, imbal, spreadPct, vwapDev, rng, taker, d1m, score: scoreObj.score, parts: scoreObj.parts });
+      }
+
       // ACCEL — slope of a 90s linear regression, in $/min, compared against порог Δ1м.
       // Robust replacement for the old recent30/prev30 ratio, which produced garbage
       // multiples whenever prev30 was ~0.
@@ -1995,7 +2026,7 @@ function renderStats() {
   const completed = outcomes.filter(o => o.done).length;
   const pending = outcomes.length - completed;
 
-  const types = ["SIGNAL", "QUIET", "ACCEL", "VEL1M", "SPIKE"];
+  const types = ["SIGNAL", "QUIET", "ACCEL", "VEL1M", "VEL1M30", "SPIKE"];
   const byType = types.map(t => {
     const list = outcomes.filter(o => (o.type || "SPIKE") === t);
     return list.length ? exLine(t === "SIGNAL" ? "⭐ SCORE" : t, excursion(list)) : "";
@@ -2077,7 +2108,7 @@ function renderTradePanel() {
 }
 
 // ---------- пороговый сигнал: рендер ----------
-const THRESHOLD_TYPE_LABEL = { SPIKE: "10с", SPIKE30: "30с", VEL1M: "Δ1м", ACCEL: "наклон" };
+const THRESHOLD_TYPE_LABEL = { SPIKE: "10с", SPIKE30: "30с", VEL1M: "Δ1м", VEL1M30: "Δ30с", ACCEL: "наклон" };
 function renderPairColumns() {
   const summaryEl = document.getElementById("pair-columns-summary");
   const scrollEl = document.getElementById("pair-columns-scroll");
@@ -2099,6 +2130,7 @@ function renderPairColumns() {
       const has24h = a.pct24h !== null && a.pct24h !== undefined && !isNaN(a.pct24h);
       return `
         <tr data-key="${a.key}" title="Показать пару в таблице">
+          <td class="pcc-type">${THRESHOLD_TYPE_LABEL[a.type] || a.type}</td>
           <td class="pcc-amount">+$${fmtMoney(a.amount)}</td>
           <td class="pcc-price">${hasPrice ? "$" + fmtPrice(a.price) : "—"}</td>
           <td class="${dirCls}">${dirText}</td>
@@ -2403,7 +2435,7 @@ function resetBaseline() {
   shelfAlerts = [];
   totalTriggeredCount = 0;
   totalEarlyCount = 0;
-  signalSeq = { SPIKE: {}, SPIKE30: {}, VEL1M: {} };
+  signalSeq = { SPIKE: {}, SPIKE30: {}, VEL1M: {}, VEL1M30: {} };
   lastSignalPct24h = {};
   pairSignalLog = {};
   pairColumnOrder = [];
@@ -2508,6 +2540,20 @@ document.getElementById("apply-threshold-1m").addEventListener("click", () => {
 });
 document.getElementById("threshold-1m-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter") document.getElementById("apply-threshold-1m").click();
+});
+document.getElementById("apply-threshold-vel1m30").addEventListener("click", () => {
+  const inputEl = document.getElementById("threshold-vel1m30-input");
+  const v = parseAmountInput(inputEl.value);
+  if (!isNaN(v) && v > 0) {
+    thresholdVel1m30 = v;
+    inputEl.value = String(v);
+    saveState();
+    render();
+    flashApplied(inputEl);
+  }
+});
+document.getElementById("threshold-vel1m30-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.getElementById("apply-threshold-vel1m30").click();
 });
 document.getElementById("apply-max-price").addEventListener("click", () => {
   const inputEl = document.getElementById("max-price-input");
@@ -2763,6 +2809,7 @@ loadStateAsync().then((ok) => {
   document.getElementById("threshold-input").value = String(threshold);
   document.getElementById("threshold-30s-input").value = String(threshold30);
   document.getElementById("threshold-1m-input").value = String(threshold1m);
+  document.getElementById("threshold-vel1m30-input").value = String(thresholdVel1m30);
   document.getElementById("max-price-input").value = String(maxInitialPrice);
   document.getElementById("max-volume-input").value = String(maxInitialVolume);
   document.getElementById("score-threshold-input").value = String(scoreThreshold);
