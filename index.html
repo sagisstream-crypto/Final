@@ -720,6 +720,7 @@ let thresholdLog = [];                   // последние срабатыв�
 // "пятый VEL1M вообще среди всех пар". Только для SPIKE/SPIKE30/VEL1M.
 const NUMBERED_SIGNAL_TYPES = ["SPIKE", "SPIKE30", "VEL1M"];
 let signalSeq = { SPIKE: {}, SPIKE30: {}, VEL1M: {} }; // type -> key -> count
+let lastSignalPct24h = {}; // key -> 24ч% на прошлом сигнале ЛЮБОГО типа по этой паре (для 🔥/⬇️)
 let telegramOn = false;
 let telegramToken = "";
 let telegramChatId = "";
@@ -820,6 +821,18 @@ function recordThresholdSignal(entry) {
     signalSeq[entry.type][entry.key] = (signalSeq[entry.type][entry.key] || 0) + 1;
     entry.seq = signalSeq[entry.type][entry.key];
   }
+  // 🔥/⬇️ справа в шапке сообщения — растёт или падает 24ч% пары от сигнала к сигналу
+  // (сравниваем с прошлым сигналом ЛЮБОГО типа по этой же паре, не только того же типа).
+  // На первом сигнале по паре сравнивать не с чем — без иконки.
+  let momentumIcon = "";
+  if (entry.pct24h !== null && entry.pct24h !== undefined && !isNaN(entry.pct24h)) {
+    const prevPct = lastSignalPct24h[entry.key];
+    if (prevPct !== undefined) {
+      if (entry.pct24h > prevPct) momentumIcon = " 🔥";
+      else if (entry.pct24h < prevPct) momentumIcon = " ⬇️";
+    }
+    lastSignalPct24h[entry.key] = entry.pct24h;
+  }
   thresholdLog.unshift(entry);
   if (thresholdLog.length > THRESHOLD_LOG_MAX) thresholdLog.length = THRESHOLD_LOG_MAX;
   dataDirty = true;
@@ -828,8 +841,10 @@ function recordThresholdSignal(entry) {
     ? `\n🟢 Объём 24ч: <b>$${fmtMoney(entry.curVol)}</b>` + (entry.pct24h !== null && entry.pct24h !== undefined && !isNaN(entry.pct24h)
         ? ` (${entry.pct24h >= 0 ? "+" : ""}${entry.pct24h.toFixed(2)}%)` : "")
     : "";
-  const dirLine = entry.dirPct !== null && entry.dirPct !== undefined && !isNaN(entry.dirPct)
-    ? `\nЦена: ${dot} ${entry.dirPct >= 0 ? "+" : ""}${entry.dirPct.toFixed(2)}%`
+  const hasPrice = entry.price !== null && entry.price !== undefined && !isNaN(entry.price);
+  const hasDir = entry.dirPct !== null && entry.dirPct !== undefined && !isNaN(entry.dirPct);
+  const priceLine = (hasPrice || hasDir)
+    ? `\nЦена: ${hasPrice ? "$" + fmtPrice(entry.price) : ""}${hasPrice && hasDir ? " · " : ""}${hasDir ? `${dot} ${entry.dirPct >= 0 ? "+" : ""}${entry.dirPct.toFixed(2)}%` : ""}`
     : "";
   const imbalLine = entry.imbal !== null && entry.imbal !== undefined && !isNaN(entry.imbal)
     ? ` · стакан ${Math.round(entry.imbal * 100)}% bid`
@@ -842,11 +857,12 @@ function recordThresholdSignal(entry) {
     : "";
   // Telegram не даёт красить произвольный текст в сообщениях бота (нет тега color) —
   // приближаем жёлтый/зелёный кружками-эмодзи (🟡 у сигнала, 🟢 у объёмов) плюс жирным
-  // шрифтом (parse_mode: HTML). 1-я строка — коротко: пара + сумма, всё остальное ниже.
+  // шрифтом (parse_mode: HTML). 1-я строка — коротко: пара + сумма (+ 🔥/⬇️ справа), всё
+  // остальное ниже.
   const amountStr = `${entry.amount >= 0 ? "+" : ""}$${fmtMoney(entry.amount)}`;
-  const pairAmountLine = `${entry.seq ? bigNumber(entry.seq) + " " : ""}<b>${entry.base}/${entry.quote} ${amountStr}</b>`;
+  const pairAmountLine = `${entry.seq ? bigNumber(entry.seq) + " " : ""}<b>${entry.base}/${entry.quote} ${amountStr}</b>${momentumIcon}`;
   const typeLine = `🟡 ${entry.type} (${entry.market})${entry.extra ? " · " + entry.extra : ""}`;
-  sendTelegram(`${pairAmountLine}\n${typeLine}${volLine}${dirLine}${imbalLine}${fundLine}${oiLine}`);
+  sendTelegram(`${pairAmountLine}\n${typeLine}${volLine}${priceLine}${imbalLine}${fundLine}${oiLine}`);
 }
 function sendTelegram(text) {
   if (!telegramOn || !telegramToken || !telegramChatId) return;
@@ -877,7 +893,7 @@ function buildPayload() {
     everInTop30, everInTop15,
     tradePlanOn, tradeStopPct, tradeTargetPct, tradeTimeHours, tradeEquity,
     openTrades, closedTrades,
-    thresholdLog, telegramOn, telegramToken, telegramChatId, signalSeq,
+    thresholdLog, telegramOn, telegramToken, telegramChatId, signalSeq, lastSignalPct24h,
     filtersCollapsed, totalTriggeredCount, totalEarlyCount,
     startTime, savedAt: Date.now(),
   };
@@ -928,6 +944,7 @@ function applyPayload(payload) {
     const isOldShape = saved && Object.keys(saved).every(k => k === "SPOT" || k === "USDT-M");
     if (saved && typeof saved === "object" && !isOldShape) signalSeq[t] = { ...saved };
   }
+  lastSignalPct24h = (payload.lastSignalPct24h && typeof payload.lastSignalPct24h === "object") ? { ...payload.lastSignalPct24h } : {};
   telegramOn = !!payload.telegramOn;
   telegramToken = payload.telegramToken || "";
   telegramChatId = payload.telegramChatId || "";
@@ -1753,7 +1770,7 @@ function handleTickerBatch(market, arr) {
         const alertEntry = {
           key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
           amount: rolling10, time: now, type: "SPIKE", extra: "10с",
-          curVol: parsed.curVol, pct24h: parsed.pct,
+          curVol: parsed.curVol, pct24h: parsed.pct, price: parsed.price,
           dirPct: pct1m !== null ? pct1m : (parsed.pct !== null && parsed.pct !== undefined && !isNaN(parsed.pct) ? parsed.pct : null),
           imbal,
           fundingPct: market.id === "USDT-M" && fundingRate[parsed.symbol] ? fundingRate[parsed.symbol].r * 100 : null,
@@ -1772,7 +1789,7 @@ function handleTickerBatch(market, arr) {
         const alertEntry = {
           key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
           amount: rolling30, time: now, type: "SPIKE30", extra: "30с",
-          curVol: parsed.curVol, pct24h: parsed.pct,
+          curVol: parsed.curVol, pct24h: parsed.pct, price: parsed.price,
           dirPct: pct1m !== null ? pct1m : (parsed.pct !== null && parsed.pct !== undefined && !isNaN(parsed.pct) ? parsed.pct : null),
           imbal,
           fundingPct: market.id === "USDT-M" && fundingRate[parsed.symbol] ? fundingRate[parsed.symbol].r * 100 : null,
@@ -1790,7 +1807,7 @@ function handleTickerBatch(market, arr) {
         const alertEntry = {
           key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
           amount: d1m, time: now, type: "VEL1M", extra: "Δ1м",
-          curVol: parsed.curVol, pct24h: parsed.pct,
+          curVol: parsed.curVol, pct24h: parsed.pct, price: parsed.price,
           dirPct: pct1m !== null ? pct1m : (parsed.pct !== null && parsed.pct !== undefined && !isNaN(parsed.pct) ? parsed.pct : null),
           imbal,
           fundingPct: market.id === "USDT-M" && fundingRate[parsed.symbol] ? fundingRate[parsed.symbol].r * 100 : null,
@@ -1811,7 +1828,7 @@ function handleTickerBatch(market, arr) {
         const alertEntry = {
           key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
           amount: d1m, time: now, type: "ACCEL", extra: `наклон ${accel >= 0 ? "+" : ""}$${fmtMoney(accel)}/мин`,
-          curVol: parsed.curVol, pct24h: parsed.pct,
+          curVol: parsed.curVol, pct24h: parsed.pct, price: parsed.price,
           dirPct: pct1m !== null ? pct1m : (parsed.pct !== null && parsed.pct !== undefined && !isNaN(parsed.pct) ? parsed.pct : null),
           imbal,
           fundingPct: market.id === "USDT-M" && fundingRate[parsed.symbol] ? fundingRate[parsed.symbol].r * 100 : null,
@@ -2386,6 +2403,7 @@ function resetBaseline() {
   totalTriggeredCount = 0;
   totalEarlyCount = 0;
   signalSeq = { SPIKE: {}, SPIKE30: {}, VEL1M: {} };
+  lastSignalPct24h = {};
   startTime = Date.now();
   clearState();
   render();
