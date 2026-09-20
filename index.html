@@ -715,13 +715,11 @@ let closedTrades = [];                   // закрытые сделки, са�
 // (отключено ранее по отдельному запросу) — это новый, независимый от него список.
 const THRESHOLD_LOG_MAX = 30;
 let thresholdLog = [];                   // последние срабатывания порогов, самые новые первыми
-// номер сигнала — отдельный счётчик на каждый (тип, рынок): SPIKE/SPIKE30/VEL1M
+// номер сигнала — отдельный счётчик на каждую конкретную пару (по entry.key = рынок:символ),
+// а не общий на весь рынок: чтобы "5" значило "пятый VEL1M именно по этой паре", а не
+// "пятый VEL1M вообще среди всех пар". Только для SPIKE/SPIKE30/VEL1M.
 const NUMBERED_SIGNAL_TYPES = ["SPIKE", "SPIKE30", "VEL1M"];
-let signalSeq = {
-  SPIKE: { SPOT: 0, "USDT-M": 0 },
-  SPIKE30: { SPOT: 0, "USDT-M": 0 },
-  VEL1M: { SPOT: 0, "USDT-M": 0 },
-};
+let signalSeq = { SPIKE: {}, SPIKE30: {}, VEL1M: {} }; // type -> key -> count
 let telegramOn = false;
 let telegramToken = "";
 let telegramChatId = "";
@@ -817,9 +815,10 @@ function bigNumber(n) {
   return String(n).split("").map(d => KEYCAP_DIGITS[d] || d).join("");
 }
 function recordThresholdSignal(entry) {
-  // Нумеруем SPIKE/SPIKE30/VEL1M, и отдельно для SPOT и для USDT-M — ACCEL без номера.
-  if (signalSeq[entry.type] && signalSeq[entry.type][entry.market] !== undefined) {
-    entry.seq = ++signalSeq[entry.type][entry.market];
+  // Нумеруем SPIKE/SPIKE30/VEL1M — счётчик свой на каждую пару (entry.key), не общий. ACCEL без номера.
+  if (signalSeq[entry.type]) {
+    signalSeq[entry.type][entry.key] = (signalSeq[entry.type][entry.key] || 0) + 1;
+    entry.seq = signalSeq[entry.type][entry.key];
   }
   thresholdLog.unshift(entry);
   if (thresholdLog.length > THRESHOLD_LOG_MAX) thresholdLog.length = THRESHOLD_LOG_MAX;
@@ -921,14 +920,13 @@ function applyPayload(payload) {
   openTrades = payload.openTrades || {};
   closedTrades = payload.closedTrades || [];
   thresholdLog = payload.thresholdLog || [];
-  // payload.vel1mSeq — старое поле (нумерация была только у VEL1M), переносим при апгрейде
-  signalSeq = {};
+  // старый формат signalSeq был { SPOT, "USDT-M" } (счётчик на весь рынок, не на пару) —
+  // если сохранённое значение в этой форме, не переносим его, просто считаем заново по парам.
+  signalSeq = { SPIKE: {}, SPIKE30: {}, VEL1M: {} };
   for (const t of NUMBERED_SIGNAL_TYPES) {
-    const saved = (payload.signalSeq && payload.signalSeq[t]) || (t === "VEL1M" ? payload.vel1mSeq : null);
-    signalSeq[t] = {
-      SPOT: (saved && typeof saved.SPOT === "number") ? saved.SPOT : 0,
-      "USDT-M": (saved && typeof saved["USDT-M"] === "number") ? saved["USDT-M"] : 0,
-    };
+    const saved = payload.signalSeq && payload.signalSeq[t];
+    const isOldShape = saved && Object.keys(saved).every(k => k === "SPOT" || k === "USDT-M");
+    if (saved && typeof saved === "object" && !isOldShape) signalSeq[t] = { ...saved };
   }
   telegramOn = !!payload.telegramOn;
   telegramToken = payload.telegramToken || "";
@@ -2387,11 +2385,7 @@ function resetBaseline() {
   shelfAlerts = [];
   totalTriggeredCount = 0;
   totalEarlyCount = 0;
-  signalSeq = {
-    SPIKE: { SPOT: 0, "USDT-M": 0 },
-    SPIKE30: { SPOT: 0, "USDT-M": 0 },
-    VEL1M: { SPOT: 0, "USDT-M": 0 },
-  };
+  signalSeq = { SPIKE: {}, SPIKE30: {}, VEL1M: {} };
   startTime = Date.now();
   clearState();
   render();
