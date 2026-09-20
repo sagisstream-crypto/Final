@@ -182,10 +182,6 @@
     width: 280px; border-left: 1px solid #1e2b1e; background: #0d120d;
     display: flex; flex-direction: column; flex-shrink: 0;
   }
-  .alerts-header {
-    padding: 8px 12px; border-bottom: 1px solid #1e2b1e; font-size: 10px;
-    color: #5a6b5a; letter-spacing: 0.05em; display: flex; align-items: center; gap: 6px;
-  }
   .shelf-panel { border: 1px solid #4a3a14; background: #1a1408; border-radius: 4px; margin: 0 12px 8px; padding: 6px 8px; }
   .shelf-header { font-size: 11px; font-weight: 700; color: #ffd85e; margin-bottom: 4px; }
   .shelf-list { display: flex; flex-wrap: wrap; gap: 6px; max-height: 120px; overflow-y: auto; }
@@ -206,27 +202,33 @@
   .trade-closed-item { display: flex; align-items: center; gap: 8px; background: #0f1a24; border: 1px solid #1a2a3a; border-radius: 3px; padding: 4px 8px; }
   .trade-closed-item .t-sym { font-size: 11px; font-weight: 600; color: #8aa8bf; min-width: 76px; }
   .trade-closed-item .t-time { font-size: 9px; color: #4a6478; margin-left: auto; }
-  /* только телефон (см. @media max-width:900px ниже) — на ПК сканер остаётся как был, без этой панели */
-  .pair-columns-panel { display: none; border: 1px solid #1a3a3a; background: #081414; border-radius: 4px; margin: 8px 8px 0; padding: 6px 8px; }
-  .pair-columns-header { font-size: 11px; font-weight: 700; color: #4adede; margin-bottom: 4px; }
-  .pair-columns-summary { color: #3a8a8a; font-weight: 400; }
-  .pair-columns-empty { font-size: 11px; color: #2a6a6a; padding: 2px 0; }
-  .pair-columns-scroll { display: flex; gap: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; scroll-snap-type: x proximity; padding-bottom: 2px; }
-  .pair-column { flex: 0 0 138px; scroll-snap-align: start; border: 1px solid #1a3a3a; border-radius: 3px; background: #0d1a1a; display: flex; flex-direction: column; max-height: 220px; }
-  .pair-column-head {
-    font-size: 10.5px; font-weight: 600; color: #4adede; padding: 4px 6px; border-bottom: 1px solid #1a3a3a;
-    position: sticky; top: 0; background: #0f1f1f; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  /* только телефон (см. @media max-width:900px ниже) — на ПК сканер остаётся как был, без этой панели.
+     Занимает место старого "🔔 ЖУРНАЛ СИГНАЛОВ" (убран целиком, он всё равно был мёртвый). */
+  .pair-columns-panel {
+    display: none; flex: 1; min-height: 0; flex-direction: column;
+    background: #081414; border-top: 1px solid #1a3a3a;
   }
-  .pair-column-head .pcc-market { font-weight: 400; font-size: 9px; color: #2a6a6a; }
-  .pair-column-body { overflow-y: auto; padding: 4px 6px; display: flex; flex-direction: column; gap: 5px; }
-  .pair-column-card { border-left: 2px solid #4adede; padding-left: 5px; cursor: pointer; }
-  .pair-column-card:hover { border-left-color: #b8f5f5; }
-  .pcc-top { display: flex; justify-content: space-between; gap: 4px; }
-  .pcc-amount { font-size: 11px; font-weight: 600; color: #ffb454; }
-  .pcc-time { font-size: 9px; color: #2a6a6a; }
-  .pcc-price { font-size: 10px; color: #8ab8b8; }
-  .pcc-bottom { display: flex; justify-content: space-between; gap: 4px; font-size: 9.5px; }
+  .pair-columns-header {
+    padding: 8px 12px; border-bottom: 1px solid #1a3a3a; font-size: 10px;
+    color: #4adede; letter-spacing: 0.05em; display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+  }
+  .pair-columns-summary { color: #3a8a8a; font-weight: 400; }
+  .pair-columns-empty { font-size: 11px; color: #2a6a6a; padding: 24px 12px; text-align: center; }
+  .pair-columns-scroll { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .pair-group + .pair-group { border-top: 1px solid #1a3a3a; }
+  .pair-group-head {
+    padding: 6px 12px; font-size: 12px; font-weight: 600; color: #4adede;
+    background: #0d1a1a; position: sticky; top: 0; display: flex; align-items: baseline; gap: 6px;
+  }
+  .pair-group-head .pcc-market { font-weight: 400; font-size: 9px; color: #2a6a6a; }
+  .pair-group-table { width: 100%; border-collapse: collapse; }
+  .pair-group-table tr { cursor: pointer; border-bottom: 1px solid #10201f; }
+  .pair-group-table tr:hover { background: #0d1a1a; }
+  .pair-group-table td { padding: 5px 12px; font-size: 11px; white-space: nowrap; }
+  .pcc-amount { font-weight: 600; color: #ffb454; }
+  .pcc-price { color: #8ab8b8; }
   .pcc-24h { color: #3a8a8a; }
+  .pcc-time { color: #2a6a6a; font-size: 9px; text-align: right; }
   .threshold-panel { border: 1px solid #4a2a14; background: #1a0f08; border-radius: 4px; margin: 0 12px 8px; padding: 6px 8px; }
   .threshold-header { font-size: 11px; font-weight: 700; color: #ff9d4a; margin-bottom: 4px; }
   .threshold-summary { color: #b37a4a; font-weight: 400; }
@@ -240,57 +242,11 @@
   .threshold-item .th-vol { font-size: 10px; color: #b37a4a; }
   .threshold-item .th-time { font-size: 9px; color: #7a5a3a; }
   #telegram-btn.paused { color: #5ec8ff; border-color: #1a3a4a; background: #0a1a1f; }
-  .alerts-tabs {
-    display: flex; border-bottom: 1px solid #1e2b1e;
-  }
-  .alerts-tabs button {
-    flex: 1; background: transparent; border: none; border-right: 1px solid #1e2b1e;
-    color: #5a6b5a; font-family: inherit; font-size: 10px; padding: 7px 4px; cursor: pointer;
-  }
-  .alerts-tabs button:last-child { border-right: none; }
-  .alerts-tabs button.active { background: #1a2e1a; color: #5eff8f; }
-  .alerts-tabs button.early-tab.active { background: #1e1a10; color: #ffd85e; }
-  .alerts-list { flex: 1; overflow: auto; }
-  .alert-item { padding: 8px 12px; border-bottom: 1px solid #141a14; font-size: 11px; cursor: pointer; border-left: 3px solid transparent; }
-  .alert-item.market-SPOT { border-left-color: #7ab8ff; }
-  .alert-item.market-SPOT .alert-sym { color: #7ab8ff; }
-  .alert-item.market-USDT-M { border-left-color: #ffb454; }
-  .alert-item.market-USDT-M .alert-sym { color: #ffb454; }
-  .alert-item.type-VEL { border-left-color: #ffd85e; }
-  .alert-item.type-ACCEL { border-left-color: #ff9f43; }
-  .alert-item.type-RANK { border-left-color: #a29bfe; }
-  .alert-item.type-TOP { border-left-color: #fd79a8; }
-  .alert-item:hover { background: #10160f; }
   tr.row-flash { animation: rowFlash 1.4s ease-out; }
   @keyframes rowFlash {
     0% { background: #2a3a1a; }
     100% { background: transparent; }
   }
-  .alert-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
-  .alert-sym { color: #e4ece4; font-weight: 600; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
-  .alert-seq { font-size: 9px; font-weight: 400; color: #5a6b5a; background: #131a13; border: 1px solid #223022; border-radius: 3px; padding: 1px 4px; }
-  .alert-type {
-    font-size: 8px; font-weight: 600; letter-spacing: 0.04em;
-    padding: 1px 5px; border-radius: 2px; border: 1px solid;
-  }
-  .alert-type.SPIKE { color: #ffb454; border-color: #4a3a1e; background: #1e1810; }
-  .alert-type.VEL1M { color: #ffd85e; border-color: #4a3a1e; background: #1e1a10; }
-  .alert-type.ACCEL { color: #ff9f43; border-color: #4a2a1e; background: #1e1410; }
-  .alert-type.RANK { color: #a29bfe; border-color: #3a2a4a; background: #16101e; }
-  .alert-type.TOP30 { color: #fd79a8; border-color: #4a1e3a; background: #1e1018; }
-  .alert-type.TOP15 { color: #ff6b9d; border-color: #4a1e3a; background: #1e1018; }
-  .alert-type.RVOL { color: #55efc4; border-color: #1e4a3a; background: #101e18; }
-  .alert-type.FAST30 { color: #74b9ff; border-color: #1e3a4a; background: #10181e; }
-  .alert-type.NRATE { color: #81ecec; border-color: #1e4a4a; background: #101e1e; }
-  .alert-type.BIGPRINT { color: #ffeaa7; border-color: #4a3a1e; background: #1e1a10; }
-  .alert-type.IMBAL { color: #a29bfe; border-color: #3a2a4a; background: #16101e; }
-  .alert-type.VWAPX { color: #55efc4; border-color: #1e4a3a; background: #101e18; }
-  .alert-type.RANGEBRK { color: #fab1a0; border-color: #4a2a1e; background: #1e1410; }
-  .alert-type.QUIET { color: #dfe6e9; border-color: #2a2a2a; background: #141414; }
-  .alert-type.SIGNAL { color: #0a0e0a; background: #5eff8f; border-color: #5eff8f; font-weight: 700; }
-  .alert-delta { color: #ffb454; font-weight: 600; white-space: nowrap; }
-  .alert-bottom { display: flex; justify-content: space-between; color: #5a6b5a; margin-top: 3px; }
-  .alerts-empty { font-size: 11px; color: #3f4f3f; padding: 24px 12px; text-align: center; line-height: 1.5; }
   .footer {
     border-top: 1px solid #1e2b1e; background: #0d120d; padding: 6px 16px;
     font-size: 10px; color: #3f4f3f; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px;
@@ -303,7 +259,6 @@
     .body-wrap { flex-direction: column; overflow: visible; flex: none; }
     .table-wrap { max-height: none; overflow: visible; }
     .alerts-panel { width: 100%; border-left: none; border-top: 1px solid #1e2b1e; max-height: none; overflow: visible; }
-    .alerts-list { overflow: visible; }
     thead { position: static; }
   }
 
@@ -362,10 +317,9 @@
     body.pane-table .alerts-panel { display: none; }
     body.pane-alerts .table-wrap { display: none; }
     body.pane-alerts .alerts-panel { display: flex; }
-    .alerts-list { overflow: auto; -webkit-overflow-scrolling: touch; }
     td, th { padding: 8px 6px; }
     .del-btn { width: 28px; height: 28px; }
-    .pair-columns-panel { display: block; }
+    .pair-columns-panel { display: flex; }
   }
 
 </style>
@@ -488,7 +442,7 @@
   </div>
   <div class="filters-hint">
     <b>⭐ SCORE (0–100)</b> — главный сигнал: складывает RVOL (объём против средней минуты суток), Δ% цены за 1м, пробой дневного хая, положение к VWAP, скачок среднего чека сделки, перекос стакана, долю тейкер-покупок и форму последней 1m свечи горячего потока. Стреляет только при score ≥ порога И растущей цене. «ТОЛЬКО SCORE» глушит старые пороговые сигналы.
-    <b>Пороговые:</b> SPIKE (10с), SPIKE30 (30с), VEL1M, ACCEL (наклон за 90с) — каждый по своему $ порогу из шапки. <b>🎯 Пороговый сигнал</b> — пришпиленная лента наверху: последние срабатывания этих четырёх сигналов, отдельно от старого нижнего журнала. <b>🪤 Тихая полка</b> — первый вынос у пары, которая долго стояла ровно.
+    <b>Пороговые:</b> SPIKE (10с), SPIKE30 (30с), VEL1M, ACCEL (наклон за 90с) — каждый по своему $ порогу из шапки. <b>🎯 Пороговый сигнал</b> — пришпиленная лента наверху: последние срабатывания этих четырёх сигналов. <b>📶 По парам (VEL1M)</b> — на телефоне, во вкладке «СИГНАЛЫ»: та же лента, но сгруппированная по паре — своя таблица на каждую, а не общий список вперемешку. <b>🪤 Тихая полка</b> — первый вынос у пары, которая долго стояла ровно.
     <b>🔥 Тейкер-поток</b> — kline_1m по 12 самым горячим парам на каждом рынке, даёт долю покупок и форму свечи. <b>💾 CSV</b> — выгрузка всех сигналов с признаками и MFE/MAE для разбора.
     <b>📐 План сделки</b> — встроенная стратегия из 12-месячного бэктеста (research/binance_pump_patterns): на каждый ⭐ SCORE-сигнал заводится виртуальная позиция (стоп/цель/тайм-аут, риск 1% капитала на сделку, комиссия 0.10% за круг) и ведётся сама, без участия пользователя — это не автоторговля и не финансовая рекомендация, а прозрачная проверка сигнала теми же правилами, что тестировались на истории. Не более одной позиции на пару одновременно.
     <b>📨 Telegram</b> — впиши токен бота (у @BotFather) и chat_id, нажми ТЕСТ: если тестовое сообщение дошло, рассылка пороговых сигналов (🎯) включится сама. Токен и chat_id хранятся только в этом браузере (IndexedDB), никуда, кроме Telegram, не уходят.
@@ -538,14 +492,6 @@
       <div class="pair-columns-scroll" id="pair-columns-scroll">
         <div class="pair-columns-empty">Пока нет.</div>
       </div>
-    </div>
-    <div class="alerts-header">🔔 ЖУРНАЛ СИГНАЛОВ</div>
-    <div class="alerts-tabs" id="alerts-tabs">
-      <button data-tab="all" class="active">ВСЕ</button>
-      <button data-tab="early" class="early-tab">РАННИЕ</button>
-    </div>
-    <div class="alerts-list" id="alerts-list">
-      <div class="alerts-empty">Здесь появятся сигналы: ⭐ SCORE, SPIKE, VEL1M, ACCEL.</div>
     </div>
   </div>
 </div>
@@ -646,7 +592,6 @@ let soundOn = true;
 let paused = false;
 let earlyOnlyMode = false;   // table shows only pairs with recent early signals
 let filtersCollapsed = true; // фильтры/пороги/панели свёрнуты по умолчанию — таблица сразу на всю страницу
-let alertsTab = "all";       // "all" | "early"
 
 let rows = {};
 let sessionBase = {};
@@ -655,11 +600,6 @@ let priceBase = {};
 let doubleLevel = {};
 let lastFired = {};          // key -> { SPIKE:ts, VEL1M:ts, ACCEL:ts, RANK:ts, TOP30:ts, TOP15:ts }
 let signalCount = {};
-// TRIGGERED/EARLY в шапке считались от alertsLog.length — alertsLog никогда не
-// растёт (pushAlert его не пишет, "не копить журнал" было отдельным решением
-// ранее), поэтому счётчики в шапке всегда показывали 0, даже когда сигналы
-// реально срабатывали (пороговые уходили в 🎯-ленту и Telegram, ⭐ SCORE — в
-// уведомление). Это не имеет отношения к Telegram — считаем отдельно и честно.
 let totalTriggeredCount = 0;  // сколько сигналов всего сработало (любых типов)
 let totalEarlyCount = 0;      // из них — «ранних» (VEL1M/ACCEL/SIGNAL)
 let history = {};            // key -> [{t, vol}, ...]
@@ -669,8 +609,6 @@ const HISTORY_1M_MS = 60000;
 const HISTORY_2M_MS = 120000;
 const HISTORY_MAX_AGE_MS = 150000; // keep ~2.5 min
 const ANCHOR_TOLERANCE_MS = 8000;
-let alertsLog = [];
-const ALERTS_LOG_MAX = 400;
 let lastPollAt = {};
 
 let outcomes = [];
@@ -739,8 +677,8 @@ let openTrades = {};                     // key -> открытый план с�
 let closedTrades = [];                   // закрытые сделки, самые новые первыми
 
 // ---- пороговый сигнал: отдельная пришпиленная лента для SPIKE/VEL1M/ACCEL,
-// в самом верху страницы. Старый "🔔 ЖУРНАЛ СИГНАЛОВ" внизу на pushAlert() не пишет
-// (отключено ранее по отдельному запросу) — это новый, независимый от него список.
+// в самом верху страницы. Старый "🔔 ЖУРНАЛ СИГНАЛОВ" внизу был мёртв (pushAlert()
+// его не писал) и полностью убран из UI — это новый, независимый список.
 const THRESHOLD_LOG_MAX = 30;
 let thresholdLog = [];                   // последние срабатывания порогов, самые новые первыми
 // номер сигнала — отдельный счётчик на каждую конкретную пару (по entry.key = рынок:символ),
@@ -812,7 +750,6 @@ function purgeKey(key) {
   delete atsHistory[key]; delete spreadHistory[key]; delete imbalHistory[key];
   delete dayHigh[key]; delete dayHighAt[key]; delete dayLow[key]; delete takerRatio[key]; delete candleShape[key];
   shelfAlerts = shelfAlerts.filter(e => e.key !== key);
-  alertsLog = alertsLog.filter(e => e.key !== key);
   delete outcomesByKey[key];
   delete openTrades[key];
 }
@@ -938,7 +875,6 @@ function buildPayload() {
   // режем outcomes, чтобы не раздувать базу на телефоне
   return {
     rows, sessionBase, baseTime, priceBase, doubleLevel, lastFired, signalCount,
-    alertsLog: [],
     shelfAlerts: [],
     outcomes: [],
     threshold, threshold30, threshold1m, maxInitialPrice, maxInitialVolume,
@@ -961,7 +897,6 @@ function applyPayload(payload) {
   doubleLevel = payload.doubleLevel || {};
   lastFired = payload.lastFired || {};
   signalCount = payload.signalCount || {};
-  alertsLog = [];
   shelfAlerts = [];
   outcomes = [];
   outcomesByKey = {};
@@ -1251,8 +1186,6 @@ function markFired(key, type) {
   ensureLastFired(key)[type] = Date.now();
 }
 function pushAlert(entry) {
-  // журнал (alertsLog) сознательно не копим — не писать на диск лишнее, по
-  // отдельному решению ранее. Но счётчики в шапке считать обязаны честно.
   signalCount[entry.key] = (signalCount[entry.key] || 0) + 1;
   totalTriggeredCount++;
   if (isEarlyType(entry.type)) totalEarlyCount++;
@@ -2158,29 +2091,25 @@ function renderPairColumns() {
     const list = pairSignalLog[key];
     if (!list || !list.length) return "";
     const head = list[0];
-    const cards = list.map(a => {
+    const rows = list.map(a => {
       const hasDir = a.dirPct !== null && a.dirPct !== undefined && !isNaN(a.dirPct);
       const dirCls = hasDir ? (a.dirPct >= 0 ? "pct-pos" : "pct-neg") : "";
-      const dirText = hasDir ? `${directionEmoji(a.dirPct)} ${a.dirPct >= 0 ? "+" : ""}${a.dirPct.toFixed(2)}%` : "";
+      const dirText = hasDir ? `${directionEmoji(a.dirPct)} ${a.dirPct >= 0 ? "+" : ""}${a.dirPct.toFixed(2)}%` : "—";
       const hasPrice = a.price !== null && a.price !== undefined && !isNaN(a.price);
       const has24h = a.pct24h !== null && a.pct24h !== undefined && !isNaN(a.pct24h);
       return `
-        <div class="pair-column-card" data-key="${a.key}" title="Показать пару в таблице">
-          <div class="pcc-top">
-            <span class="pcc-amount">+$${fmtMoney(a.amount)}</span>
-            <span class="pcc-time">${fmtTimeMinusHour(a.time)}</span>
-          </div>
-          ${hasPrice ? `<div class="pcc-price">$${fmtPrice(a.price)}</div>` : ""}
-          <div class="pcc-bottom">
-            ${dirText ? `<span class="${dirCls}">${dirText}</span>` : ""}
-            ${has24h ? `<span class="pcc-24h">24ч ${a.pct24h >= 0 ? "+" : ""}${a.pct24h.toFixed(2)}%</span>` : ""}
-          </div>
-        </div>`;
+        <tr data-key="${a.key}" title="Показать пару в таблице">
+          <td class="pcc-amount">+$${fmtMoney(a.amount)}</td>
+          <td class="pcc-price">${hasPrice ? "$" + fmtPrice(a.price) : "—"}</td>
+          <td class="${dirCls}">${dirText}</td>
+          <td class="pcc-24h">${has24h ? (a.pct24h >= 0 ? "+" : "") + a.pct24h.toFixed(2) + "%" : "—"}</td>
+          <td class="pcc-time">${fmtTimeMinusHour(a.time)}</td>
+        </tr>`;
     }).join("");
     return `
-      <div class="pair-column" data-key="${key}">
-        <div class="pair-column-head">${head.base}/${head.quote} <span class="pcc-market">${head.market}</span></div>
-        <div class="pair-column-body">${cards}</div>
+      <div class="pair-group" data-key="${key}">
+        <div class="pair-group-head">${head.base}/${head.quote} <span class="pcc-market">${head.market}</span></div>
+        <table class="pair-group-table"><tbody>${rows}</tbody></table>
       </div>`;
   }).join("");
 }
@@ -2372,33 +2301,6 @@ function render() {
   document.getElementById("triggered-count").textContent = totalTriggeredCount;
   document.getElementById("early-count").textContent = totalEarlyCount;
 
-  // alerts list
-  const alertsList = document.getElementById("alerts-list");
-  let shownAlerts = alertsLog;
-  if (alertsTab === "early") shownAlerts = alertsLog.filter(a => isEarlyType(a.type));
-
-  if (shownAlerts.length === 0) {
-    alertsList.innerHTML = `<div class="alerts-empty">${alertsTab === "early"
-      ? "Запись сигналов отключена."
-      : "Запись сигналов отключена."}</div>`;
-  } else {
-    alertsList.innerHTML = shownAlerts.map(a => `
-      <div class="alert-item market-${a.market} type-${a.type || "SPIKE"}" data-key="${a.key}" title="Показать пару в таблице">
-        <div class="alert-top">
-          <span class="alert-sym">
-            <span class="alert-type ${a.type || "SPIKE"}">${a.type || "SPIKE"}</span>
-            ${a.base}/${a.quote}
-            <span class="alert-seq">#${a.seq || "?"}</span>
-          </span>
-          <span class="alert-delta">${a.amount != null ? "+$" + fmtMoney(a.amount) : ""}</span>
-        </div>
-        <div class="alert-bottom">
-          <span>${a.market}${a.extra ? " · " + a.extra : ""}</span>
-          <span>${fmtTimeMinusHour(a.time)}</span>
-        </div>
-      </div>
-    `).join("");
-  }
 
   // shelf (тихая полка) — свой список, отдельно от общего журнала, всегда на виду
   const shelfList = document.getElementById("shelf-list");
@@ -2456,11 +2358,6 @@ function jumpToPair(key) {
   void el.offsetWidth;
   el.classList.add("row-flash");
 }
-document.getElementById("alerts-list").addEventListener("click", (e) => {
-  const item = e.target.closest(".alert-item");
-  if (!item) return;
-  jumpToPair(item.dataset.key);
-});
 document.getElementById("shelf-list").addEventListener("click", (e) => {
   const item = e.target.closest(".shelf-item");
   if (!item) return;
@@ -2472,7 +2369,7 @@ document.getElementById("threshold-list").addEventListener("click", (e) => {
   jumpToPair(item.dataset.key);
 });
 document.getElementById("pair-columns-scroll").addEventListener("click", (e) => {
-  const item = e.target.closest(".pair-column-card");
+  const item = e.target.closest("tr[data-key]");
   if (!item) return;
   jumpToPair(item.dataset.key);
 });
@@ -2485,7 +2382,6 @@ function resetBaseline() {
   doubleLevel = {};
   lastFired = {};
   signalCount = {};
-  alertsLog = [];
   history = {};
   rankSnapshot = {};
   lastComputedRanks = {};
@@ -2785,14 +2681,6 @@ document.getElementById("early-only-btn").addEventListener("click", (e) => {
   e.target.classList.toggle("paused", earlyOnlyMode);
   render();
 });
-document.getElementById("alerts-tabs").addEventListener("click", (e) => {
-  if (e.target.tagName !== "BUTTON") return;
-  document.querySelectorAll("#alerts-tabs button").forEach(b => b.classList.remove("active"));
-  e.target.classList.add("active");
-  alertsTab = e.target.dataset.tab;
-  render();
-});
-
 // wake lock
 let wakeLock = null;
 const wakelockBtn = document.getElementById("wakelock-btn");
