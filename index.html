@@ -206,7 +206,8 @@
   .trade-closed-item { display: flex; align-items: center; gap: 8px; background: #0f1a24; border: 1px solid #1a2a3a; border-radius: 3px; padding: 4px 8px; }
   .trade-closed-item .t-sym { font-size: 11px; font-weight: 600; color: #8aa8bf; min-width: 76px; }
   .trade-closed-item .t-time { font-size: 9px; color: #4a6478; margin-left: auto; }
-  .pair-columns-panel { border: 1px solid #1a3a3a; background: #081414; border-radius: 4px; margin: 8px 8px 0; padding: 6px 8px; }
+  /* только телефон (см. @media max-width:900px ниже) — на ПК сканер остаётся как был, без этой панели */
+  .pair-columns-panel { display: none; border: 1px solid #1a3a3a; background: #081414; border-radius: 4px; margin: 8px 8px 0; padding: 6px 8px; }
   .pair-columns-header { font-size: 11px; font-weight: 700; color: #4adede; margin-bottom: 4px; }
   .pair-columns-summary { color: #3a8a8a; font-weight: 400; }
   .pair-columns-empty { font-size: 11px; color: #2a6a6a; padding: 2px 0; }
@@ -364,6 +365,7 @@
     .alerts-list { overflow: auto; -webkit-overflow-scrolling: touch; }
     td, th { padding: 8px 6px; }
     .del-btn { width: 28px; height: 28px; }
+    .pair-columns-panel { display: block; }
   }
 
 </style>
