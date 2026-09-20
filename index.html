@@ -206,6 +206,26 @@
   .trade-closed-item { display: flex; align-items: center; gap: 8px; background: #0f1a24; border: 1px solid #1a2a3a; border-radius: 3px; padding: 4px 8px; }
   .trade-closed-item .t-sym { font-size: 11px; font-weight: 600; color: #8aa8bf; min-width: 76px; }
   .trade-closed-item .t-time { font-size: 9px; color: #4a6478; margin-left: auto; }
+  .pair-columns-panel { border: 1px solid #1a3a3a; background: #081414; border-radius: 4px; margin: 8px 8px 0; padding: 6px 8px; }
+  .pair-columns-header { font-size: 11px; font-weight: 700; color: #4adede; margin-bottom: 4px; }
+  .pair-columns-summary { color: #3a8a8a; font-weight: 400; }
+  .pair-columns-empty { font-size: 11px; color: #2a6a6a; padding: 2px 0; }
+  .pair-columns-scroll { display: flex; gap: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; scroll-snap-type: x proximity; padding-bottom: 2px; }
+  .pair-column { flex: 0 0 138px; scroll-snap-align: start; border: 1px solid #1a3a3a; border-radius: 3px; background: #0d1a1a; display: flex; flex-direction: column; max-height: 220px; }
+  .pair-column-head {
+    font-size: 10.5px; font-weight: 600; color: #4adede; padding: 4px 6px; border-bottom: 1px solid #1a3a3a;
+    position: sticky; top: 0; background: #0f1f1f; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .pair-column-head .pcc-market { font-weight: 400; font-size: 9px; color: #2a6a6a; }
+  .pair-column-body { overflow-y: auto; padding: 4px 6px; display: flex; flex-direction: column; gap: 5px; }
+  .pair-column-card { border-left: 2px solid #4adede; padding-left: 5px; cursor: pointer; }
+  .pair-column-card:hover { border-left-color: #b8f5f5; }
+  .pcc-top { display: flex; justify-content: space-between; gap: 4px; }
+  .pcc-amount { font-size: 11px; font-weight: 600; color: #ffb454; }
+  .pcc-time { font-size: 9px; color: #2a6a6a; }
+  .pcc-price { font-size: 10px; color: #8ab8b8; }
+  .pcc-bottom { display: flex; justify-content: space-between; gap: 4px; font-size: 9.5px; }
+  .pcc-24h { color: #3a8a8a; }
   .threshold-panel { border: 1px solid #4a2a14; background: #1a0f08; border-radius: 4px; margin: 0 12px 8px; padding: 6px 8px; }
   .threshold-header { font-size: 11px; font-weight: 700; color: #ff9d4a; margin-bottom: 4px; }
   .threshold-summary { color: #b37a4a; font-weight: 400; }
@@ -511,6 +531,12 @@
     </table>
   </div>
   <div class="alerts-panel">
+    <div class="pair-columns-panel" id="pair-columns-panel">
+      <div class="pair-columns-header">📶 ПО ПАРАМ (VEL1M) <span class="pair-columns-summary" id="pair-columns-summary"></span></div>
+      <div class="pair-columns-scroll" id="pair-columns-scroll">
+        <div class="pair-columns-empty">Пока нет.</div>
+      </div>
+    </div>
     <div class="alerts-header">🔔 ЖУРНАЛ СИГНАЛОВ</div>
     <div class="alerts-tabs" id="alerts-tabs">
       <button data-tab="all" class="active">ВСЕ</button>
@@ -721,6 +747,31 @@ let thresholdLog = [];                   // последние срабатыв�
 const NUMBERED_SIGNAL_TYPES = ["SPIKE", "SPIKE30", "VEL1M"];
 let signalSeq = { SPIKE: {}, SPIKE30: {}, VEL1M: {} }; // type -> key -> count
 let lastSignalPct24h = {}; // key -> 24ч% на прошлом сигнале ЛЮБОГО типа по этой паре (для 🔥/⬇️)
+
+// ---- "ПО ПАРАМ" — альтернатива Telegram-ленте: не общий поток вперемешку, а своя
+// колонка на каждую пару, в ней снизу вверх видно, как менялась цена/объём именно
+// у неё. Пока только VEL1M — чтобы список колонок не захламлялся; чтобы вернуть
+// ACCEL, достаточно дописать "ACCEL" в PAIR_VIEW_TYPES, больше ничего менять не нужно.
+const PAIR_VIEW_TYPES = ["VEL1M"];
+const PAIR_COLUMN_MAX = 12;      // сколько последних активных пар держим одновременно
+const PAIR_COLUMN_LOG_MAX = 20;  // сколько карточек храним в каждой колонке
+let pairSignalLog = {};          // key -> [entry,...] новые сверху
+let pairColumnOrder = [];        // [key,...] недавно активные первыми
+function recordPairSignal(entry) {
+  if (!PAIR_VIEW_TYPES.includes(entry.type)) return;
+  if (!pairSignalLog[entry.key]) pairSignalLog[entry.key] = [];
+  pairSignalLog[entry.key].unshift(entry);
+  if (pairSignalLog[entry.key].length > PAIR_COLUMN_LOG_MAX) pairSignalLog[entry.key].length = PAIR_COLUMN_LOG_MAX;
+  const idx = pairColumnOrder.indexOf(entry.key);
+  if (idx !== -1) pairColumnOrder.splice(idx, 1);
+  pairColumnOrder.unshift(entry.key);
+  if (pairColumnOrder.length > PAIR_COLUMN_MAX) {
+    const dropped = pairColumnOrder.splice(PAIR_COLUMN_MAX);
+    for (const k of dropped) delete pairSignalLog[k];
+  }
+  dataDirty = true;
+}
+
 let telegramOn = false;
 let telegramToken = "";
 let telegramChatId = "";
@@ -894,6 +945,7 @@ function buildPayload() {
     tradePlanOn, tradeStopPct, tradeTargetPct, tradeTimeHours, tradeEquity,
     openTrades, closedTrades,
     thresholdLog, telegramOn, telegramToken, telegramChatId, signalSeq, lastSignalPct24h,
+    pairSignalLog, pairColumnOrder,
     filtersCollapsed, totalTriggeredCount, totalEarlyCount,
     startTime, savedAt: Date.now(),
   };
@@ -945,6 +997,8 @@ function applyPayload(payload) {
     if (saved && typeof saved === "object" && !isOldShape) signalSeq[t] = { ...saved };
   }
   lastSignalPct24h = (payload.lastSignalPct24h && typeof payload.lastSignalPct24h === "object") ? { ...payload.lastSignalPct24h } : {};
+  pairSignalLog = (payload.pairSignalLog && typeof payload.pairSignalLog === "object") ? payload.pairSignalLog : {};
+  pairColumnOrder = Array.isArray(payload.pairColumnOrder) ? payload.pairColumnOrder : [];
   telegramOn = !!payload.telegramOn;
   telegramToken = payload.telegramToken || "";
   telegramChatId = payload.telegramChatId || "";
@@ -1778,6 +1832,7 @@ function handleTickerBatch(market, arr) {
         };
         pushAlert(alertEntry);
         recordThresholdSignal(alertEntry);
+        recordPairSignal(alertEntry);
         notify(`⚡ SPIKE: ${parsed.base}/${parsed.quote}`, `+$${fmtMoney(rolling10)} за 10с (${market.id})`);
         startOutcome(key, market.id, parsed, now, "SPIKE", { rvol, pct1m, ats, atsMedian, imbal, spreadPct, vwapDev, rng, taker, d1m, score: scoreObj.score, parts: scoreObj.parts });
       }
@@ -1797,6 +1852,7 @@ function handleTickerBatch(market, arr) {
         };
         pushAlert(alertEntry);
         recordThresholdSignal(alertEntry);
+        recordPairSignal(alertEntry);
         notify(`⚡ SPIKE30: ${parsed.base}/${parsed.quote}`, `+$${fmtMoney(rolling30)} за 30с (${market.id})`);
         startOutcome(key, market.id, parsed, now, "SPIKE30", { rvol, pct1m, ats, atsMedian, imbal, spreadPct, vwapDev, rng, taker, d1m, score: scoreObj.score, parts: scoreObj.parts });
       }
@@ -1815,6 +1871,7 @@ function handleTickerBatch(market, arr) {
         };
         pushAlert(alertEntry);
         recordThresholdSignal(alertEntry);
+        recordPairSignal(alertEntry);
         earlyBeep();
         notify(`🚀 VEL1M: ${parsed.base}/${parsed.quote}`, `+$${fmtMoney(d1m)} за 1м (${market.id})`);
         startOutcome(key, market.id, parsed, now, "VEL1M", { rvol, pct1m, ats, atsMedian, imbal, spreadPct, vwapDev, rng, taker, d1m, score: scoreObj.score, parts: scoreObj.parts });
@@ -1836,6 +1893,7 @@ function handleTickerBatch(market, arr) {
         };
         pushAlert(alertEntry);
         recordThresholdSignal(alertEntry);
+        recordPairSignal(alertEntry);
         earlyBeep();
         notify(`🚀 ACCEL: ${parsed.base}/${parsed.quote}`, `наклон $${fmtMoney(accel)}/мин · Δ1м +$${fmtMoney(d1m)} (${market.id})`);
         startOutcome(key, market.id, parsed, now, "ACCEL", { rvol, pct1m, ats, atsMedian, imbal, spreadPct, vwapDev, rng, taker, d1m, score: scoreObj.score, parts: scoreObj.parts });
@@ -2085,6 +2143,45 @@ function renderTradePanel() {
 
 // ---------- пороговый сигнал: рендер ----------
 const THRESHOLD_TYPE_LABEL = { SPIKE: "10с", SPIKE30: "30с", VEL1M: "Δ1м", ACCEL: "наклон" };
+function renderPairColumns() {
+  const summaryEl = document.getElementById("pair-columns-summary");
+  const scrollEl = document.getElementById("pair-columns-scroll");
+  if (!summaryEl || !scrollEl) return;
+  summaryEl.textContent = pairColumnOrder.length ? ` — пар: ${pairColumnOrder.length}` : "";
+  if (!pairColumnOrder.length) {
+    scrollEl.innerHTML = `<div class="pair-columns-empty">Пока нет.</div>`;
+    return;
+  }
+  scrollEl.innerHTML = pairColumnOrder.map(key => {
+    const list = pairSignalLog[key];
+    if (!list || !list.length) return "";
+    const head = list[0];
+    const cards = list.map(a => {
+      const hasDir = a.dirPct !== null && a.dirPct !== undefined && !isNaN(a.dirPct);
+      const dirCls = hasDir ? (a.dirPct >= 0 ? "pct-pos" : "pct-neg") : "";
+      const dirText = hasDir ? `${directionEmoji(a.dirPct)} ${a.dirPct >= 0 ? "+" : ""}${a.dirPct.toFixed(2)}%` : "";
+      const hasPrice = a.price !== null && a.price !== undefined && !isNaN(a.price);
+      const has24h = a.pct24h !== null && a.pct24h !== undefined && !isNaN(a.pct24h);
+      return `
+        <div class="pair-column-card" data-key="${a.key}" title="Показать пару в таблице">
+          <div class="pcc-top">
+            <span class="pcc-amount">+$${fmtMoney(a.amount)}</span>
+            <span class="pcc-time">${fmtTimeMinusHour(a.time)}</span>
+          </div>
+          ${hasPrice ? `<div class="pcc-price">$${fmtPrice(a.price)}</div>` : ""}
+          <div class="pcc-bottom">
+            ${dirText ? `<span class="${dirCls}">${dirText}</span>` : ""}
+            ${has24h ? `<span class="pcc-24h">24ч ${a.pct24h >= 0 ? "+" : ""}${a.pct24h.toFixed(2)}%</span>` : ""}
+          </div>
+        </div>`;
+    }).join("");
+    return `
+      <div class="pair-column" data-key="${key}">
+        <div class="pair-column-head">${head.base}/${head.quote} <span class="pcc-market">${head.market}</span></div>
+        <div class="pair-column-body">${cards}</div>
+      </div>`;
+  }).join("");
+}
 function renderThresholdPanel() {
   const summaryEl = document.getElementById("threshold-summary");
   const listEl = document.getElementById("threshold-list");
@@ -2318,6 +2415,7 @@ function render() {
   renderStats();
   renderTradePanel();
   renderThresholdPanel();
+  renderPairColumns();
 }
 
 // ---------- controls ----------
@@ -2371,6 +2469,11 @@ document.getElementById("threshold-list").addEventListener("click", (e) => {
   if (!item) return;
   jumpToPair(item.dataset.key);
 });
+document.getElementById("pair-columns-scroll").addEventListener("click", (e) => {
+  const item = e.target.closest(".pair-column-card");
+  if (!item) return;
+  jumpToPair(item.dataset.key);
+});
 
 function resetBaseline() {
   rows = {};
@@ -2404,6 +2507,8 @@ function resetBaseline() {
   totalEarlyCount = 0;
   signalSeq = { SPIKE: {}, SPIKE30: {}, VEL1M: {} };
   lastSignalPct24h = {};
+  pairSignalLog = {};
+  pairColumnOrder = [];
   startTime = Date.now();
   clearState();
   render();
