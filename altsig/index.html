@@ -114,6 +114,8 @@ main{flex:1;padding:14px;padding-bottom:calc(84px + env(safe-area-inset-bottom,0
 }
 .banner.warn{background:#1d160a;border:1px solid #5a4420;color:#ffd08a}
 .banner.err{background:#1c1015;border:1px solid #6b2334;color:#ffb3c0}
+.banner.pause{display:block;background:#12192a;border:1px solid #2f4a6b;color:#9fc4ff}
+.iconbtn.paused{color:var(--amber);border-color:#5a4420;background:#1d160a}
 .banner .btn{margin-left:8px;vertical-align:middle}
 #probe{font-family:var(--mono);font-size:11px;line-height:1.7;color:var(--dim);padding:2px 0}
 
@@ -158,6 +160,9 @@ main{flex:1;padding:14px;padding-bottom:calc(84px + env(safe-area-inset-bottom,0
 }
 .card.long::before{background:linear-gradient(180deg,var(--green),transparent)}
 .card.short::before{background:linear-gradient(180deg,var(--red),transparent)}
+.card.dim{opacity:.58;border-color:var(--line)}
+.card.dim::before{background:#2a3648}
+.c-state{display:flex;align-items:center;gap:7px;margin-bottom:8px;font-size:10px;flex-wrap:wrap}
 .card.fresh{animation:flash 1.4s ease-out}
 @keyframes flash{0%{box-shadow:0 0 0 0 #00e08a55}100%{box-shadow:0 0 0 14px transparent}}
 .c-top{display:flex;align-items:flex-start;gap:9px}
@@ -290,16 +295,11 @@ textarea{
 .wrow input[type=range]{width:100%}
 .wrow .wv{font-family:var(--mono);text-align:right;color:var(--dim)}
 
-/* ---------- toast ---------- */
-#toasts{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:80;display:grid;gap:7px;width:min(400px,94vw)}
-.toast{
-  background:rgba(17,25,39,.97);border:1px solid var(--line2);border-radius:12px;padding:10px 13px;
-  box-shadow:0 12px 34px #000a;animation:tin .25s ease-out;display:flex;gap:9px;align-items:center
-}
-.toast.long{border-color:#18604a} .toast.short{border-color:#6b2334}
-@keyframes tin{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
-.toast .tt{font-family:var(--mono);font-weight:700;font-size:13px}
-.toast .ts{font-size:10.5px;color:var(--dim);margin-top:1px}
+/* ---------- mini table ---------- */
+table.mini{min-width:640px;font-size:11px}
+table.mini th{position:static;font-size:9px;padding:7px 8px;background:var(--panel2)}
+table.mini td{padding:6px 8px}
+table.mini tbody tr{cursor:pointer}
 
 /* ---------- bottom nav (mobile) ---------- */
 #bnav{
@@ -345,7 +345,7 @@ textarea{
   <nav id="nav">
     <button data-v="signals" class="on">Сигналы<span class="cnt" id="nSig">0</span></button>
     <button data-v="scanner">Сканер<span class="cnt" id="nScan">0</span></button>
-    <button data-v="flow">Поток</button>
+    <button data-v="flow">Поток<span class="cnt" id="nFlow">0</span></button>
     <button data-v="journal">Журнал<span class="cnt" id="nJrn">0</span></button>
     <button data-v="settings">Настройки</button>
   </nav>
@@ -384,6 +384,7 @@ textarea{
         </select>
       </div>
       <div class="fld"><label>Риск $</label><input id="riskAmt" type="number" value="50" min="1"></div>
+      <button class="btn sm" id="btnFaded">Снятые: видны</button>
     </div>
     <div id="cards"></div>
     <div class="empty" id="sigEmpty"><b>Ищу точки входа…</b>Движок прогоняет альты Binance по 15 факторам.<br>Первые сигналы появятся через 20–60 секунд после подключения.</div>
@@ -398,7 +399,7 @@ textarea{
         <button data-m="all">Все</button>
       </div>
       <div class="fld search"><label>🔎</label><input id="q" placeholder="ФИЛЬТР ПО ТИКЕРУ" autocomplete="off"></div>
-      <div class="fld"><label>Объём 24ч ≥ $</label><input id="minVol" type="number" value="3" step="0.5"><span class="d mono">млн</span></div>
+      <div class="fld"><label>Объём 24ч, млн $</label><input id="minVol" type="number" value="3" step="0.5" title="от"><span class="d mono">—</span><input id="maxVol" type="number" value="0" step="10" title="до, 0 = без ограничения"></div>
       <div class="fld"><label>Показывать</label><select id="rowLimit"><option>60</option><option selected>120</option><option>250</option><option>600</option></select></div>
       <button class="btn sm" id="btnRescan">↻ Пересканировать</button>
     </div>
@@ -446,6 +447,10 @@ textarea{
       </div>
       <div class="grid" style="gap:12px;align-content:start">
         <div class="panel">
+          <div class="panel-h">Лента событий<span class="sp"><button class="btn sm" id="btnClearEv">Очистить</button></span></div>
+          <div id="events" style="max-height:300px;overflow-y:auto"></div>
+        </div>
+        <div class="panel">
           <div class="panel-h">Ликвидации live<span class="sp d" id="liqSum">—</span></div>
           <div id="liqfeed"></div>
         </div>
@@ -484,8 +489,12 @@ textarea{
           <div class="fld"><input id="setDepth" type="range" min="20" max="160" step="10" value="70"><span class="mono" id="setDepthV">70</span></div></div>
         <div class="set-row"><div><div class="t">Интервал цикла, сек</div><div class="h">Как часто пересчитывать глубокий анализ кандидатов.</div></div>
           <div class="fld"><input id="setCycle" type="range" min="15" max="180" step="5" value="45"><span class="mono" id="setCycleV">45</span></div></div>
-        <div class="set-row"><div><div class="t">Мин. объём 24ч, млн $</div><div class="h">Отсечка неликвида: узкий стакан = проскальзывание.</div></div>
-          <div class="fld"><input id="setMinVol" type="number" value="3" step="0.5"></div></div>
+        <div class="set-row"><div><div class="t">Коридор объёма 24ч, млн $</div><div class="h">Снизу отсекается неликвид, сверху — тяжёлые пары, которые почти не двигаются. 0 в поле «до» = без верхней границы.</div></div>
+          <div class="fld"><input id="setMinVol" type="number" value="3" step="0.5" style="width:70px"><span class="d mono">—</span><input id="setMaxVol" type="number" value="0" step="10" style="width:70px"></div></div>
+        <div class="set-row"><div><div class="t">Не больше алертов за 5 минут</div><div class="h">Звук, уведомления и телеграм сверх лимита не идут — событие всё равно попадает в ленту «Поток».</div></div>
+          <div class="fld"><input id="setAlertCap" type="number" value="6" min="1" max="60"></div></div>
+        <div class="set-row"><div><div class="t">Сколько держать снятые сигналы, мин</div><div class="h">Карточка не исчезает молча: остаётся с пометкой, почему сигнал снят.</div></div>
+          <div class="fld"><input id="setKeepFaded" type="number" value="45" min="5" max="240"></div></div>
         <div class="set-row"><div><div class="t">Макс. спред, %</div><div class="h">Пары с более широким спредом не торгуем.</div></div>
           <div class="fld"><input id="setMaxSpread" type="number" value="0.12" step="0.01"></div></div>
         <div class="set-row"><div><div class="t">Только совпадение с трендом BTC</div><div class="h">Лонги лишь когда BTC не падает, шорты — когда не растёт.</div></div>
@@ -504,6 +513,8 @@ textarea{
             <option value="1" selected>обычная</option>
             <option value="2">агрессивная</option>
           </select></div></div>
+        <div class="set-row"><div><div class="t">Шуметь только подтверждёнными запалами</div><div class="h">Искра сама по себе срабатывает часто. Со включённой опцией она молча пишется в ленту, а звук и телеграм приходят, только если разбор подтвердил её сигналом на вход.</div></div>
+          <div class="sw on" id="swSparkConfirm"><i></i></div></div>
         <div class="set-row"><div><div class="t">Отдельный звук запала</div><div class="h">Три восходящие ноты — отличается от сигнала на вход.</div></div>
           <div class="sw on" id="swSparkSound"><i></i></div></div>
       </div>
@@ -612,7 +623,6 @@ textarea{
   <div class="d-body" id="dBody"></div>
 </aside>
 
-<div id="toasts"></div>
 <script>
 /* =====================================================================
    ALTSIG — Binance altcoin signal engine
@@ -670,8 +680,9 @@ const HOSTS = {
 
 /* ---------------------------------------------------------------- config */
 const CFG = {
-  thresh: 45, depth: 60, cycle: 30, minVol: 3, maxSpread: 0.12,
-  sens: 1, sparkOn: true, absorbOn: true, sparkSound: true,
+  thresh: 50, depth: 60, cycle: 30, minVol: 3, maxVol: 0, maxSpread: 0.12,
+  sens: 0, sparkOn: true, absorbOn: true, sparkSound: true,
+  sparkConfirm: true, alertCap: 6, keepFaded: 45,
   btcFilter: false,
   acct: 1000, riskPct: 1, atrMult: 1.5, maxLev: 20, riskAmt: 50,
   preset: 'intraday', market: 'futures', host: 'auto',
@@ -712,6 +723,10 @@ const S = {
   liq: [],              // лента ликвидаций
   liqAgg: new Map(),    // symbol -> {long,short,ts}
   signals: [],          // отсортированные активные сигналы
+  active: new Map(),    // жизненный цикл выданных сигналов: активен / снят / отработал
+  events: [],           // лента событий вместо всплывающих окон
+  alertTs: [],          // отметки алертов для ограничителя спама
+  newEvents: 0, showFaded: true,
   journal: [],          // автожурнал
   queue: [], qi: 0,
   btc: { ch1h: 0, ch24: 0, price: 0, trend: 0 },
@@ -932,6 +947,13 @@ function cvdUsd(k, n) {
 }
 const chg = (a, b) => b ? (a - b) / b * 100 : 0;
 
+/* объём 24ч попадает в заданный коридор (0 в «до» = без верхней границы) */
+function volOk(qv) {
+  if (qv < CFG.minVol * 1e6) return false;
+  if (CFG.maxVol > 0 && qv > CFG.maxVol * 1e6) return false;
+  return true;
+}
+
 /* =====================================================================
    Слой данных: вселенная пар, сокеты, кэш свечей
    ===================================================================== */
@@ -1044,9 +1066,10 @@ function at(h, secs) {                              // ближайшая зап
 }
 
 function ignite(sym, x, h) {
+  if (S.paused) return;
   if (!CFG.sparkOn && !CFG.absorbOn) return;
   if (h.length < 14) return;                        // нужен разогрев буфера
-  if (x.qv < CFG.minVol * 1e6) return;
+  if (!volOk(x.qv)) return;
   if (now() - S.started < 20000) return;            // не палим на старте сессии
 
   const cur = h[h.length - 1];
@@ -1108,6 +1131,17 @@ function pushSpark(sp) {
   prioWorker();
   alertSpark(sp);
   renderSparks();
+}
+
+/* торговый оборот пары за последние n секунд, по кольцевому буферу */
+function volWindow(sym, secs) {
+  const h = S.hist.get(sym);
+  if (!h || h.length < 2) return null;
+  const cur = h[h.length - 1];
+  const ref = at(h, secs);
+  if (!ref || cur.t - ref.t < secs * 350) return null;
+  const dq = Math.max(0, cur.q - ref.q);
+  return { usd: dq, dt: (cur.t - ref.t) / 1000 };
 }
 
 /* изменение цены за n секунд по собственному кольцевому буферу */
@@ -1256,7 +1290,7 @@ async function restPoll() {
   } finally {
     pollBusy = false;
     updateNetUI();
-    if (S.tick.size && !S.scanning && !S.lastCycle) cycle();   // первый цикл сразу, как появились данные
+    if (S.tick.size && !S.scanning && !S.lastCycle && !S.paused) cycle();   // первый цикл сразу, как появились данные
   }
 }
 
@@ -1268,6 +1302,12 @@ function updateNetUI() {
   setDot('#wsSpot', sl ? 'on' : sr ? 'warn' : 'off');
   S.mode = (fl || sl) ? 'сокеты' : (fr || sr) ? 'REST' : 'нет данных';
   const el = $('#banner'); if (!el) return;
+  if (S.paused) {
+    el.className = 'banner pause';
+    el.innerHTML = '<b>Пауза.</b> Разбор, детектор запала, звук и отправка в Telegram остановлены. ' +
+      'Данные продолжают идти, чтобы не терять историю. Нажми ▶ в шапке, чтобы продолжить.';
+    return;
+  }
   if (!S.tick.size && now() - S.started > 15000) {
     el.className = 'banner err';
     el.innerHTML = `<b>Данных от Binance нет.</b> ${S.netErr ? 'Последняя ошибка: ' + esc(S.netErr) + '. ' : ''}` +
@@ -1696,6 +1736,7 @@ async function analyze(sym, urgent) {
 /* внеочередной разбор: запал не ждёт следующего цикла */
 let prioBusy = false;
 async function prioWorker() {
+  if (S.paused) { S.priority.length = 0; return; }
   if (prioBusy) return;
   prioBusy = true;
   try {
@@ -1712,12 +1753,11 @@ async function prioWorker() {
 /* -------------------------------------------------- кандидаты на анализ */
 function heatList() {
   const out = [];
-  const minVol = CFG.minVol * 1e6;
   for (const [sym, t] of S.tick) {
     const m = S.meta.get(sym); if (!m) continue;
     if (CFG.market === 'futures' && !m.hasFut) continue;
     if (CFG.market === 'spot' && !m.hasSpot) continue;
-    if (t.qv < minVol) continue;
+    if (!volOk(t.qv)) continue;
     const c1 = Math.abs(microChg(sym, 60)), c5 = Math.abs(microChg(sym, 300));
     const mk = S.mark.get(sym);
     const liq = S.liqAgg.get(sym);
@@ -1810,19 +1850,69 @@ function rebuildSignals() {
   }
   arr.sort((a, b) => Math.abs(b.score) - Math.abs(a.score));
   S.signals = arr;
+
+  /* новые сигналы */
   for (const r of arr) {
     const prev = S.seen.get(r.sym);
     const fresh = !prev || prev.side !== r.side || now() - prev.ts > 30 * 60000;
     if (fresh && Math.abs(r.score) >= CFG.thresh) {
       S.seen.set(r.sym, { side: r.side, ts: now(), score: r.score });
       r.fresh = now();
+      S.active.set(r.sym, {
+        sym: r.sym, base: r.base, side: r.side, grade: r.grade, r,
+        firstTs: now(), peak: Math.abs(r.score), state: 'active', stateTs: now(), reason: '',
+      });
       alertSignal(r);
       openJournal(r);
     } else if (prev) {
       prev.score = r.score;
     }
   }
+  refreshActive();
   updateJournal();
+}
+
+/* Сигнал не исчезает молча: у каждого есть состояние и причина.
+   active — условия держатся, faded — факторы рассыпались, stale — нет свежих данных,
+   tp1/tp/stop — цена уже дошла до цели или до стопа. */
+function refreshActive() {
+  const dirOf = a => a.side === 'long' ? 1 : -1;
+  for (const [sym, a] of S.active) {
+    const setState = (st, reason) => {
+      if (a.state !== st) { a.state = st; a.stateTs = now(); }
+      a.reason = reason || '';
+    };
+    const j = S.journal.find(x => x.sym === sym && Math.abs(x.ts - a.firstTs) < 6e5);
+    const r2 = S.an.get(sym);
+    if (r2 && r2.ts > a.r.ts) {
+      a.r = r2;
+      if (r2.grade && Math.sign(r2.score) === dirOf(a)) {
+        a.peak = Math.max(a.peak, Math.abs(r2.score));
+        setState('active', '');
+      } else {
+        setState('faded', `score ${a.peak.toFixed(0)} → ${Math.abs(r2.score).toFixed(0)}` +
+          (Math.sign(r2.score) !== dirOf(a) ? ', сторона развернулась' : ''));
+      }
+    } else if (now() - a.r.ts > 12 * 60000 && (a.state === 'active')) {
+      setState('stale', 'пара выпала из очереди разбора');
+    }
+    if (j) {
+      if (!j.open && j.cancelled) setState('cancelled', 'лимитный вход не исполнился');
+      else if (!j.open && j.result !== null) setState(j.result > 0 ? 'tp' : 'stop',
+        j.result > 0 ? `цель взята, +${j.result.toFixed(1)}R` : 'цена дошла до стопа');
+      else if (j.tp1) setState('tp1', 'TP1 взят, стоп в безубыток');
+    }
+    if (a.state !== 'active' && now() - a.stateTs > CFG.keepFaded * 60000) S.active.delete(sym);
+  }
+}
+
+/* ограничитель шума: не больше CFG.alertCap алертов за 5 минут */
+function canAlert() {
+  const t = now();
+  S.alertTs = S.alertTs.filter(x => t - x < 3e5);
+  if (S.alertTs.length >= CFG.alertCap) return false;
+  S.alertTs.push(t);
+  return true;
 }
 
 /* =====================================================================
@@ -1838,7 +1928,7 @@ const tgActive = () => CFG.tgOn && tgReady();
 const tgEsc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 
 function tgSend(text, force) {
-  if (!force && !tgActive()) return;
+  if (!force && (S.paused || !tgActive())) return;
   if (!tgReady()) return;
   TG.q.push({ text, tries: 0 });
   if (TG.q.length > 80) TG.q.shift();
@@ -2042,8 +2132,19 @@ function counterReasons(r, n = 2) {
     .sort((a, b) => b.w - a.w).slice(0, n);
 }
 
-function cardHtml(r) {
-  const p = r.plan, long = r.side === 'long';
+const CARD_STATE = {
+  active:    { t: 'актуален',          c: 'p' },
+  faded:     { t: 'снят',              c: 'n' },
+  stale:     { t: 'нет свежих данных', c: 'w' },
+  tp1:       { t: 'TP1 взят',          c: 'p' },
+  tp:        { t: 'цель взята',        c: 'p' },
+  stop:      { t: 'стоп',              c: 'n' },
+  cancelled: { t: 'вход не исполнился',c: '' },
+};
+
+function cardHtml(a) {
+  const r = a.r, p = r.plan, long = a.side === 'long';
+  const st = CARD_STATE[a.state] || CARD_STATE.active;
   const w = clamp(Math.abs(r.score), 0, 100);
   const col = scoreColor(r.score);
   const chips = topReasons(r).map(x =>
@@ -2051,9 +2152,15 @@ function cardHtml(r) {
     counterReasons(r).map(x => `<span class="chip n">против: ${esc(COMP_NAMES[x.k])}</span>`).join('') +
     r.flags.map(f => `<span class="chip w">${esc(f)}</span>`).join('');
   const fresh = r.fresh && now() - r.fresh < 60000 ? ' fresh' : '';
+  const dim = a.state === 'active' ? '' : ' dim';
   const sparkChip = r.spark && now() - r.spark.t < 6e5
     ? `<span class="chip w">⚡ запал ${sparkAge(r.spark.t)} назад</span>` : '';
-  return `<div class="card ${r.side}${fresh}" data-sym="${r.sym}">
+  return `<div class="card ${a.side}${fresh}${dim}" data-sym="${r.sym}">
+    <div class="c-state">
+      <span class="chip ${st.c}">${st.t}</span>
+      ${a.reason ? `<span class="d">${esc(a.reason)}</span>` : ''}
+      <span class="d" style="margin-left:auto">выдан ${ago(a.firstTs)} назад${a.state !== 'active' ? ' · снят ' + ago(a.stateTs) + ' назад' : ''}</span>
+    </div>
     <div class="c-top">
       <div style="min-width:0">
         <div class="c-sym">${esc(r.base)}<span class="mk ${r.market === 'fut' ? 'f' : 's'}">${r.market === 'fut' ? 'PERP' : 'SPOT'}</span></div>
@@ -2078,27 +2185,38 @@ function cardHtml(r) {
 }
 
 function renderCards() {
-  const list = S.signals.filter(r =>
-    (S.sideFilter === 'all' || r.side === S.sideFilter) &&
-    Math.abs(r.score) >= S.gradeFilter);
-  $('#cards').innerHTML = list.slice(0, 60).map(cardHtml).join('');
-  $('#sigEmpty').style.display = list.length ? 'none' : 'block';
-  if (!list.length && S.an.size) {
-    $('#sigEmpty').innerHTML = '<b>Сейчас входов нет</b>Рынок не даёт совпадения факторов по фильтрам.<br>Снизь порог в настройках или подожди — движок продолжает сканировать.';
+  const rank = a => a.state === 'active' ? 0 : 1;
+  let items = [...S.active.values()].filter(a =>
+    (S.sideFilter === 'all' || a.side === S.sideFilter) &&
+    ((a.state === 'active' ? Math.abs(a.r.score) : a.peak) >= S.gradeFilter) &&
+    (S.showFaded || a.state === 'active'));
+  items.sort((x, y) => rank(x) - rank(y) ||
+    (rank(x) === 0 ? Math.abs(y.r.score) - Math.abs(x.r.score) : y.stateTs - x.stateTs));
+
+  $('#cards').innerHTML = items.slice(0, 60).map(cardHtml).join('');
+  const act = [...S.active.values()].filter(a => a.state === 'active');
+  $('#sigEmpty').style.display = items.length ? 'none' : 'block';
+  if (!items.length && S.an.size) {
+    const hidden = S.active.size;
+    $('#sigEmpty').innerHTML = hidden
+      ? `<b>Сигналы скрыты фильтрами</b>Выданных сигналов: ${hidden}, но ни один не проходит текущие фильтры вкладки.<br>Сбрось порог на «Все ≥40» или переключи сторону на «Все».`
+      : '<b>Сейчас входов нет</b>Рынок не даёт совпадения факторов.<br>Порог выдачи задаётся в «Настройках → Движок», сейчас он ' + CFG.thresh + '.';
   }
-  $('#nSig').textContent = S.signals.length;
-  $('#stLong').textContent = S.signals.filter(r => r.side === 'long').length;
-  $('#stShort').textContent = S.signals.filter(r => r.side === 'short').length;
+  $('#nSig').textContent = act.length;
+  $('#stLong').textContent = act.filter(a => a.side === 'long').length;
+  $('#stShort').textContent = act.filter(a => a.side === 'short').length;
   $('#stAnalyzed').textContent = S.an.size;
   const breadth = breadthIdx();
   $('#stBreadth').textContent = breadth === null ? '—' : breadth.toFixed(0) + '%';
   $('#stBreadth').className = 'v ' + (breadth > 55 ? 'g' : breadth < 45 ? 'r' : 'd');
   $('#stBtc').innerHTML = `<span class="${cls(S.btc.ch1h)}">${fmtPct(S.btc.ch1h, 2)}</span>`;
+  const fb = $('#btnFaded');
+  if (fb) { fb.classList.toggle('on', S.showFaded); fb.textContent = S.showFaded ? 'Снятые: видны' : 'Снятые: скрыты'; }
 }
 function breadthIdx() {
   let up = 0, n = 0;
   for (const t of S.tick.values()) {
-    if (t.qv < CFG.minVol * 1e6) continue;
+    if (!volOk(t.qv)) continue;
     n++; if (t.ch24 > 0) up++;
   }
   return n ? up / n * 100 : null;
@@ -2150,12 +2268,16 @@ function renderSparks() {
   }).join('');
 }
 function alertSpark(sp) {
-  if (sp.kind === 'absorb' ? CFG.tgAbsorb : CFG.tgSparks) tgSend(tgSparkMsg(sp));
   const title = sp.kind === 'absorb'
-    ? `${esc(sp.base)} · НАБОР без цены`
-    : `${esc(sp.base)} · ${sp.side === 'long' ? 'СТАРТ ВВЕРХ' : 'СТАРТ ВНИЗ'}`;
+    ? `${esc(sp.base)} · набор без цены`
+    : `${esc(sp.base)} · ${sp.side === 'long' ? 'старт вверх' : 'старт вниз'}`;
   const sub = `объём ×${sp.rVol.toFixed(1)} · сделки ×${sp.rTrd.toFixed(1)} · ${sp.kind === 'absorb' ? 'цена стоит' : sp.z.toFixed(1) + 'σ · ' + fmtPct(sp.ret30, 2) + ' за 30с'}`;
-  toastMsg(title, sub, sp.kind === 'absorb' ? '' : sp.side, sp.sym, 9000);
+  logEvent(sp.kind === 'absorb' ? 'absorb' : 'spark', title, sub, sp.sym);
+  /* по умолчанию запал только пишется в ленту: шумит он часто.
+     Звук и телеграм — когда разбор подтвердит его сигналом, либо если выключить «только подтверждённые». */
+  if (CFG.sparkConfirm) return;
+  if (sp.kind === 'absorb' ? CFG.tgAbsorb : CFG.tgSparks) tgSend(tgSparkMsg(sp));
+  if (!canAlert()) return;
   if (CFG.sparkSound) beep('spark');
   if (CFG.vibro && navigator.vibrate) navigator.vibrate([25, 35, 25, 35, 45]);
   if (CFG.notif && 'Notification' in window && Notification.permission === 'granted') {
@@ -2165,14 +2287,13 @@ function alertSpark(sp) {
 
 /* ------------------------------------------------------------- таблица */
 function tableRows() {
-  const minVol = CFG.minVol * 1e6;
   const q = S.q.toUpperCase();
   const rows = [];
   for (const [sym, t] of S.tick) {
     const m = S.meta.get(sym); if (!m) continue;
     if (CFG.market === 'futures' && !m.hasFut) continue;
     if (CFG.market === 'spot' && !m.hasSpot) continue;
-    if (t.qv < minVol) continue;
+    if (!volOk(t.qv)) continue;
     if (q && sym.indexOf(q) === -1) continue;
     const a = S.an.get(sym);
     const mk = S.mark.get(sym);
@@ -2228,19 +2349,32 @@ function renderTable() {
 
 /* ------------------------------------------------------------- поток */
 function renderFlow() {
-  const arr = [...S.tick.values()].filter(t => t.qv >= CFG.minVol * 1e6);
-  const bu = arr.filter(t => t.burst > 1.8).sort((a, b) => b.burst - a.burst).slice(0, 14);
-  $('#bursts').innerHTML = bu.length ? bu.map(t => {
-    const ch = microChg(t.sym, 300);
-    return `<div class="liq" data-sym="${t.sym}" style="cursor:pointer">
-      <span class="s">${esc(t.base)}</span>
-      <span class="a">×${t.burst.toFixed(1)}</span>
-      <span class="${cls(ch)}">${fmtPct(ch, 2)} 5м</span>
-      <span class="t">$${fmtUsd(t.rate * 60)}/мин</span></div>`;
-  }).join('') : '<div class="empty">Тишина: аномальных всплесков нет.</div>';
+  const arr = [...S.tick.values()].filter(t => volOk(t.qv));
+  const bu = arr.filter(t => t.burst > 1.5).sort((a, b) => b.burst - a.burst).slice(0, 16);
+  $('#bursts').innerHTML = bu.length ? `<div class="tblwrap"><table class="mini">
+    <thead><tr>
+      <th style="text-align:left">Пара</th><th>Всплеск</th><th>$/мин сейчас</th>
+      <th>Объём 5м</th><th>Объём 1ч</th><th>Объём 24ч</th><th>24ч %</th><th>5м %</th>
+    </tr></thead><tbody>` + bu.map(t => {
+      const ch5 = microChg(t.sym, 300);
+      const v5 = volWindow(t.sym, 300), v60 = volWindow(t.sym, 3600);
+      const norm = t.qv / 288;                                   // средние 5 минут за сутки
+      const v5r = v5 && norm ? v5.usd / norm : null;
+      return `<tr data-sym="${t.sym}">
+        <td style="text-align:left"><span class="sy">${esc(t.base)}</span></td>
+        <td><span class="a">×${t.burst.toFixed(1)}</span></td>
+        <td>$${fmtUsd(t.rate * 60)}</td>
+        <td>${v5 ? '$' + fmtUsd(v5.usd) + (v5r ? ` <span class="${v5r > 2 ? 'a' : 'd'}">×${v5r.toFixed(1)}</span>` : '') : '<span class="d">копится…</span>'}</td>
+        <td>${v60 ? '$' + fmtUsd(v60.usd) : '<span class="d">копится…</span>'}</td>
+        <td>$${fmtUsd(t.qv)}</td>
+        <td class="${cls(t.ch24)}">${fmtPct(t.ch24, 1)}</td>
+        <td class="${cls(ch5)}">${fmtPct(ch5, 2)}</td>
+      </tr>`;
+    }).join('') + '</tbody></table></div>'
+    : '<div class="empty">Тишина: аномальных всплесков нет.</div>';
 
   const fu = [...S.mark.entries()]
-    .filter(([s]) => S.tick.has(s) && S.tick.get(s).qv >= CFG.minVol * 1e6)
+    .filter(([s]) => S.tick.has(s) && volOk(S.tick.get(s).qv))
     .sort((a, b) => Math.abs(b[1].fund) - Math.abs(a[1].fund)).slice(0, 12);
   $('#fundList').innerHTML = fu.length ? fu.map(([s, m]) => {
     const t = S.tick.get(s);
@@ -2276,6 +2410,7 @@ function renderFlow() {
     </div>`).join('')
     : '<div class="empty">Сжатых пар в разборе пока нет.</div>';
 
+  renderEvents();
   const oi = [...S.an.values()].filter(r => Number.isFinite(r.oi15))
     .sort((a, b) => Math.abs(b.oi15) - Math.abs(a.oi15)).slice(0, 12);
   $('#oiList').innerHTML = oi.length ? oi.map(r =>
@@ -2318,21 +2453,21 @@ function updateJournal() {
     if (rNow < j.mae) { j.mae = rNow; changed = true; }
     if (!j.tp1 && rNow >= 1) {
       j.tp1 = true; changed = true;
-      toastMsg(`${esc(j.base)} · TP1 взят`, `+1R от входа ${fmtPrice(j.entry)} — стоп можно двигать в безубыток`, j.side, j.sym, 9000);
+      logEvent('tp1', `${esc(j.base)} · TP1 взят`, `+1R от входа ${fmtPrice(j.entry)} — стоп можно двигать в безубыток`, j.sym);
       if (CFG.tgOutcomes) tgSend(tgOutcomeMsg(j, 'tp1'));
-      beep('long');
+      if (canAlert()) beep('long');
     }
     const hitStop = dir === 1 ? p <= j.stop : p >= j.stop;
     const hitTp2 = dir === 1 ? p >= j.tp[1] : p <= j.tp[1];
     if (hitStop) {
       j.open = false; j.result = -1; j.closedTs = now(); changed = true;
-      toastMsg(`${esc(j.base)} · стоп`, `сценарий отменён на ${fmtPrice(j.stop)} (−1R)`, 'short', j.sym, 8000);
+      logEvent('stop', `${esc(j.base)} · стоп`, `сценарий отменён на ${fmtPrice(j.stop)} (−1R)`, j.sym);
       if (CFG.tgOutcomes) tgSend(tgOutcomeMsg(j, 'stop'));
     } else if (hitTp2) {
       j.open = false; j.result = 2; j.closedTs = now(); changed = true;
-      toastMsg(`${esc(j.base)} · TP2 взят`, `+2R от входа ${fmtPrice(j.entry)}`, 'long', j.sym, 9000);
+      logEvent('tp', `${esc(j.base)} · TP2 взят`, `+2R от входа ${fmtPrice(j.entry)}`, j.sym);
       if (CFG.tgOutcomes) tgSend(tgOutcomeMsg(j, 'tp2'));
-      beep('long');
+      if (canAlert()) beep('long');
     }
     else if (now() - j.ts > 24 * 3600e3) { j.open = false; j.result = +rNow.toFixed(2); j.closedTs = now(); changed = true; }
   }
@@ -2400,25 +2535,33 @@ function beep(side) {
     });
   } catch (e) {}
 }
-function toastMsg(title, sub, side, sym, ttl = 11000) {
-  const el = document.createElement('div');
-  el.className = 'toast ' + (side || '');
-  el.innerHTML = `<div style="flex:1;min-width:0">
-      <div class="tt ${side === 'long' ? 'g' : side === 'short' ? 'r' : ''}">${title}</div>
-      <div class="ts">${sub}</div>
-    </div>${sym ? '<button class="btn sm">Открыть</button>' : ''}`;
-  if (sym) el.querySelector('button').onclick = () => { openDrawer(sym); el.remove(); };
-  $('#toasts').appendChild(el);
-  setTimeout(() => el.remove(), ttl);
+const EV_ICON = { long: '🟢', short: '🔴', spark: '🔥', absorb: '👁', tp1: '✅', tp: '🎯', stop: '🛑', info: '·' };
+
+/* Всплывающих окон нет: всё пишется в ленту событий во вкладке «Поток». */
+function logEvent(kind, title, sub, sym) {
+  S.events.unshift({ kind, title, sub, sym, t: now() });
+  if (S.events.length > 200) S.events.pop();
+  if (S.view !== 'flow') {
+    S.newEvents++;
+    const b = $('#nFlow'); if (b) b.textContent = S.newEvents;
+  } else renderEvents();
 }
-function toast(r) {
-  toastMsg(`${esc(r.base)} · ${r.side === 'long' ? 'ЛОНГ' : 'ШОРТ'} ${r.grade}`,
-    `score ${Math.abs(r.score).toFixed(0)} · вход ${fmtPrice(r.price)} · стоп ${fmtPrice(r.plan.stop)} · ${r.plan.lev}×`,
-    r.side, r.sym);
+function renderEvents() {
+  const el = $('#events'); if (!el) return;
+  el.innerHTML = S.events.length ? S.events.slice(0, 80).map(e =>
+    `<div class="liq" ${e.sym ? `data-sym="${e.sym}" style="cursor:pointer"` : ''}>
+      <span style="width:16px">${EV_ICON[e.kind] || '·'}</span>
+      <span class="s" style="width:auto;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">${e.title}</span>
+      <span class="d" style="flex:2;min-width:0;overflow:hidden;text-overflow:ellipsis">${e.sub}</span>
+      <span class="t">${ago(e.t)}</span>
+    </div>`).join('') : '<div class="empty">Событий пока нет.</div>';
 }
+
 function alertSignal(r) {
+  logEvent(r.side, `${esc(r.base)} · ${r.side === 'long' ? 'ЛОНГ' : 'ШОРТ'} ${r.grade}`,
+    `score ${Math.abs(r.score).toFixed(0)} · вход ${fmtPrice(r.plan.entry)} · стоп ${fmtPrice(r.plan.stop)} · ${r.plan.lev}×`, r.sym);
+  if (!canAlert()) return;                       // ограничитель шума
   if (CFG.tgSignals && (GRADE_RANK[r.grade] || 0) >= (GRADE_RANK[CFG.tgGrade] || 1)) tgSend(tgSignalMsg(r));
-  toast(r);
   beep(r.side);
   if (CFG.vibro && navigator.vibrate) navigator.vibrate(r.side === 'long' ? [40, 60, 40] : [90]);
   if (CFG.notif && 'Notification' in window && Notification.permission === 'granted') {
@@ -2666,6 +2809,7 @@ function bindNum(id, key, after) {
 function applyCfg() {
   $('#riskAmt').value = CFG.riskAmt;
   $('#minVol').value = CFG.minVol;
+  $('#maxVol').value = CFG.maxVol;
   $('#preset').value = CFG.preset;
   $('#setExcl').value = CFG.exclude;
   $('#setSens').value = CFG.sens;
@@ -2674,6 +2818,7 @@ function applyCfg() {
   $('#setDepthV').textContent = CFG.depth;
   $('#setCycleV').textContent = CFG.cycle;
   $$('#mktSeg button').forEach(b => b.classList.toggle('on', b.dataset.m === CFG.market));
+  $$('#sigGrade button').forEach(b => b.classList.toggle('on', +b.dataset.q === S.gradeFilter));
   $('#btnSound').classList.toggle('active', CFG.sound);
 }
 
@@ -2683,8 +2828,19 @@ function restartCycleTimer() {
   cycleTimer = setInterval(cycle, Math.max(15, CFG.cycle) * 1000);
 }
 
+function setPaused(v) {
+  S.paused = v;
+  const b = $('#btnPause');
+  if (b) { b.textContent = v ? '▶' : '⏸'; b.classList.toggle('paused', v); b.classList.toggle('active', !v); }
+  $('#scanState').textContent = v ? 'пауза' : 'ждёт';
+  setDot('#scanDot', v ? 'off' : 'on');
+  updateNetUI();
+  if (!v) { restPoll(); cycle(); }
+}
+
 function go2(v) {
   S.view = v;
+  if (v === 'flow') { S.newEvents = 0; const b = $('#nFlow'); if (b) b.textContent = '0'; }
   $$('.view').forEach(s => s.classList.toggle('on', s.id === 'v-' + v));
   $$('#nav button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
   $$('#bnav button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
@@ -2725,6 +2881,7 @@ function bindAll() {
   };
   $('#riskAmt').oninput = e => { CFG.riskAmt = +e.target.value || 0; saveCfg(); };
   $('#minVol').oninput = e => { CFG.minVol = +e.target.value || 0; $('#setMinVol').value = CFG.minVol; saveCfg(); render(); };
+  $('#maxVol').oninput = e => { CFG.maxVol = +e.target.value || 0; $('#setMaxVol').value = CFG.maxVol; saveCfg(); render(); };
   $('#q').oninput = e => { S.q = e.target.value.trim(); renderTable(); };
   $('#rowLimit').onchange = renderTable;
   $('#btnRescan').onclick = () => { KL.clear(); OI.clear(); restPoll(); cycle(); };
@@ -2755,20 +2912,18 @@ function bindAll() {
     $('#swSound').classList.toggle('on', CFG.sound);
     if (CFG.sound) beep('long');
   };
-  $('#btnPause').onclick = () => {
-    S.paused = !S.paused;
-    $('#btnPause').textContent = S.paused ? '▶' : '⏸';
-    $('#btnPause').classList.toggle('active', !S.paused);
-    $('#scanState').textContent = S.paused ? 'пауза' : 'ждёт';
-    setDot('#scanDot', S.paused ? 'off' : 'on');
-    if (!S.paused) cycle();
-  };
+  $('#btnPause').onclick = () => setPaused(!S.paused);
+  $('#btnFaded').onclick = () => { S.showFaded = !S.showFaded; renderCards(); };
+  $('#btnClearEv').onclick = () => { S.events = []; S.newEvents = 0; $('#nFlow').textContent = '0'; renderEvents(); };
 
   /* настройки */
   bindNum('#setThresh', 'thresh');
   bindNum('#setDepth', 'depth');
   bindNum('#setCycle', 'cycle', restartCycleTimer);
   bindNum('#setMinVol', 'minVol', v => { $('#minVol').value = v; render(); });
+  bindNum('#setMaxVol', 'maxVol', v => { $('#maxVol').value = v; render(); });
+  bindNum('#setAlertCap', 'alertCap');
+  bindNum('#setKeepFaded', 'keepFaded');
   bindNum('#setMaxSpread', 'maxSpread');
   bindNum('#setAcct', 'acct', () => { CFG.riskAmt = +(CFG.acct * CFG.riskPct / 100).toFixed(0); $('#riskAmt').value = CFG.riskAmt; saveCfg(); });
   bindNum('#setRiskPct', 'riskPct', () => { CFG.riskAmt = +(CFG.acct * CFG.riskPct / 100).toFixed(0); $('#riskAmt').value = CFG.riskAmt; saveCfg(); });
@@ -2788,6 +2943,7 @@ function bindAll() {
   setSwitch('#swTgAbsorb', 'tgAbsorb');
   setSwitch('#swTgOutcomes', 'tgOutcomes');
   setSwitch('#swTgDigest', 'tgDigest');
+  setSwitch('#swSparkConfirm', 'sparkConfirm');
   setSwitch('#swSpark', 'sparkOn');
   setSwitch('#swAbsorb', 'absorbOn');
   setSwitch('#swSparkSound', 'sparkSound', v => { if (v) beep('spark'); });
@@ -2858,7 +3014,7 @@ function render() {
     else if (S.view === 'flow') renderFlow();
     else if (S.view === 'journal') { jStats(); renderJournal(); }
     else if (S.view === 'settings') { diag(); tgStatus(); }
-    $('#nSig').textContent = S.signals.length;
+    $('#nSig').textContent = [...S.active.values()].filter(a => a.state === 'active').length;
     $('#nJrn').textContent = S.journal.length;
   });
 }
