@@ -716,7 +716,7 @@ function recordPairSignal(entry) {
   pairColumnOrder.unshift(entry.key);
   if (pairColumnOrder.length > PAIR_COLUMN_MAX) {
     const dropped = pairColumnOrder.splice(PAIR_COLUMN_MAX);
-    for (const k of dropped) delete pairSignalLog[k];
+    for (const k of dropped) { delete pairSignalLog[k]; delete pairTelegramMsgId[k]; }
   }
   dataDirty = true;
 }
@@ -861,7 +861,14 @@ function recordThresholdSignal(entry) {
   const amountStr = `${entry.amount >= 0 ? "+" : ""}$${fmtMoney(entry.amount)}`;
   const pairAmountLine = `${entry.seq ? bigNumber(entry.seq) + " " : ""}<b>${entry.base}/${entry.quote} ${amountStr}</b>${momentumIcon}`;
   const typeLine = `🟡 ${entry.type} (${entry.market})${entry.extra ? " · " + entry.extra : ""}`;
-  sendTelegram(`${pairAmountLine}\n${typeLine}${volLine}${priceLine}${imbalLine}${fundLine}${oiLine}`);
+  // VEL1M/VEL1M30 идут не отдельными сообщениями, а одним сообщением на пару, которое
+  // редактируется (дописывается новой строкой снизу) при каждом новом сигнале по ней —
+  // см. sendPairTelegramUpdate. Остальные типы — как раньше, обычным новым сообщением.
+  if (PAIR_TG_TYPES.includes(entry.type)) {
+    sendPairTelegramUpdate(entry.key);
+  } else {
+    sendTelegram(`${pairAmountLine}\n${typeLine}${volLine}${priceLine}${imbalLine}${fundLine}${oiLine}`);
+  }
 }
 function sendTelegram(text) {
   if (!telegramOn || !telegramToken || !telegramChatId) return;
@@ -870,6 +877,58 @@ function sendTelegram(text) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ chat_id: telegramChatId, text, parse_mode: "HTML" }),
   }).catch(() => {}); // сеть/токен может быть плохим — не роняем сканер из-за этого
+}
+// ---- один эволюционирующий Telegram-месседж на пару для VEL1M/VEL1M30 ----
+// Вместо потока отдельных сообщений — шапка (пара, рынок, цена) и снизу построчно
+// последние сигналы по этой паре, новые дописываются в конец. Технически это works
+// через editMessageText поверх уже отправленного сообщения (id храним в pairTelegramMsgId);
+// если редактирование не удалось (сообщение старше ~48ч у Telegram, удалено и т.п.) —
+// отправляем новое и запоминаем его id для дальнейших правок.
+const PAIR_TG_TYPES = ["VEL1M", "VEL1M30"];
+const PAIR_TG_ROWS_MAX = 15;
+const PAIR_TG_TYPE_LABEL = { VEL1M: "1m", VEL1M30: "30s" };
+let pairTelegramMsgId = {}; // key -> message_id последнего сообщения по этой паре
+function buildPairTelegramText(key) {
+  const list = pairSignalLog[key];
+  if (!list || !list.length) return null;
+  const head = list[0];
+  const hasPrice = head.price !== null && head.price !== undefined && !isNaN(head.price);
+  const header = `<b>${head.base}/${head.quote} (${head.market})</b>${hasPrice ? " " + fmtPrice(head.price) : ""}`;
+  const rows = list.slice(0, PAIR_TG_ROWS_MAX).slice().reverse().map(a => {
+    const has24h = a.pct24h !== null && a.pct24h !== undefined && !isNaN(a.pct24h);
+    const pctText = has24h ? `${a.pct24h >= 0 ? "+" : ""}${a.pct24h.toFixed(2)}%` : "—";
+    const label = PAIR_TG_TYPE_LABEL[a.type] || a.type;
+    return `${label}/+$${fmtMoney(a.amount)}/${pctText}/ ${fmtTimeMinusHour(a.time)}`;
+  }).join("\n");
+  return `${header}\n${rows}`;
+}
+async function sendPairTelegramUpdate(key) {
+  if (!telegramOn || !telegramToken || !telegramChatId) return;
+  const text = buildPairTelegramText(key);
+  if (!text) return;
+  try {
+    const existingId = pairTelegramMsgId[key];
+    if (existingId) {
+      const res = await fetch(`https://api.telegram.org/bot${telegramToken}/editMessageText`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: telegramChatId, message_id: existingId, text, parse_mode: "HTML" }),
+      });
+      const data = await res.json().catch(() => null);
+      if (data && data.ok) return;
+      // не вышло отредактировать — падаем ниже на отправку нового сообщения
+    }
+    const res2 = await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: telegramChatId, text, parse_mode: "HTML" }),
+    });
+    const data2 = await res2.json().catch(() => null);
+    if (data2 && data2.ok && data2.result && data2.result.message_id) {
+      pairTelegramMsgId[key] = data2.result.message_id;
+      dataDirty = true;
+    }
+  } catch (e) {} // сеть/токен может быть плохим — не роняем сканер из-за этого
 }
 let marketFilter = "ALL";
 let searchTerm = "";
@@ -892,7 +951,7 @@ function buildPayload() {
     tradePlanOn, tradeStopPct, tradeTargetPct, tradeTimeHours, tradeEquity,
     openTrades, closedTrades,
     thresholdLog, telegramOn, telegramToken, telegramChatId, signalSeq, lastSignalPct24h,
-    pairSignalLog, pairColumnOrder,
+    pairSignalLog, pairColumnOrder, pairTelegramMsgId,
     filtersCollapsed, totalTriggeredCount, totalEarlyCount,
     startTime, savedAt: Date.now(),
   };
@@ -946,6 +1005,7 @@ function applyPayload(payload) {
   lastSignalPct24h = (payload.lastSignalPct24h && typeof payload.lastSignalPct24h === "object") ? { ...payload.lastSignalPct24h } : {};
   pairSignalLog = (payload.pairSignalLog && typeof payload.pairSignalLog === "object") ? payload.pairSignalLog : {};
   pairColumnOrder = Array.isArray(payload.pairColumnOrder) ? payload.pairColumnOrder : [];
+  pairTelegramMsgId = (payload.pairTelegramMsgId && typeof payload.pairTelegramMsgId === "object") ? payload.pairTelegramMsgId : {};
   telegramOn = !!payload.telegramOn;
   telegramToken = payload.telegramToken || "";
   telegramChatId = payload.telegramChatId || "";
@@ -1776,8 +1836,8 @@ function handleTickerBatch(market, arr) {
           oiChangePct: oiChangePctForSignal(market.id, parsed.symbol),
         };
         pushAlert(alertEntry);
-        recordThresholdSignal(alertEntry);
         recordPairSignal(alertEntry);
+        recordThresholdSignal(alertEntry);
         notify(`⚡ SPIKE: ${parsed.base}/${parsed.quote}`, `+$${fmtMoney(rolling10)} за 10с (${market.id})`);
         startOutcome(key, market.id, parsed, now, "SPIKE", { rvol, pct1m, ats, atsMedian, imbal, spreadPct, vwapDev, rng, taker, d1m, score: scoreObj.score, parts: scoreObj.parts });
       }
@@ -1796,8 +1856,8 @@ function handleTickerBatch(market, arr) {
           oiChangePct: oiChangePctForSignal(market.id, parsed.symbol),
         };
         pushAlert(alertEntry);
-        recordThresholdSignal(alertEntry);
         recordPairSignal(alertEntry);
+        recordThresholdSignal(alertEntry);
         notify(`⚡ SPIKE30: ${parsed.base}/${parsed.quote}`, `+$${fmtMoney(rolling30)} за 30с (${market.id})`);
         startOutcome(key, market.id, parsed, now, "SPIKE30", { rvol, pct1m, ats, atsMedian, imbal, spreadPct, vwapDev, rng, taker, d1m, score: scoreObj.score, parts: scoreObj.parts });
       }
@@ -1815,8 +1875,8 @@ function handleTickerBatch(market, arr) {
           oiChangePct: oiChangePctForSignal(market.id, parsed.symbol),
         };
         pushAlert(alertEntry);
-        recordThresholdSignal(alertEntry);
         recordPairSignal(alertEntry);
+        recordThresholdSignal(alertEntry);
         earlyBeep();
         notify(`🚀 VEL1M: ${parsed.base}/${parsed.quote}`, `+$${fmtMoney(d1m)} за 1м (${market.id})`);
         startOutcome(key, market.id, parsed, now, "VEL1M", { rvol, pct1m, ats, atsMedian, imbal, spreadPct, vwapDev, rng, taker, d1m, score: scoreObj.score, parts: scoreObj.parts });
@@ -1836,8 +1896,8 @@ function handleTickerBatch(market, arr) {
           oiChangePct: oiChangePctForSignal(market.id, parsed.symbol),
         };
         pushAlert(alertEntry);
-        recordThresholdSignal(alertEntry);
         recordPairSignal(alertEntry);
+        recordThresholdSignal(alertEntry);
         earlyBeep();
         notify(`🚀 VEL1M30: ${parsed.base}/${parsed.quote}`, `+$${fmtMoney(rolling30)} за 30с (${market.id})`);
         startOutcome(key, market.id, parsed, now, "VEL1M30", { rvol, pct1m, ats, atsMedian, imbal, spreadPct, vwapDev, rng, taker, d1m, score: scoreObj.score, parts: scoreObj.parts });
@@ -1858,8 +1918,8 @@ function handleTickerBatch(market, arr) {
           oiChangePct: oiChangePctForSignal(market.id, parsed.symbol),
         };
         pushAlert(alertEntry);
-        recordThresholdSignal(alertEntry);
         recordPairSignal(alertEntry);
+        recordThresholdSignal(alertEntry);
         earlyBeep();
         notify(`🚀 ACCEL: ${parsed.base}/${parsed.quote}`, `наклон $${fmtMoney(accel)}/мин · Δ1м +$${fmtMoney(d1m)} (${market.id})`);
         startOutcome(key, market.id, parsed, now, "ACCEL", { rvol, pct1m, ats, atsMedian, imbal, spreadPct, vwapDev, rng, taker, d1m, score: scoreObj.score, parts: scoreObj.parts });
@@ -2452,6 +2512,7 @@ function resetBaseline() {
   lastSignalPct24h = {};
   pairSignalLog = {};
   pairColumnOrder = [];
+  pairTelegramMsgId = {};
   startTime = Date.now();
   clearState();
   render();
