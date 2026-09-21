@@ -284,6 +284,52 @@
   .tab-bar button.active { color: #5eff8f; }
   body.pane-alerts .table-wrap { display: none; }
   body.pane-table .alerts-panel { display: none; }
+
+  /* ===== бэктест ===== */
+  body.pane-backtest .table-wrap, body.pane-backtest .alerts-panel { display: none; }
+  .bt-panel { display: none; flex-direction: column; flex: 1; min-height: 0; overflow: auto;
+    -webkit-overflow-scrolling: touch; padding: 12px 14px 40px; }
+  body.pane-backtest .bt-panel { display: flex; }
+  .bt-head { font-size: 11px; color: #5a6b5a; line-height: 1.6; margin-bottom: 10px; }
+  .bt-head b { color: #9fb89f; }
+  .bt-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+  .bt-controls label { display: flex; align-items: center; gap: 5px; font-size: 10px; color: #5a6b5a;
+    border: 1px solid #1e2b1e; background: #0d120d; padding: 5px 8px; border-radius: 2px; }
+  .bt-controls input, .bt-controls select {
+    background: #0a0e0a; border: 1px solid #1e2b1e; color: #cfe8cf;
+    font-family: inherit; font-size: 12px; padding: 4px 6px; width: 78px; }
+  .bt-controls select { width: auto; }
+  .bt-controls button {
+    background: #12240f; border: 1px solid #2d4a2d; color: #5eff8f; font-family: inherit;
+    font-size: 10px; letter-spacing: 0.05em; padding: 7px 10px; cursor: pointer; border-radius: 2px; min-height: 34px; }
+  .bt-controls button:disabled { opacity: 0.4; cursor: default; }
+  .bt-controls button.bt-danger { background: #1e1010; border-color: #4a2d2d; color: #ff8f8f; }
+  .bt-prog-text { font-size: 11px; color: #ffd85e; margin: 6px 0; }
+  .bt-prog-bar { height: 4px; background: #1e2b1e; border-radius: 2px; overflow: hidden; }
+  .bt-prog-bar div { height: 100%; background: #5eff8f; transition: width 0.2s; }
+  .bt-sec { margin: 18px 0; }
+  .bt-sec h3 { font-size: 12px; color: #5eff8f; letter-spacing: 0.06em; margin: 0 0 8px; font-weight: 700; }
+  .bt-dim { color: #5a6b5a; font-size: 10px; line-height: 1.5; margin-top: 6px; }
+  .bt-tab, .bt-grid { border-collapse: collapse; width: 100%; font-size: 11px; margin-bottom: 6px; }
+  .bt-tab th, .bt-grid th { background: #0d120d; color: #5a6b5a; font-weight: 400; text-align: left;
+    padding: 5px 6px; border-bottom: 1px solid #1e2b1e; font-size: 9px; letter-spacing: 0.04em; }
+  .bt-tab td, .bt-grid td { padding: 5px 6px; border-bottom: 1px solid #121a12; white-space: nowrap; }
+  .bt-grid td { text-align: center; }
+  .bt-grid th:first-child, .bt-grid tr > th:first-child { text-align: center; }
+  .bt-sub { display: block; font-size: 8px; color: #5a6b5a; }
+  .bt-good { color: #5eff8f; }
+  .bt-hot { color: #ffd85e; font-weight: 700; }
+  .bt-bad { color: #ff6b6b; }
+  .bt-weak { color: #3a4a3a; }
+  .bt-cell-best { background: #1d3a12; color: #5eff8f; font-weight: 700; }
+  .bt-cell-good { background: #13240f; color: #9fe8a0; }
+  .bt-opt { border: 1px solid #2d4a2d; background: #0d120d; padding: 8px 10px; margin-bottom: 8px; font-size: 11px; line-height: 1.6; }
+  .bt-opt b { color: #5eff8f; }
+  .bt-optcfg { color: #ffd85e; margin: 3px 0; word-break: break-word; }
+  .bt-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+  .bt-warn { border: 1px solid #4a3a1e; background: #131008; padding: 8px 10px; font-size: 10px; color: #b9a97e; line-height: 1.6; }
+  .bt-warn h3 { color: #ffd85e; }
+
   .bg-banner {
     display: none; position: sticky; top: 0; z-index: 30;
     background: #1e1810; color: #ffd85e; border-bottom: 1px solid #4a3a1e;
@@ -403,6 +449,7 @@
     <b>⭐ SCORE (0–100)</b> — главный сигнал: складывает RVOL (объём против средней минуты суток), Δ% цены за 1м, пробой дневного хая, положение к VWAP, скачок среднего чека сделки, перекос стакана и долю тейкер-покупок. Стреляет только при score ≥ порога И растущей цене. «ТОЛЬКО SCORE» глушит старые пороговые сигналы.
     <b>Пороговые:</b> SPIKE (10с), VEL1M/VEL2M, ACCEL (наклон за 90с). <b>🪤 Тихая полка</b> — первый вынос у пары, которая долго стояла ровно; в течение 10 мин после неё score получает бонус.
     <b>🔥 Тейкер-поток</b> — kline_1m по 12 самым горячим спот-парам, даёт долю покупок по рынку. <b>💾 CSV</b> — выгрузка всех сигналов с признаками и MFE/MAE для разбора.
+    <b>🧪 БЭКТЕСТ</b> — вкладка внизу: прогон этих же правил по истории за год и подбор порогов по статистике, а не на глаз.
     Отбор при первом появлении: цена &lt; $10, нач. объём ≤ $3M. UTK и Alpha исключены.
   </div>
   <div id="stats-panel" style="display:none; margin-top:10px; border:1px solid #1e2b1e; border-radius:2px; background:#0a0e0a; padding:10px 12px;">
@@ -443,6 +490,52 @@
       </tbody>
     </table>
   </div>
+  <div class="bt-panel" id="bt-panel">
+    <div class="bt-head">
+      <b>БЭКТЕСТ ПО ИСТОРИИ BINANCE.</b> Гоняет ту же логику сигналов по минутным свечам за прошедший год
+      и считает, что было с ценой ПОСЛЕ сигнала. Сутки берутся равномерно по году (стратифицированная выборка),
+      внутри суток — все подходящие под фильтр пары. Один проход собирает события со всеми признаками,
+      после этого любой перебор порогов считается мгновенно, прямо здесь, без новой загрузки.
+      <br>Живой поток на время загрузки ставится на паузу. Прогон можно прервать — собранное сохранится.
+    </div>
+    <div class="bt-controls">
+      <label>размер
+        <select id="bt-preset">
+          <option value="quick">быстрый · 12 суток × 30 пар</option>
+          <option value="mid">средний · 26 суток × 60 пар</option>
+          <option value="year">год · 52 суток × 120 пар</option>
+        </select>
+      </label>
+      <label>рынок
+        <select id="bt-market">
+          <option value="SPOT">SPOT</option>
+          <option value="USDT-M">USDT-M</option>
+        </select>
+      </label>
+      <label>суток <input id="bt-days" value="12"></label>
+      <label>пар/сутки <input id="bt-pairs" value="30"></label>
+      <label>макс. цена $ <input id="bt-maxprice" value="10"></label>
+      <label>макс. объём $ <input id="bt-maxvol" value="3000000"></label>
+      <label>мин. объём $ <input id="bt-minvol" value="0"></label>
+      <label>окно, мин
+        <select id="bt-horizon">
+          <option value="15">15</option>
+          <option value="60" selected>60</option>
+          <option value="120">120</option>
+        </select>
+      </label>
+      <label>вынос от % <input id="bt-pump" value="3"></label>
+      <label>мин. сигн./день <input id="bt-minperday" value="1"></label>
+      <button id="bt-run">▶ ЗАПУСТИТЬ БЭКТЕСТ</button>
+      <button id="bt-stop" class="bt-danger">■ СТОП</button>
+      <button id="bt-recalc">↻ ПЕРЕСЧИТАТЬ ОТЧЁТ</button>
+      <button id="bt-load">⭳ ЗАГРУЗИТЬ ПРОШЛЫЙ</button>
+      <button id="bt-csv">💾 CSV СОБЫТИЙ</button>
+      <button id="bt-copy">📋 СКОПИРОВАТЬ ИТОГ</button>
+    </div>
+    <div id="bt-progress"></div>
+    <div id="bt-report"></div>
+  </div>
   <div class="alerts-panel">
     <div class="alerts-header">🔔 ЖУРНАЛ СИГНАЛОВ</div>
     <div class="alerts-tabs" id="alerts-tabs">
@@ -462,6 +555,7 @@
 <nav class="tab-bar" id="tab-bar">
   <button data-pane="table" class="active">ТАБЛИЦА</button>
   <button data-pane="alerts">СИГНАЛЫ</button>
+  <button data-pane="backtest">БЭКТЕСТ</button>
 </nav>
 
 <script>
@@ -2132,6 +2226,1192 @@ setInterval(() => {
   }
 }, 5000);
 
+
+
+// ================== BACKTEST ENGINE v1 (BT-CORE-START) ==================
+// Зачем: пороги в шапке (Δ1м, Δ2м, score, цена, объём) подбирались на глаз.
+// Движок ниже прогоняет ту же самую логику сигналов по историческим минуткам
+// Binance и считает, что было с ценой ПОСЛЕ сигнала. Один проход по данным
+// собирает «события-кандидаты» со всеми признаками и исходами, а перебор
+// порогов — это уже фильтр по готовой таблице, поэтому перебрать можно всё.
+//
+// Честные ограничения (они же написаны в отчёте):
+//  1) Минутные свечи. Порог 10с (SPIKE) на них не виден: необходимое условие
+//     10-секундного всплеска — Δ1м >= порога, поэтому SPIKE сверху ограничен
+//     строкой VEL1M с тем же значением.
+//  2) Стакан (перекос bid/ask) и спред в истории недоступны: в score они дают
+//     от -10 до +10. Значит backtest-score примерно на 5 пунктов ниже живого.
+//     Сравнивать пороги надёжнее по частоте сигналов, а не по абсолютной цифре.
+//  3) Тейкер-доля в бэктесте есть по всем парам, а в live — только по 12 горячим.
+//  4) exchangeInfo отдаёт только живые пары: делистнутые за год не попадают
+//     в выборку (survivorship bias в сторону оптимизма).
+
+const BT_WARMUP_MIN = 1440;   // сутки прогрева: скользящие 24ч объём/хай/лоу/VWAP
+const BT_DAY_MIN = 1440;      // тестируемые сутки
+const BT_FORWARD_MIN = 120;   // сколько минут смотрим вперёд после сигнала
+const BT_WINDOW_MIN = BT_WARMUP_MIN + BT_DAY_MIN + BT_FORWARD_MIN; // 3000 = ровно 3 запроса
+const BT_EVENT_FLOOR = 2000;  // $ Δ1м — ниже этого минута не сохраняется как кандидат
+const BT_MAX_EVENTS = 300000; // потолок таблицы: ~65 МБ, дальше телефон не вывозит
+const BT_EVENT_SCORE_FLOOR = 35;
+const BT_BASELINE_MAX = 22;   // как FEAT_BASELINE_MAX / RATE_BASELINE_MAX в live
+const BT_QUIET_WINDOW_MS = 600000;
+
+const BT_COLS = [
+  "sym", "dayIdx", "t", "hour", "price", "vol24", "d1m", "d2m", "accel",
+  "rvol", "pct1m", "pct2m", "atsK", "rng", "vwapDev", "highFresh", "taker",
+  "quietMinT", "quietOwnT", "score0", "score1",
+  "mfe15", "mae15", "mfe60", "mae60", "mfe120", "mae120", "tpeak",
+];
+
+function btNewTable() {
+  const t = { n: 0, cap: 0, col: {}, syms: [], symIdx: new Map(), days: [], meta: {} };
+  for (const c of BT_COLS) t.col[c] = new Float64Array(0);
+  return t;
+}
+function btSymId(tb, sym) {
+  let id = tb.symIdx.get(sym);
+  if (id === undefined) { id = tb.syms.length; tb.syms.push(sym); tb.symIdx.set(sym, id); }
+  return id;
+}
+function btGrow(tb, need) {
+  if (need <= tb.cap) return;
+  let cap = tb.cap || 4096;
+  while (cap < need) cap *= 2;
+  for (const c of BT_COLS) {
+    const next = new Float64Array(cap);
+    next.set(tb.col[c]);
+    tb.col[c] = next;
+  }
+  tb.cap = cap;
+}
+function btPush(tb, ev) {
+  btGrow(tb, tb.n + 1);
+  const i = tb.n;
+  for (const c of BT_COLS) {
+    const v = ev[c];
+    tb.col[c][i] = (v === null || v === undefined) ? NaN : v;
+  }
+  tb.n = i + 1;
+}
+
+function btMedian(arr) {
+  if (!arr || !arr.length) return null;
+  const s = Float64Array.from(arr).sort();
+  const mid = s.length >> 1;
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+function btMedianBuf(buf, n) {
+  if (!n) return null;
+  const s = buf.slice(0, n).sort();
+  const mid = n >> 1;
+  return n % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+function btStdev(arr) {
+  if (!arr || arr.length < 2) return null;
+  let m = 0;
+  for (const v of arr) m += v;
+  m /= arr.length;
+  let v2 = 0;
+  for (const v of arr) v2 += (v - m) ** 2;
+  return Math.sqrt(v2 / arr.length);
+}
+// скользящий максимум/минимум окном win (монотонная дека) — нужен для 24ч хая/лоу
+function btRollingExtreme(arr, win, isMax) {
+  const n = arr.length, out = new Float64Array(n), dq = new Int32Array(n);
+  let head = 0, tail = 0;
+  for (let i = 0; i < n; i++) {
+    while (tail > head && dq[head] <= i - win) head++;
+    const v = arr[i];
+    while (tail > head && (isMax ? arr[dq[tail - 1]] <= v : arr[dq[tail - 1]] >= v)) tail--;
+    dq[tail++] = i;
+    out[i] = arr[dq[head]];
+  }
+  return out;
+}
+
+// Разбор строки klines Binance: [openTime,o,h,l,c,vol,closeTime,quoteVol,trades,takerBuyBase,takerBuyQuote,-]
+function btParseKlines(raw) {
+  const out = [];
+  for (const r of raw) {
+    out.push({
+      t: +r[0],
+      o: +r[1], h: +r[2], l: +r[3], c: +r[4],
+      bv: +r[5], qv: +r[7], n: +r[8], tbqv: +r[10],
+    });
+  }
+  return out;
+}
+// Свечи Binance пропускают минуты без сделок. Для скользящих окон нужна сплошная сетка.
+function btFillGaps(rows, startT, count) {
+  const byT = new Map();
+  for (const r of rows) byT.set(r.t, r);
+  const out = new Array(count);
+  let lastC = null;
+  for (let i = 0; i < count; i++) {
+    const t = startT + i * 60000;
+    const r = byT.get(t);
+    if (r) { out[i] = r; lastC = r.c; }
+    else {
+      out[i] = { t, o: lastC, h: lastC, l: lastC, c: lastC, bv: 0, qv: 0, n: 0, tbqv: 0, empty: true };
+    }
+  }
+  return out;
+}
+
+// Главный проход по одной паре за одни сутки. Повторяет расчёт признаков из
+// живого сканера (processTicker), только на минутной сетке вместо секундной.
+function btScanSeries(k, ctx) {
+  // k — сплошной массив BT_WINDOW_MIN минут: [сутки прогрева][тестируемые сутки][вперёд]
+  const scoreFn = ctx.computeScore;
+  const n = k.length;
+  if (n < BT_WARMUP_MIN + 60) return 0;
+
+  const c = new Float64Array(n), hi = new Float64Array(n), lo = new Float64Array(n);
+  const qv = new Float64Array(n), bv = new Float64Array(n), tr = new Float64Array(n), tb = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    const r = k[i];
+    c[i] = r.c; hi[i] = r.h; lo[i] = r.l;
+    qv[i] = r.qv; bv[i] = r.bv; tr[i] = r.n; tb[i] = r.tbqv;
+  }
+  // скользящие 24ч: объём (curVol тикера), VWAP, хай/лоу
+  const cumQV = new Float64Array(n + 1), cumBV = new Float64Array(n + 1);
+  for (let i = 0; i < n; i++) { cumQV[i + 1] = cumQV[i] + qv[i]; cumBV[i + 1] = cumBV[i] + bv[i]; }
+  const hi24 = btRollingExtreme(hi, BT_WARMUP_MIN, true);
+  const lo24 = btRollingExtreme(lo, BT_WARMUP_MIN, false);
+
+  const symId = btSymId(ctx.table, ctx.sym);
+  const rateHist = [], atsHist = [];
+  let lastHighUpAt = null;
+  const quietHist = []; // [{t, minT}] — минимальный порог Δ1м, при котором тут сработала бы ТИХАЯ ПОЛКА
+  let pushed = 0;
+
+  const from = BT_WARMUP_MIN, to = BT_WARMUP_MIN + BT_DAY_MIN;
+  for (let i = 1; i < to; i++) {
+    const price = c[i];
+    if (!(price > 0)) continue;
+    const vol24 = cumQV[i + 1] - cumQV[i + 1 - Math.min(i + 1, BT_WARMUP_MIN)];
+    const base24 = cumBV[i + 1] - cumBV[i + 1 - Math.min(i + 1, BT_WARMUP_MIN)];
+
+    // новый 24ч хай — «храповик», как dayHigh/dayHighAt в live
+    if (i > 0 && hi[i] > hi24[i - 1]) lastHighUpAt = k[i].t;
+    const highFresh = lastHighUpAt !== null ? (k[i].t - lastHighUpAt) : null;
+
+    const d1m = qv[i];
+    const d2m = i >= 1 ? qv[i] + qv[i - 1] : null;
+    // accel в live — наклон регрессии объёма за 90с в $/мин; на минутках это
+    // средняя скорость за 2 минуты, то есть d2m/2
+    const accel = d2m !== null ? d2m / 2 : null;
+    const pct1m = c[i - 1] > 0 ? (c[i] / c[i - 1] - 1) * 100 : null;
+    const pct2m = i >= 2 && c[i - 2] > 0 ? (c[i] / c[i - 2] - 1) * 100 : null;
+    const ats = (tr[i] >= 3 && d1m > 0) ? d1m / tr[i] : null;
+    const expMinVol = vol24 > 0 ? vol24 / 1440 : null;
+    const rvol = expMinVol ? d1m / expMinVol : null;
+    const rng = (hi24[i] > lo24[i]) ? (price - lo24[i]) / (hi24[i] - lo24[i]) : null;
+    const vwap = base24 > 0 ? vol24 / base24 : null;
+    const vwapDev = vwap ? (price / vwap - 1) * 100 : null;
+    const taker = d1m > 0 ? tb[i] / d1m : null;
+
+    // baseline считаем по ЗАВЕРШЁННЫМ прошлым минутам (без самой оцениваемой),
+    // иначе всплеск попадает в собственную же «полку»
+    const rvolMedian = rateHist.length >= 6 ? btMedian(rateHist) : null;
+    const rvolStd = rateHist.length >= 8 ? btStdev(rateHist) : null;
+    const atsMedian = atsHist.length >= 4 ? btMedian(atsHist) : null;
+
+    // ТИХАЯ ПОЛКА: единственное условие, зависящее от порога Δ1м —
+    // rvolMedian < T*0.5, то есть T > 2*rvolMedian. Запоминаем это граничное T,
+    // чтобы потом при переборе знать, была ли полка при конкретном пороге.
+    let quietOwnT = Infinity;
+    if (rvolMedian !== null && rvolStd !== null
+        && rvolStd <= Math.max(rvolMedian, 1) * 0.6
+        && d1m >= Math.max(rvolMedian, 1) * 3
+        && d1m >= 900) {
+      quietOwnT = 2 * rvolMedian;
+      quietHist.push({ t: k[i].t, minT: quietOwnT });
+      while (quietHist.length && k[i].t - quietHist[0].t > BT_QUIET_WINDOW_MS) quietHist.shift();
+    }
+    // wasQuiet в live читается ДО того, как полка успеет сработать на этом же тике
+    let quietMinT = Infinity;
+    for (const q of quietHist) {
+      if (q.t < k[i].t && k[i].t - q.t <= BT_QUIET_WINDOW_MS && q.minT < quietMinT) quietMinT = q.minT;
+    }
+
+    // обновляем baseline уже ПОСЛЕ оценки минуты
+    if (d1m !== null && !isNaN(d1m)) {
+      rateHist.push(d1m);
+      if (rateHist.length > BT_BASELINE_MAX) rateHist.shift();
+    }
+    if (ats !== null) {
+      atsHist.push(ats);
+      if (atsHist.length > BT_BASELINE_MAX) atsHist.shift();
+    }
+
+    if (i < from) continue;                   // прогрев — только копим baseline
+    if (k[i].empty) continue;                 // минута без сделок
+
+    const feat = {
+      rvol, pct1m, pct2m, rng, vwapDev, ats, atsMedian,
+      imbal: null, spreadPct: null,            // стакана в истории нет
+      highFresh, taker,
+    };
+    const s0 = scoreFn({ ...feat, wasQuiet: false }).score;
+    const s1 = scoreFn({ ...feat, wasQuiet: true }).score;
+
+    const interesting = (d1m >= BT_EVENT_FLOOR) || (d2m !== null && d2m >= BT_EVENT_FLOOR)
+      || s0 >= BT_EVENT_SCORE_FLOOR;
+    if (!interesting) continue;
+
+    // исходы: вход по закрытию сигнальной минуты, вперёд по максимуму/минимуму
+    const out = {};
+    for (const H of [15, 60, 120]) {
+      let mx = -Infinity, mn = Infinity, peakAt = 0;
+      const end = Math.min(n - 1, i + H);
+      for (let j = i + 1; j <= end; j++) {
+        if (hi[j] > mx) { mx = hi[j]; peakAt = j - i; }
+        if (lo[j] < mn) mn = lo[j];
+      }
+      if (mx === -Infinity) { out["mfe" + H] = null; out["mae" + H] = null; continue; }
+      out["mfe" + H] = (mx / price - 1) * 100;
+      out["mae" + H] = (mn / price - 1) * 100;
+      if (H === 120) out.tpeak = peakAt;
+    }
+    if (out.mfe15 === null) continue;
+    if (ctx.table.n >= BT_MAX_EVENTS) { ctx.table.meta.truncated = true; return pushed; }
+
+    btPush(ctx.table, {
+      sym: symId, dayIdx: ctx.dayIdx, t: k[i].t, hour: new Date(k[i].t).getUTCHours(),
+      price, vol24, d1m, d2m, accel, rvol, pct1m, pct2m,
+      atsK: (ats !== null && atsMedian) ? ats / atsMedian : null,
+      rng, vwapDev, highFresh, taker,
+      quietMinT: isFinite(quietMinT) ? quietMinT : 1e15,
+      quietOwnT: isFinite(quietOwnT) ? quietOwnT : 1e15,
+      score0: s0, score1: s1,
+      mfe15: out.mfe15, mae15: out.mae15, mfe60: out.mfe60, mae60: out.mae60,
+      mfe120: out.mfe120, mae120: out.mae120, tpeak: out.tpeak,
+    });
+    pushed++;
+  }
+  return pushed;
+}
+// ================== BT-CORE-END ==================
+
+
+// ================== BT-SWEEP-START ==================
+// Перебор настроек. Таблица событий со всеми признаками и исходами уже собрана,
+// поэтому любая комбинация порогов — это фильтр + пересчёт кулдаунов, сотни
+// конфигураций считаются за секунды. Отсюда и «перепробовать всё».
+
+const BT_TYPES = ["VEL1M", "VEL2M", "ACCEL", "SIGNAL", "QUIET"];
+const BT_COOLDOWN = { VEL1M: 45000, VEL2M: 60000, ACCEL: 50000, SIGNAL: 120000, QUIET: 90000 };
+const BT_DEFAULT_CFG = {
+  types: ["SIGNAL"],
+  t1m: 30000, t2m: 50000, scoreThr: 60,
+  maxPrice: 10, maxVol: 3000000, minVol: 0,
+  minD1m: null,
+  minRvol: null, minTaker: null, minPct1m: null, minAtsK: null,
+  minVwapDev: null, minRng: null, requireQuiet: false, requireNewHigh: false,
+  hourFrom: null, hourTo: null,
+  horizon: 60, pump: 3, big: 10,
+};
+function btCfg(over) { return Object.assign({}, BT_DEFAULT_CFG, over || {}); }
+
+// Нижняя граница доли (Уилсон, 95%). Нужна, чтобы конфигурация с 5 сигналами
+// и «100% выносов» не побеждала конфигурацию с 400 сигналами и 38%.
+function btWilson(k, n) {
+  if (!n) return null;
+  const z = 1.96, p = k / n;
+  const denom = 1 + z * z / n;
+  const centre = p + z * z / (2 * n);
+  const margin = z * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n));
+  return Math.max(0, (centre - margin) / denom) * 100;
+}
+
+function btEval(tb, cfgIn) {
+  const cfg = btCfg(cfgIn);
+  const C = tb.col;
+  const mfeCol = C["mfe" + cfg.horizon], maeCol = C["mae" + cfg.horizon];
+  const nSym = Math.max(1, tb.syms.length), nDay = Math.max(1, tb.days.length);
+  const slots = nSym * nDay * 6;
+  if (!tb._cd || tb._cd.length < slots) tb._cd = new Float64Array(slots);
+  else tb._cd.fill(0, 0, slots);
+  const cd = tb._cd;
+
+  const wantVel1 = cfg.types.includes("VEL1M"), wantVel2 = cfg.types.includes("VEL2M");
+  const wantAccel = cfg.types.includes("ACCEL"), wantSig = cfg.types.includes("SIGNAL");
+  const wantQuiet = cfg.types.includes("QUIET");
+  if (!tb._mfeBuf || tb._mfeBuf.length < tb.n) {
+    tb._mfeBuf = new Float64Array(tb.n);
+    tb._tpkBuf = new Float64Array(tb.n);
+  }
+  const mfeBuf = tb._mfeBuf, tpkBuf = tb._tpkBuf;
+  let sumMfe = 0, sumMae = 0;
+  let n = 0, hitPump = 0, hitBig = 0, hit1 = 0, hit5 = 0, hit20 = 0, deep = 0, sumScore = 0, sumD1m = 0;
+  const hitPairs = new Set();
+
+  for (let i = 0; i < tb.n; i++) {
+    const mfe = mfeCol[i];
+    if (isNaN(mfe)) continue;
+    // фильтр вселенной (то же, что «макс. цена» и «макс. нач. объём» в шапке)
+    const price = C.price[i], vol24 = C.vol24[i];
+    if (!(price < cfg.maxPrice)) continue;
+    if (!(vol24 <= cfg.maxVol)) continue;
+    if (cfg.minVol && !(vol24 >= cfg.minVol)) continue;
+
+    const d1m = C.d1m[i], d2m = C.d2m[i], accel = C.accel[i], pct1m = C.pct1m[i];
+    const quiet = C.quietMinT[i] < cfg.t1m;
+    const score = quiet ? C.score1[i] : C.score0[i];
+
+    // дополнительные фильтры признаков
+    if (cfg.minD1m !== null && !(d1m >= cfg.minD1m)) continue;
+    if (cfg.minRvol !== null && !(C.rvol[i] >= cfg.minRvol)) continue;
+    if (cfg.minTaker !== null && !(C.taker[i] >= cfg.minTaker)) continue;
+    if (cfg.minPct1m !== null && !(pct1m >= cfg.minPct1m)) continue;
+    if (cfg.minAtsK !== null && !(C.atsK[i] >= cfg.minAtsK)) continue;
+    if (cfg.minVwapDev !== null && !(C.vwapDev[i] >= cfg.minVwapDev)) continue;
+    if (cfg.minRng !== null && !(C.rng[i] >= cfg.minRng)) continue;
+    if (cfg.requireQuiet && !quiet) continue;
+    if (cfg.requireNewHigh && !(C.highFresh[i] <= 120000)) continue;
+    if (cfg.hourFrom !== null) {
+      const h = C.hour[i];
+      const inRange = cfg.hourFrom <= cfg.hourTo
+        ? (h >= cfg.hourFrom && h < cfg.hourTo)
+        : (h >= cfg.hourFrom || h < cfg.hourTo);
+      if (!inRange) continue;
+    }
+
+    // сработал ли хоть один включённый тип сигнала
+    let mask = 0, minCd = Infinity;
+    if (wantVel1 && d1m >= cfg.t1m) { mask |= 1; minCd = Math.min(minCd, BT_COOLDOWN.VEL1M); }
+    if (wantVel2 && d2m >= cfg.t2m) { mask |= 2; minCd = Math.min(minCd, BT_COOLDOWN.VEL2M); }
+    if (wantAccel && accel >= cfg.t1m * 0.6 && d1m >= cfg.t1m * 0.4) { mask |= 4; minCd = Math.min(minCd, BT_COOLDOWN.ACCEL); }
+    if (wantSig && score >= cfg.scoreThr && d1m >= 1500 && pct1m > 0) { mask |= 8; minCd = Math.min(minCd, BT_COOLDOWN.SIGNAL); }
+    if (wantQuiet && C.quietOwnT[i] < cfg.t1m) { mask |= 16; minCd = Math.min(minCd, BT_COOLDOWN.QUIET); }
+    if (!mask) continue;
+
+    const t = C.t[i];
+    const slotBase = (C.sym[i] * nDay + C.dayIdx[i]) * 6;
+    // кулдаун: хотя бы один из сработавших типов должен быть «остывшим»
+    let ready = false;
+    for (let b = 0; b < 5; b++) {
+      if (mask & (1 << b)) {
+        if (t - cd[slotBase + b] >= BT_COOLDOWN[BT_TYPES[b]]) ready = true;
+      }
+    }
+    if (!ready) continue;
+    if (t - cd[slotBase + 5] < minCd) continue;   // одна минута не считается дважды
+    for (let b = 0; b < 5; b++) if (mask & (1 << b)) cd[slotBase + b] = t;
+    cd[slotBase + 5] = t;
+
+    const mae = maeCol[i];
+    mfeBuf[n] = mfe; tpkBuf[n] = C.tpeak[i];
+    sumMfe += mfe; sumMae += mae;
+    n++;
+    sumScore += score; sumD1m += d1m;
+    if (mfe >= 1) hit1++;
+    if (mfe >= cfg.pump) hitPump++;
+    if (mfe >= 5) hit5++;
+    if (mfe >= cfg.big) hitBig++;
+    if (mfe >= 20) hit20++;
+    if (mae <= -3) deep++;
+    hitPairs.add(C.sym[i]);
+  }
+
+  const days = tb.days.length || 1;
+  return {
+    cfg, n,
+    perDay: n / days,
+    pumpRate: n ? (hitPump / n) * 100 : null,
+    bigRate: n ? (hitBig / n) * 100 : null,
+    pumpLB: btWilson(hitPump, n), bigLB: btWilson(hitBig, n),
+    hit1: n ? (hit1 / n) * 100 : null,
+    hit5: n ? (hit5 / n) * 100 : null,
+    hit20: n ? (hit20 / n) * 100 : null,
+    deepRate: n ? (deep / n) * 100 : null,
+    avgMfe: n ? sumMfe / n : null, medMfe: btMedianBuf(mfeBuf, n),
+    avgMae: n ? sumMae / n : null, medTpeak: btMedianBuf(tpkBuf, n),
+    avgScore: n ? sumScore / n : null,
+    avgD1m: n ? sumD1m / n : null,
+    pumpsPerDay: hitPump / days,
+    bigPerDay: hitBig / days,
+    pairs: hitPairs.size,
+  };
+}
+
+// срез по одному признаку — «при каком значении чаще вынос»
+function btMarginal(tb, cfgIn, field, bands) {
+  const cfg = btCfg(cfgIn);
+  const C = tb.col;
+  const mfeCol = C["mfe" + cfg.horizon], maeCol = C["mae" + cfg.horizon];
+  const acc = bands.map(([lo, hi]) => ({ lo, hi, n: 0, pump: 0, big: 0, sum: 0, sumMae: 0, mfes: [] }));
+  for (let i = 0; i < tb.n; i++) {
+    const mfe = mfeCol[i];
+    if (isNaN(mfe)) continue;
+    if (!(C.price[i] < cfg.maxPrice)) continue;
+    if (!(C.vol24[i] <= cfg.maxVol)) continue;
+    const quiet = C.quietMinT[i] < cfg.t1m;
+    if (cfg.types.includes("VEL1M") && !(C.d1m[i] >= cfg.t1m)) continue;
+    if (cfg.minD1m !== null && !(C.d1m[i] >= cfg.minD1m)) continue;
+    let v;
+    if (field === "score") v = quiet ? C.score1[i] : C.score0[i];
+    else if (field === "quiet") v = quiet ? 1 : 0;
+    else if (field === "newHigh") v = C.highFresh[i] <= 120000 ? 1 : 0;
+    else v = C[field][i];
+    if (isNaN(v)) continue;
+    for (const a of acc) {
+      if (v >= a.lo && v < a.hi) {
+        a.n++; a.sum += mfe; a.sumMae += maeCol[i]; a.mfes.push(mfe);
+        if (mfe >= cfg.pump) a.pump++;
+        if (mfe >= cfg.big) a.big++;
+        break;
+      }
+    }
+  }
+  return acc.map(a => ({
+    lo: a.lo, hi: a.hi, n: a.n,
+    pumpRate: a.n ? (a.pump / a.n) * 100 : null,
+    bigRate: a.n ? (a.big / a.n) * 100 : null,
+    avgMfe: a.n ? a.sum / a.n : null,
+    medMfe: btMedian(a.mfes),
+    avgMae: a.n ? a.sumMae / a.n : null,
+  }));
+}
+
+// координатный спуск по сетке — «идеальные пороги» под выбранную цель
+function btOptimize(tb, baseCfg, spec, objective, minPerDay, minN) {
+  const floorN = minN || 40;
+  let cur = btCfg(baseCfg);
+  let best = btEval(tb, cur);
+  // оптимизируем по НИЖНЕЙ границе доли: так «идеальные» пороги не подгоняются
+  // под десяток случайных удач
+  const val = r => {
+    if (!r.n || r.n < floorN || r.perDay < minPerDay) return -Infinity;
+    const v = objective === "big" ? r.bigLB : (objective === "pump" ? r.pumpLB : r.avgMfe);
+    return v + Math.min(r.perDay, 20) * 0.02;  // при равной надёжности — больше сигналов
+  };
+  let bestVal = val(best), tried = 1;
+  for (let pass = 0; pass < 3; pass++) {
+    let improved = false;
+    for (const key of Object.keys(spec)) {
+      for (const v of spec[key]) {
+        if (cur[key] === v) continue;
+        const cand = Object.assign({}, cur, { [key]: v });
+        const r = btEval(tb, cand);
+        tried++;
+        if (val(r) > bestVal) { bestVal = val(r); best = r; cur = cand; improved = true; }
+      }
+    }
+    if (!improved) break;
+  }
+  return { best, cfg: cur, tried };
+}
+// ================== BT-SWEEP-END ==================
+
+
+// ================== BT-REPORT-START ==================
+// Отчёт: сетки «score × Δ1м», срезы по каждому признаку и координатный поиск
+// идеальных порогов. Всё считается из уже собранной таблицы событий.
+
+const BT_SCORE_STEPS = [40, 45, 50, 55, 60, 65, 70, 75, 80, 85];
+const BT_T1M_STEPS = [5000, 10000, 15000, 20000, 30000, 40000, 50000, 75000, 100000, 150000];
+const BT_T2M_STEPS = [10000, 20000, 30000, 50000, 75000, 100000, 150000, 250000];
+
+function btPct(v, d) { return v === null || v === undefined || isNaN(v) ? "—" : v.toFixed(d === undefined ? 1 : d) + "%"; }
+function btNum(v, d) { return v === null || v === undefined || isNaN(v) ? "—" : v.toFixed(d === undefined ? 1 : d); }
+function btMoneyShort(v) {
+  if (v >= 1e6) return "$" + (v / 1e6).toFixed(v >= 1e7 ? 0 : 1) + "M";
+  if (v >= 1000) return "$" + Math.round(v / 1000) + "k";
+  return "$" + Math.round(v);
+}
+
+function btYield() { return new Promise(r => setTimeout(r, 0)); }
+
+async function btBuildReport(tb, o, onStep) {
+  const step = (text, pct) => { if (onStep) onStep(text, pct); return btYield(); };
+  const base = { horizon: o.horizon, pump: o.pump, big: 10, maxPrice: o.maxPrice, maxVol: o.maxVol, minVol: o.minVol || 0 };
+  const rep = { meta: tb.meta, opts: o, generatedAt: Date.now() };
+
+  // 1. SCORE × Δ1м. Для SCORE-сигнала порог Δ1м влияет только через «тихую полку»
+  //    (бонус +12), поэтому вторая сетка — по типу VEL1M, где Δ1м и есть порог.
+  rep.gridScore = [];
+  await step("Сетка score × Δ1м…", 5);
+  for (const s of BT_SCORE_STEPS) {
+    const row = { scoreThr: s, cells: [] };
+    for (const t1 of BT_T1M_STEPS) {
+      row.cells.push(btEval(tb, Object.assign({}, base, { types: ["SIGNAL"], scoreThr: s, t1m: t1, minD1m: t1 })));
+    }
+    rep.gridScore.push(row);
+  }
+  await step("Пороговые сигналы…", 25);
+  rep.gridVel = BT_T1M_STEPS.map(t1 => btEval(tb, Object.assign({}, base, { types: ["VEL1M"], t1m: t1 })));
+  rep.gridVel2 = BT_T2M_STEPS.map(t2 => btEval(tb, Object.assign({}, base, { types: ["VEL2M"], t2m: t2 })));
+  rep.gridQuiet = BT_T1M_STEPS.map(t1 => btEval(tb, Object.assign({}, base, { types: ["QUIET"], t1m: t1 })));
+
+  // 2. Типы сигналов при «заводских» настройках — что вообще стоит держать включённым
+  await step("Типы сигналов…", 35);
+  rep.byType = [
+    ["⭐ SCORE 60", { types: ["SIGNAL"], scoreThr: 60, t1m: 30000 }],
+    ["⭐ SCORE 70", { types: ["SIGNAL"], scoreThr: 70, t1m: 30000 }],
+    ["⭐ SCORE 80", { types: ["SIGNAL"], scoreThr: 80, t1m: 30000 }],
+    ["VEL1M $30k", { types: ["VEL1M"], t1m: 30000 }],
+    ["VEL2M $50k", { types: ["VEL2M"], t2m: 50000 }],
+    ["QUIET $30k", { types: ["QUIET"], t1m: 30000 }],
+    ["ACCEL $30k", { types: ["ACCEL"], t1m: 30000 }],
+    ["SCORE 60 + VEL1M $30k", { types: ["SIGNAL", "VEL1M"], scoreThr: 60, t1m: 30000 }],
+  ].map(([label, cfg]) => ({ label, r: btEval(tb, Object.assign({}, base, cfg)) }));
+
+  // 3. Срезы по признакам — «при каком значении чаще вынос»
+  // население для срезов: все минуты-кандидаты с оборотом от $5k за минуту
+  const wide = Object.assign({}, base, { types: ["VEL1M"], t1m: 5000 });
+  await step("Срезы по признакам…", 45);
+  rep.marg = {
+    score: btMarginal(tb, wide, "score", [[0, 30], [30, 40], [40, 50], [50, 60], [60, 70], [70, 80], [80, 101]]),
+    rvol: btMarginal(tb, wide, "rvol", [[0, 2], [2, 4], [4, 8], [8, 15], [15, 30], [30, 60], [60, 1e9]]),
+    pct1m: btMarginal(tb, wide, "pct1m", [[-100, 0], [0, 0.4], [0.4, 1], [1, 2], [2, 4], [4, 8], [8, 1e9]]),
+    taker: btMarginal(tb, wide, "taker", [[0, 0.35], [0.35, 0.5], [0.5, 0.58], [0.58, 0.7], [0.7, 0.85], [0.85, 1.01]]),
+    atsK: btMarginal(tb, wide, "atsK", [[0, 1], [1, 2], [2, 4], [4, 8], [8, 1e9]]),
+    d1m: btMarginal(tb, wide, "d1m", [[2000, 10000], [10000, 25000], [25000, 50000], [50000, 100000], [100000, 250000], [250000, 1e12]]),
+    vol24: btMarginal(tb, wide, "vol24", [[0, 1e5], [1e5, 3e5], [3e5, 1e6], [1e6, 3e6], [3e6, 1e12]]),
+    price: btMarginal(tb, wide, "price", [[0, 0.01], [0.01, 0.1], [0.1, 1], [1, 3], [3, 10], [10, 1e9]]),
+    rng: btMarginal(tb, wide, "rng", [[0, 0.35], [0.35, 0.7], [0.7, 0.9], [0.9, 1.01]]),
+    vwapDev: btMarginal(tb, wide, "vwapDev", [[-100, -3], [-3, 0], [0, 3], [3, 10], [10, 1e9]]),
+    quiet: btMarginal(tb, wide, "quiet", [[0, 1], [1, 2]]),
+    newHigh: btMarginal(tb, wide, "newHigh", [[0, 1], [1, 2]]),
+    hour: btMarginal(tb, wide, "hour", [[0, 4], [4, 8], [8, 12], [12, 16], [16, 20], [20, 24]]),
+  };
+
+  // 4. Идеальные пороги: отдельно под «вынос» и под «10%+»
+  const spec = {
+    scoreThr: BT_SCORE_STEPS,
+    t1m: BT_T1M_STEPS,
+    minD1m: [null].concat(BT_T1M_STEPS),
+    minRvol: [null, 2, 4, 6, 10, 15, 25],
+    minPct1m: [null, 0.2, 0.5, 1, 2],
+    minTaker: [null, 0.5, 0.58, 0.65, 0.7],
+    minAtsK: [null, 1.5, 2, 3],
+    maxVol: [3e6, 1.5e6, 7.5e5, 3e5],
+    maxPrice: [10, 3, 1, 0.1],
+    minRng: [null, 0.7, 0.9],
+    requireNewHigh: [false, true],
+    requireQuiet: [false, true],
+  };
+  const start = Object.assign({}, base, { types: ["SIGNAL"], scoreThr: 60, t1m: 30000 });
+  const minN = o.minN || 40;
+  await step("Подбор порогов под выносы…", 60);
+  rep.optPump = btOptimize(tb, start, spec, "pump", o.minPerDay, minN);
+  await step("Подбор порогов под 10%+…", 70);
+  rep.optBig = btOptimize(tb, start, spec, "big", o.minPerDay, minN);
+  await step("Подбор чистого VEL1M…", 78);
+  const startVel = Object.assign({}, base, { types: ["VEL1M"], t1m: 30000 });
+  rep.optVel = btOptimize(tb, startVel, spec, "pump", o.minPerDay, minN);
+  rep.baseline = btEval(tb, Object.assign({}, base, { types: ["SIGNAL"], scoreThr: 60, t1m: 30000 }));
+  rep.baselineVel = btEval(tb, Object.assign({}, base, { types: ["VEL1M"], t1m: 30000 }));
+
+  // 5. Топ-конфигураций перебором сетки score × Δ1м × доп. фильтр
+  await step("Перебор конфигураций…", 85);
+  const cands = [];
+  let ci = 0;
+  for (const s of BT_SCORE_STEPS) {
+    for (const t1 of BT_T1M_STEPS) {
+      for (const rv of [null, 6, 15]) {
+        for (const tk of [null, 0.65]) {
+          for (const types of [["SIGNAL"], ["SIGNAL", "VEL1M"]]) {
+            const r = btEval(tb, Object.assign({}, base, { types, scoreThr: s, t1m: t1, minD1m: types.includes("VEL1M") ? null : t1, minRvol: rv, minTaker: tk }));
+            ci++;
+            if (r.n >= (o.minN || 40) && r.perDay >= o.minPerDay) cands.push(r);
+          }
+        }
+      }
+    }
+    await step(`Перебор конфигураций… ${ci}`, 85 + (ci / 1200) * 12);
+  }
+  // сортируем по нижней границе доли, а не по «голому» проценту
+  rep.topPump = cands.slice().sort((a, b) => b.pumpLB - a.pumpLB).slice(0, 12);
+  rep.topBig = cands.slice().sort((a, b) => b.bigLB - a.bigLB).slice(0, 12);
+  rep.topVolume = cands.slice().sort((a, b) => b.bigPerDay - a.bigPerDay).slice(0, 12);
+  rep.candCount = ci;
+  await step("Готово", 100);
+  return rep;
+}
+
+function btCfgText(c) {
+  const bits = [];
+  bits.push(c.types.join("+"));
+  if (c.types.includes("SIGNAL")) bits.push("score≥" + c.scoreThr);
+  if (c.minD1m !== null && c.minD1m !== undefined) bits.push("Δ1м ≥ " + btMoneyShort(c.minD1m));
+  else if (!c.types.includes("SIGNAL")) bits.push("Δ1м " + btMoneyShort(c.t1m));
+  if (c.types.includes("VEL2M")) bits.push("Δ2м " + btMoneyShort(c.t2m));
+  if (c.minRvol !== null && c.minRvol !== undefined) bits.push("RVOL≥" + c.minRvol);
+  if (c.minPct1m !== null && c.minPct1m !== undefined) bits.push("Δ%1м≥" + c.minPct1m);
+  if (c.minTaker !== null && c.minTaker !== undefined) bits.push("тейкер≥" + Math.round(c.minTaker * 100) + "%");
+  if (c.minAtsK !== null && c.minAtsK !== undefined) bits.push("чек×≥" + c.minAtsK);
+  if (c.minRng !== null && c.minRng !== undefined) bits.push("диап≥" + c.minRng);
+  if (c.requireNewHigh) bits.push("новый хай");
+  if (c.requireQuiet) bits.push("из полки");
+  if (c.hourFrom !== null && c.hourFrom !== undefined) bits.push(`часы ${c.hourFrom}–${c.hourTo} UTC`);
+  if (c.maxVol !== 3e6) bits.push("объём≤" + btMoneyShort(c.maxVol));
+  if (c.maxPrice !== 10) bits.push("цена<$" + c.maxPrice);
+  return bits.join(" · ");
+}
+// ================== BT-REPORT-END ==================
+
+
+// ================== BT-DATA-START ==================
+// Загрузка истории Binance. Год минуток по всем парам — это десятки гигабайт,
+// поэтому берём стратифицированную выборку суток (равномерно по году) и на этих
+// сутках гоняем ВСЕ подходящие пары целиком. Так частоты и проценты остаются
+// несмещёнными, а объём загрузки — подъёмным для телефона.
+
+const BT_API = {
+  SPOT: { base: "https://api.binance.com/api/v3", info: "/exchangeInfo", kl: "/klines" },
+  "USDT-M": { base: "https://fapi.binance.com/fapi/v1", info: "/exchangeInfo", kl: "/klines" },
+};
+const BT_DAY_MS = 86400000;
+
+let btAbort = false;
+let btBusy = false;
+let btTable = null;
+let btLastReport = null;
+
+function btSleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function btFetchJson(url, tries) {
+  const max = tries || 5;
+  let wait = 800;
+  for (let attempt = 1; attempt <= max; attempt++) {
+    if (btAbort) throw new Error("abort");
+    try {
+      const res = await fetch(url, { cache: "no-store" });
+      if (res.status === 429 || res.status === 418) {
+        // лимит веса Binance: ждём столько, сколько просят, и сбавляем темп
+        const ra = parseInt(res.headers.get("retry-after") || "0", 10);
+        btThrottle.slowDown();
+        await btSleep(ra > 0 ? ra * 1000 : wait * 2);
+        wait *= 2;
+        continue;
+      }
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return await res.json();
+    } catch (e) {
+      if (btAbort) throw e;
+      if (attempt === max) throw e;
+      await btSleep(wait);
+      wait = Math.min(wait * 2, 15000);
+    }
+  }
+}
+
+// простой ограничитель темпа: Binance даёт 6000 веса в минуту на IP,
+// klines весит 2 — держимся заметно ниже потолка
+const btThrottle = {
+  minGap: 45,          // мс между запросами
+  last: 0,
+  async gate() {
+    const now = Date.now();
+    const wait = this.last + this.minGap - now;
+    if (wait > 0) await btSleep(wait);
+    this.last = Date.now();
+  },
+  slowDown() { this.minGap = Math.min(this.minGap * 2, 1000); },
+  speedUp() { this.minGap = Math.max(45, this.minGap - 2); },
+};
+
+async function btGet(url) {
+  await btThrottle.gate();
+  const r = await btFetchJson(url);
+  btThrottle.speedUp();
+  return r;
+}
+
+// детерминированный ГПСЧ — выборка пар воспроизводима между запусками
+function btRng(seed) {
+  let s = seed >>> 0;
+  return () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+}
+
+async function btUsdtSymbols(market) {
+  const api = BT_API[market];
+  const info = await btGet(api.base + api.info);
+  const out = [];
+  for (const s of info.symbols) {
+    if (s.status !== "TRADING" && s.contractType !== "PERPETUAL") continue;
+    if (market === "USDT-M" && s.contractType !== "PERPETUAL") continue;
+    if (market === "USDT-M" && s.status !== "TRADING") continue;
+    if (s.quoteAsset !== "USDT") continue;
+    if (isExcluded(s.symbol)) continue;
+    out.push(s.symbol);
+  }
+  return out;
+}
+
+function btDayList(nDays, endDaysAgo) {
+  // равномерно по последнему году: шаг = 365 / nDays
+  const today = Math.floor(Date.now() / BT_DAY_MS) * BT_DAY_MS;
+  const step = Math.max(1, Math.floor(365 / nDays));
+  const days = [];
+  for (let k = 0; k < nDays; k++) {
+    const d = today - (endDaysAgo + k * step) * BT_DAY_MS;
+    days.push(d);
+  }
+  return days.sort((a, b) => a - b);
+}
+
+async function btLoadMinutes(market, sym, startT) {
+  const api = BT_API[market];
+  const rows = [];
+  for (let chunk = 0; chunk < 3; chunk++) {
+    const from = startT + chunk * 1000 * 60000;
+    const url = `${api.base}${api.kl}?symbol=${sym}&interval=1m&startTime=${from}&endTime=${from + 1000 * 60000 - 1}&limit=1000`;
+    const raw = await btGet(url);
+    if (!Array.isArray(raw)) throw new Error("bad klines");
+    rows.push(...btParseKlines(raw));
+  }
+  return rows;
+}
+
+async function btRunBacktest(opts, onProgress) {
+  btAbort = false;
+  btBusy = true;
+  const market = opts.market;
+  const report = msg => onProgress && onProgress(msg);
+  try {
+    report({ phase: "symbols", text: "Список пар…" });
+    const symbols = await btUsdtSymbols(market);
+
+    // суточные свечи: дают отбор «цена < X, объём ≤ Y» на каждую конкретную дату
+    const days = btDayList(opts.days, 2);
+    const need = Math.ceil((Date.now() - days[0]) / BT_DAY_MS) + 5;
+    const dailies = new Map();
+    let di = 0;
+    for (const sym of symbols) {
+      if (btAbort) throw new Error("abort");
+      di++;
+      report({ phase: "daily", text: `Суточные свечи ${di}/${symbols.length} · ${sym}`, pct: di / symbols.length * 100 });
+      try {
+        const api = BT_API[market];
+        const raw = await btGet(`${api.base}${api.kl}?symbol=${sym}&interval=1d&limit=${Math.min(need, 1000)}`);
+        const map = new Map();
+        for (const r of btParseKlines(raw)) map.set(Math.floor(r.t / BT_DAY_MS) * BT_DAY_MS, r);
+        dailies.set(sym, map);
+      } catch (e) { /* пара без истории — пропускаем */ }
+    }
+
+    // план: на каждые сутки — пары, подходившие под фильтр шапки НАКАНУНЕ
+    const rng = btRng(20250921);
+    const plan = [];
+    days.forEach((day, dayIdx) => {
+      const eligible = [];
+      for (const sym of symbols) {
+        const m = dailies.get(sym);
+        if (!m) continue;
+        const prev = m.get(day - BT_DAY_MS);
+        if (!prev) continue;
+        if (!(prev.c > 0 && prev.c < opts.maxPrice)) continue;
+        if (!(prev.qv > 0 && prev.qv <= opts.maxVol)) continue;
+        if (opts.minVol && prev.qv < opts.minVol) continue;
+        eligible.push(sym);
+      }
+      // случайная (но воспроизводимая) подвыборка — иначе смещение в сторону
+      // начала алфавита
+      for (let i = eligible.length - 1; i > 0; i--) {
+        const j = Math.floor(rng() * (i + 1));
+        [eligible[i], eligible[j]] = [eligible[j], eligible[i]];
+      }
+      const take = eligible.slice(0, opts.pairsPerDay);
+      for (const sym of take) plan.push({ sym, day, dayIdx });
+    });
+
+    const table = btNewTable();
+    table.days = days.slice();
+    table.meta = {
+      market, generatedAt: Date.now(), days: days.length, pairsPerDay: opts.pairsPerDay,
+      maxPrice: opts.maxPrice, maxVol: opts.maxVol, minVol: opts.minVol || 0,
+      planned: plan.length, symbolsTotal: symbols.length,
+    };
+
+    let done = 0, okCount = 0, failed = 0;
+    const t0 = Date.now();
+    for (const job of plan) {
+      if (btAbort) throw new Error("abort");
+      done++;
+      try {
+        const rows = await btLoadMinutes(market, job.sym, job.day - BT_DAY_MS);
+        if (rows.length >= 600) {
+          const grid = btFillGaps(rows, job.day - BT_DAY_MS, BT_WINDOW_MIN);
+          // пара должна реально торговаться в тестируемые сутки
+          let live = 0;
+          for (let i = BT_WARMUP_MIN; i < BT_WARMUP_MIN + BT_DAY_MIN; i++) if (!grid[i].empty) live++;
+          if (live >= 200) {
+            btScanSeries(grid, { table, sym: job.sym, dayIdx: job.dayIdx, computeScore });
+            okCount++;
+          }
+        } else failed++;
+      } catch (e) {
+        if (btAbort) throw e;
+        failed++;
+      }
+      const elapsed = (Date.now() - t0) / 1000;
+      const eta = done ? (elapsed / done) * (plan.length - done) : 0;
+      report({
+        phase: "minutes",
+        text: `Минутки ${done}/${plan.length} · ${job.sym} · ${new Date(job.day).toISOString().slice(0, 10)} · событий ${table.n} · осталось ~${Math.round(eta / 60)} мин`,
+        pct: done / plan.length * 100,
+      });
+    }
+    table.meta.scanned = okCount;
+    table.meta.failed = failed;
+    btTable = table;
+    await btSaveTable(table);
+    btBusy = false;
+    return table;
+  } catch (e) {
+    btBusy = false;
+    throw e;
+  }
+}
+
+async function btSaveTable(tb) {
+  try {
+    await idbPut("backtest", {
+      v: 1, n: tb.n, cap: tb.cap, syms: tb.syms, days: tb.days, meta: tb.meta,
+      col: Object.fromEntries(BT_COLS.map(c => [c, tb.col[c].slice(0, tb.n)])),
+    });
+  } catch (e) { /* не влезло — отчёт всё равно уже построен */ }
+}
+async function btLoadTable() {
+  try {
+    const raw = await idbGet("backtest");
+    if (!raw || !raw.col) return null;
+    const tb = btNewTable();
+    tb.n = raw.n; tb.cap = raw.n;
+    tb.syms = raw.syms || []; tb.days = raw.days || []; tb.meta = raw.meta || {};
+    tb.syms.forEach((s, i) => tb.symIdx.set(s, i));
+    for (const c of BT_COLS) tb.col[c] = raw.col[c] ? Float64Array.from(raw.col[c]) : new Float64Array(raw.n);
+    return tb;
+  } catch (e) { return null; }
+}
+// ================== BT-DATA-END ==================
+
+
+// ================== BT-UI-START ==================
+const BT_PRESETS = {
+  quick:  { days: 12, pairsPerDay: 30, label: "Быстрый (~1.1к запросов, 3–6 мин)" },
+  mid:    { days: 26, pairsPerDay: 60, label: "Средний (~4.7к запросов, 15–25 мин)" },
+  year:   { days: 52, pairsPerDay: 120, label: "Год целиком (~19к запросов, 50–90 мин)" },
+};
+
+function btOpts() {
+  const g = id => document.getElementById(id);
+  const preset = BT_PRESETS[g("bt-preset").value] || BT_PRESETS.quick;
+  return {
+    market: g("bt-market").value,
+    days: parseInt(g("bt-days").value, 10) || preset.days,
+    pairsPerDay: parseInt(g("bt-pairs").value, 10) || preset.pairsPerDay,
+    maxPrice: parseFloat(g("bt-maxprice").value) || 10,
+    maxVol: parseFloat(g("bt-maxvol").value) || 3000000,
+    minVol: parseFloat(g("bt-minvol").value) || 0,
+    horizon: parseInt(g("bt-horizon").value, 10) || 60,
+    pump: parseFloat(g("bt-pump").value) || 3,
+    minPerDay: parseFloat(g("bt-minperday").value) || 1,
+  };
+}
+
+function btSetProgress(text, pct) {
+  const el = document.getElementById("bt-progress");
+  if (!el) return;
+  el.innerHTML = `<div class="bt-prog-text">${text}</div>`
+    + (pct !== undefined && pct !== null
+      ? `<div class="bt-prog-bar"><div style="width:${Math.min(100, pct).toFixed(1)}%"></div></div>` : "");
+}
+
+function btRow(label, r) {
+  if (!r || !r.n) return `<tr><td>${label}</td><td colspan="9" class="bt-dim">нет сигналов</td></tr>`;
+  return `<tr>
+    <td>${label}</td>
+    <td>${r.n}</td>
+    <td>${btNum(r.perDay, 1)}</td>
+    <td class="bt-good">${btPct(r.pumpRate)}</td>
+    <td class="bt-hot">${btPct(r.bigRate)}</td>
+    <td>${btPct(r.hit1)}</td>
+    <td>${btPct(r.hit5)}</td>
+    <td>${btNum(r.medMfe, 2)}%</td>
+    <td class="bt-bad">${btNum(r.avgMae, 2)}%</td>
+    <td>${btNum(r.medTpeak, 0)} мин</td>
+  </tr>`;
+}
+const BT_TABLE_HEAD = `<tr><th>КОНФИГ</th><th>N</th><th>в день</th><th>ВЫНОС</th><th>10%+</th>
+  <th>1%+</th><th>5%+</th><th>мед. MFE</th><th>ср. просадка</th><th>пик</th></tr>`;
+
+function btGridHtml(rep, metric) {
+  const key = metric === "big" ? "bigRate" : "pumpRate";
+  let h = `<table class="bt-grid"><tr><th>score ↓ / Δ1м →</th>`;
+  for (const t of BT_T1M_STEPS) h += `<th>${btMoneyShort(t)}</th>`;
+  h += `</tr>`;
+  let best = 0;
+  for (const row of rep.gridScore) for (const c of row.cells) if (c.n >= 20 && c[key] > best) best = c[key];
+  for (const row of rep.gridScore) {
+    h += `<tr><th>${row.scoreThr}</th>`;
+    for (const c of row.cells) {
+      if (!c.n) { h += `<td class="bt-dim">—</td>`; continue; }
+      const v = c[key];
+      const weak = c.n < 20;
+      const cls = weak ? "bt-weak" : (best && v >= best * 0.95 ? "bt-cell-best" : (v >= best * 0.8 ? "bt-cell-good" : ""));
+      h += `<td class="${cls}" title="N=${c.n} · ${btNum(c.perDay, 1)}/день · мед.MFE ${btNum(c.medMfe, 2)}%">`
+        + `${btPct(v, 0)}<span class="bt-sub">${c.n}</span></td>`;
+    }
+    h += `</tr>`;
+  }
+  return h + `</table>`;
+}
+
+function btMargHtml(title, rows, fmt) {
+  let h = `<table class="bt-tab"><tr><th>${title}</th><th>N</th><th>ВЫНОС</th><th>10%+</th><th>ср. MFE</th><th>мед. MFE</th><th>просадка</th></tr>`;
+  for (const r of rows) {
+    h += `<tr><td>${fmt(r.lo, r.hi)}</td><td>${r.n}</td>`
+      + `<td class="bt-good">${btPct(r.pumpRate)}</td><td class="bt-hot">${btPct(r.bigRate)}</td>`
+      + `<td>${btNum(r.avgMfe, 2)}%</td><td>${btNum(r.medMfe, 2)}%</td><td class="bt-bad">${btNum(r.avgMae, 2)}%</td></tr>`;
+  }
+  return h + `</table>`;
+}
+
+function btRenderReport(rep) {
+  const o = rep.opts, m = rep.meta;
+  const fmtRange = (lo, hi) => `${btNum(lo, 2)} … ${hi >= 1e8 ? "∞" : btNum(hi, 2)}`;
+  const fmtMoneyRange = (lo, hi) => `${btMoneyShort(lo)} … ${hi >= 1e11 ? "∞" : btMoneyShort(hi)}`;
+  const fmtPctRange = (lo, hi) => `${btNum(lo * 100, 0)}% … ${btNum(Math.min(hi, 1.01) * 100, 0)}%`;
+  const opt = (label, res) => `<div class="bt-opt"><b>${label}</b><div class="bt-optcfg">${btCfgText(res.cfg)}</div>`
+    + `<div>N=${res.best.n} · ${btNum(res.best.perDay, 1)} сигн./день · ВЫНОС ${btPct(res.best.pumpRate)} · `
+    + `10%+ ${btPct(res.best.bigRate)} · мед. MFE ${btNum(res.best.medMfe, 2)}% · просадка ${btNum(res.best.avgMae, 2)}%</div></div>`;
+
+  document.getElementById("bt-report").innerHTML = `
+  <div class="bt-sec">
+    <h3>Прогон</h3>
+    <div class="bt-dim">Рынок ${m.market} · суток в выборке ${m.days} (равномерно по году) · пар в сутки до ${m.pairsPerDay}
+    · прогнано пара-суток ${m.scanned || 0} из ${m.planned || 0} · событий-кандидатов ${rep.eventCount}
+    ${m.truncated ? "<span class=\"bt-hot\">· таблица упёрлась в потолок " + BT_MAX_EVENTS + " событий, часть суток не досчитана</span> " : ""}· окно исхода ${o.horizon} мин · «вынос» = MFE ≥ ${o.pump}% · отбор: цена &lt; $${o.maxPrice}, объём ≤ ${btMoneyShort(o.maxVol)}</div>
+  </div>
+
+  <div class="bt-sec">
+    <h3>1. Как настройки влияют на ВЫНОС (MFE ≥ ${o.pump}% за ${o.horizon} мин)</h3>
+    ${btGridHtml(rep, "pump")}
+    <div class="bt-dim">Строка — порог score, колонка — требование к обороту минуты (порог Δ1м из шапки, применённый как условие входа).
+    Цифра в клетке — доля сигналов, дошедших до +${o.pump}%; снизу — сколько было сигналов. Серое = меньше 20 сигналов, статистики нет.</div>
+  </div>
+
+  <div class="bt-sec">
+    <h3>2. Как настройки влияют на 10%+</h3>
+    ${btGridHtml(rep, "big")}
+  </div>
+
+  <div class="bt-sec">
+    <h3>3. Типы сигналов при заводских порогах</h3>
+    <table class="bt-tab">${BT_TABLE_HEAD}
+      ${rep.byType.map(x => btRow(x.label, x.r)).join("")}
+    </table>
+  </div>
+
+  <div class="bt-sec">
+    <h3>4. Пороговые сигналы по значению порога</h3>
+    <table class="bt-tab">${BT_TABLE_HEAD}
+      ${rep.gridVel.map((r, i) => btRow("VEL1M " + btMoneyShort(BT_T1M_STEPS[i]), r)).join("")}
+      ${rep.gridVel2.map((r, i) => btRow("VEL2M " + btMoneyShort(BT_T2M_STEPS[i]), r)).join("")}
+      ${rep.gridQuiet.map((r, i) => btRow("QUIET при Δ1м " + btMoneyShort(BT_T1M_STEPS[i]), r)).join("")}
+    </table>
+  </div>
+
+  <div class="bt-sec">
+    <h3>5. Что реально предсказывает вынос (срезы по признакам)</h3>
+    <div class="bt-cols">
+      ${btMargHtml("SCORE", rep.marg.score, (a, b) => `${a}–${Math.min(b - 1, 100)}`)}
+      ${btMargHtml("RVOL ×", rep.marg.rvol, fmtRange)}
+      ${btMargHtml("Δ% за 1 мин", rep.marg.pct1m, (a, b) => `${btNum(a, 1)}% … ${b >= 1e8 ? "∞" : btNum(b, 1) + "%"}`)}
+      ${btMargHtml("Тейкер-покупки", rep.marg.taker, fmtPctRange)}
+      ${btMargHtml("Чек сделки ×медиана", rep.marg.atsK, fmtRange)}
+      ${btMargHtml("Δ1м, $", rep.marg.d1m, fmtMoneyRange)}
+      ${btMargHtml("Объём пары 24ч", rep.marg.vol24, fmtMoneyRange)}
+      ${btMargHtml("Цена пары", rep.marg.price, (a, b) => `$${btNum(a, 3)} … $${btNum(b, 2)}`)}
+      ${btMargHtml("Место в дневном диапазоне", rep.marg.rng, fmtRange)}
+      ${btMargHtml("Отклонение от VWAP", rep.marg.vwapDev, (a, b) => `${btNum(a, 1)}% … ${b >= 1e8 ? "∞" : btNum(b, 1) + "%"}`)}
+      ${btMargHtml("Из тихой полки", rep.marg.quiet, (a) => a ? "да" : "нет")}
+      ${btMargHtml("Новый 24ч хай", rep.marg.newHigh, (a) => a ? "да" : "нет")}
+      ${btMargHtml("Час UTC", rep.marg.hour, (a, b) => `${a}:00–${b}:00`)}
+    </div>
+  </div>
+
+  <div class="bt-sec">
+    <h3>6. Идеальные пороги</h3>
+    ${opt("Максимум выносов (MFE ≥ " + o.pump + "%)", rep.optPump)}
+    ${opt("Максимум 10%+", rep.optBig)}
+    ${opt("Лучший чистый VEL1M (без score)", rep.optVel)}
+    <div class="bt-dim">Ограничение при поиске: не меньше ${o.minPerDay} сигн./день. Для сравнения — заводские:
+      ⭐ score 60 → ВЫНОС ${btPct(rep.baseline.pumpRate)} · 10%+ ${btPct(rep.baseline.bigRate)} · ${btNum(rep.baseline.perDay, 1)}/день;
+      VEL1M $30k → ВЫНОС ${btPct(rep.baselineVel.pumpRate)} · 10%+ ${btPct(rep.baselineVel.bigRate)} · ${btNum(rep.baselineVel.perDay, 1)}/день.</div>
+  </div>
+
+  <div class="bt-sec">
+    <h3>7. Топ конфигураций (перебрано ${rep.candCount})</h3>
+    <table class="bt-tab">${BT_TABLE_HEAD}
+      <tr><th colspan="10" class="bt-dim">по доле выносов</th></tr>
+      ${rep.topPump.map(r => btRow(btCfgText(r.cfg), r)).join("")}
+      <tr><th colspan="10" class="bt-dim">по доле 10%+</th></tr>
+      ${rep.topBig.map(r => btRow(btCfgText(r.cfg), r)).join("")}
+      <tr><th colspan="10" class="bt-dim">по количеству 10%+ в день (сколько ловим, а не какой процент)</th></tr>
+      ${rep.topVolume.map(r => btRow(btCfgText(r.cfg), r)).join("")}
+    </table>
+  </div>
+
+  <div class="bt-sec bt-warn">
+    <h3>Чего этот бэктест не знает</h3>
+    <div>· Минутные свечи: порог 10с (SPIKE) на них не виден. Его верхняя граница — строка VEL1M с тем же значением.<br>
+    · Стакана и спреда в истории нет: в score это от −10 до +10, поэтому здешний score примерно на 5 пунктов ниже живого. Сравнивайте пороги по частоте сигналов в день, а не по абсолютной цифре.<br>
+    · Тейкер-доля здесь есть по всем парам, а в приложении — только по 12 горячим.<br>
+    · В выборке только пары, живые сегодня: делистнутые за год не попали, это смещение в плюс.<br>
+    · Вход считается по закрытию сигнальной минуты, MFE/MAE — по максимуму/минимуму следующих ${o.horizon} минут. Проскальзывание и комиссия не учтены.</div>
+  </div>`;
+}
+
+function btEventsCsv(tb) {
+  const head = ["symbol", "time_iso", "price", "vol24", "d1m", "d2m", "rvol", "pct1m", "pct2m",
+    "score", "score_quiet", "taker", "ats_k", "rng", "vwap_dev", "new_high", "mfe15", "mae15",
+    "mfe60", "mae60", "mfe120", "mae120", "peak_min"];
+  const lines = [head.join(",")];
+  const C = tb.col;
+  for (let i = 0; i < tb.n; i++) {
+    lines.push([
+      tb.syms[C.sym[i]], new Date(C.t[i]).toISOString(), C.price[i], Math.round(C.vol24[i]),
+      Math.round(C.d1m[i]), Math.round(C.d2m[i]), btNum(C.rvol[i], 2), btNum(C.pct1m[i], 3), btNum(C.pct2m[i], 3),
+      C.score0[i], C.score1[i], btNum(C.taker[i], 3), btNum(C.atsK[i], 2), btNum(C.rng[i], 3), btNum(C.vwapDev[i], 2),
+      C.highFresh[i] <= 120000 ? 1 : 0,
+      btNum(C.mfe15[i], 3), btNum(C.mae15[i], 3), btNum(C.mfe60[i], 3), btNum(C.mae60[i], 3),
+      btNum(C.mfe120[i], 3), btNum(C.mae120[i], 3), C.tpeak[i],
+    ].join(","));
+  }
+  return lines.join("\n");
+}
+
+function btDownload(name, text) {
+  const blob = new Blob([text], { type: "text/csv;charset=utf-8;" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+async function btRecompute() {
+  if (!btTable || !btTable.n) { btSetProgress("Нет данных. Сначала «ЗАПУСТИТЬ БЭКТЕСТ» или «ЗАГРУЗИТЬ ПРОШЛЫЙ»."); return; }
+  const o = btOpts();
+  const t0 = Date.now();
+  btSetProgress("Считаю отчёт…", 0);
+  await btYield();
+  try {
+    // отчёт считается кусками и отдаёт управление между ними, иначе телефон
+    // на десятки секунд превращается в кирпич
+    const rep = await btBuildReport(btTable, o, (text, pct) => btSetProgress(text, pct));
+    rep.eventCount = btTable.n;
+    btLastReport = rep;
+    btRenderReport(rep);
+    btSetProgress(`Готово: ${btTable.n} событий · отчёт посчитан за ${((Date.now() - t0) / 1000).toFixed(1)} с.`);
+  } catch (e) {
+    btSetProgress("Ошибка отчёта: " + ((e && e.message) || e));
+  }
+}
+
+function btWireUi() {
+  const g = id => document.getElementById(id);
+  g("bt-preset").addEventListener("change", () => {
+    const p = BT_PRESETS[g("bt-preset").value];
+    if (p) { g("bt-days").value = p.days; g("bt-pairs").value = p.pairsPerDay; }
+  });
+  g("bt-run").addEventListener("click", async () => {
+    if (btBusy) return;
+    const o = btOpts();
+    if (!paused) document.getElementById("stop-btn").click();  // поток мешает загрузке
+    g("bt-run").disabled = true;
+    try {
+      await btRunBacktest(o, p => btSetProgress(p.text, p.pct));
+      btSetProgress("Данные собраны, считаю отчёт…");
+      await btRecompute();
+    } catch (e) {
+      btSetProgress(String(e && e.message === "abort" ? "Остановлено. Собранные события сохранены." : "Ошибка: " + e));
+      if (btTable && btTable.n) { await btSaveTable(btTable); }
+    } finally {
+      g("bt-run").disabled = false;
+    }
+  });
+  g("bt-stop").addEventListener("click", () => { btAbort = true; btSetProgress("Останавливаю…"); });
+  g("bt-recalc").addEventListener("click", btRecompute);
+  g("bt-load").addEventListener("click", async () => {
+    const tb = await btLoadTable();
+    if (!tb || !tb.n) { btSetProgress("Сохранённого прогона нет."); return; }
+    btTable = tb;
+    btSetProgress(`Загружено ${tb.n} событий от ${new Date(tb.meta.generatedAt || Date.now()).toLocaleString()}.`);
+    await btRecompute();
+  });
+  g("bt-csv").addEventListener("click", () => {
+    if (!btTable || !btTable.n) { btSetProgress("Нет данных для выгрузки."); return; }
+    btDownload("backtest-events.csv", btEventsCsv(btTable));
+  });
+  g("bt-copy").addEventListener("click", () => {
+    if (!btLastReport) { btSetProgress("Сначала постройте отчёт."); return; }
+    const t = btSummaryText(btLastReport);
+    navigator.clipboard.writeText(t).then(
+      () => btSetProgress("Итог скопирован в буфер."),
+      () => btDownload("backtest-summary.txt", t));
+  });
+}
+
+// компактный текст — чтобы переслать итог, не таская скриншоты
+function btSummaryText(rep) {
+  const o = rep.opts, L = [];
+  L.push(`VolScan backtest · ${rep.meta.market} · суток ${rep.meta.days} · пара-суток ${rep.meta.scanned} · событий ${rep.eventCount}`);
+  L.push(`окно ${o.horizon} мин · вынос = MFE ≥ ${o.pump}% · отбор цена<$${o.maxPrice}, объём≤${btMoneyShort(o.maxVol)}`);
+  L.push("");
+  L.push("SCORE × Δ1м — доля выносов (N):");
+  L.push("score\\Δ1м " + BT_T1M_STEPS.map(btMoneyShort).join("  "));
+  for (const row of rep.gridScore) {
+    L.push(String(row.scoreThr).padStart(5) + " " + row.cells.map(c => (c.n ? `${btPct(c.pumpRate, 0)}(${c.n})` : "—")).join("  "));
+  }
+  L.push("");
+  L.push("SCORE × Δ1м — доля 10%+ (N):");
+  for (const row of rep.gridScore) {
+    L.push(String(row.scoreThr).padStart(5) + " " + row.cells.map(c => (c.n ? `${btPct(c.bigRate, 0)}(${c.n})` : "—")).join("  "));
+  }
+  L.push("");
+  L.push("Типы сигналов:");
+  for (const x of rep.byType) {
+    if (!x.r.n) continue;
+    L.push(`  ${x.label}: N=${x.r.n} ${btNum(x.r.perDay, 1)}/день вынос ${btPct(x.r.pumpRate)} 10%+ ${btPct(x.r.bigRate)} мед.MFE ${btNum(x.r.medMfe, 2)}% просадка ${btNum(x.r.avgMae, 2)}%`);
+  }
+  L.push("");
+  L.push("Срезы (доля выносов / доля 10%+ / N):");
+  const dump = (name, rows, fmt) => {
+    L.push("  " + name + ": " + rows.filter(r => r.n).map(r => `${fmt(r.lo, r.hi)} ${btPct(r.pumpRate, 0)}/${btPct(r.bigRate, 0)}/${r.n}`).join(" | "));
+  };
+  dump("score", rep.marg.score, (a, b) => `${a}-${Math.min(b - 1, 100)}`);
+  dump("rvol", rep.marg.rvol, (a, b) => `${a}-${b >= 1e8 ? "∞" : b}`);
+  dump("pct1m", rep.marg.pct1m, (a, b) => `${a}-${b >= 1e8 ? "∞" : b}`);
+  dump("taker", rep.marg.taker, (a, b) => `${Math.round(a * 100)}-${Math.round(Math.min(b, 1) * 100)}`);
+  dump("atsK", rep.marg.atsK, (a, b) => `${a}-${b >= 1e8 ? "∞" : b}`);
+  dump("d1m", rep.marg.d1m, (a, b) => `${btMoneyShort(a)}-${b >= 1e11 ? "∞" : btMoneyShort(b)}`);
+  dump("vol24", rep.marg.vol24, (a, b) => `${btMoneyShort(a)}-${b >= 1e11 ? "∞" : btMoneyShort(b)}`);
+  dump("quiet", rep.marg.quiet, a => (a ? "да" : "нет"));
+  dump("newHigh", rep.marg.newHigh, a => (a ? "да" : "нет"));
+  dump("hourUTC", rep.marg.hour, (a, b) => `${a}-${b}`);
+  L.push("");
+  const o2 = (label, res) => L.push(`  ${label}: ${btCfgText(res.cfg)} → N=${res.best.n} ${btNum(res.best.perDay, 1)}/день вынос ${btPct(res.best.pumpRate)} 10%+ ${btPct(res.best.bigRate)} мед.MFE ${btNum(res.best.medMfe, 2)}%`);
+  L.push("Идеальные пороги:");
+  o2("под выносы", rep.optPump);
+  o2("под 10%+", rep.optBig);
+  o2("чистый VEL1M", rep.optVel);
+  L.push(`  заводские score60: вынос ${btPct(rep.baseline.pumpRate)} 10%+ ${btPct(rep.baseline.bigRate)} ${btNum(rep.baseline.perDay, 1)}/день`);
+  L.push(`  заводские VEL1M $30k: вынос ${btPct(rep.baselineVel.pumpRate)} 10%+ ${btPct(rep.baselineVel.bigRate)} ${btNum(rep.baselineVel.perDay, 1)}/день`);
+  return L.join("\n");
+}
+// ================== BT-UI-END ==================
+
+
 // ---------- boot ----------
 document.body.classList.add("pane-table");
 document.getElementById("tab-bar").addEventListener("click", (e) => {
@@ -2141,10 +3421,21 @@ document.getElementById("tab-bar").addEventListener("click", (e) => {
   btn.classList.add("active");
   document.body.classList.toggle("pane-table", btn.dataset.pane === "table");
   document.body.classList.toggle("pane-alerts", btn.dataset.pane === "alerts");
+  document.body.classList.toggle("pane-backtest", btn.dataset.pane === "backtest");
 });
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("./sw.js").catch(() => {});
 }
+btWireUi();
+btLoadTable().then(tb => {
+  if (tb && tb.n) {
+    btTable = tb;
+    btSetProgress(`Найден сохранённый прогон: ${tb.n} событий от `
+      + `${new Date(tb.meta.generatedAt || Date.now()).toLocaleString()}. «ПЕРЕСЧИТАТЬ ОТЧЁТ» — без новой загрузки.`);
+  } else {
+    btSetProgress("Прогона ещё не было. Начните с быстрого — он даёт первую картину за несколько минут.");
+  }
+});
 requestPersistentStorage();
 
 const restored = false; // real restore is async below
