@@ -562,6 +562,8 @@ table.mini tbody tr{cursor:pointer}
 
       <div class="panel">
         <div class="panel-h">Детектор запала<span class="sp d">реакция за секунды, не за цикл</span></div>
+        <div class="set-row"><div><div class="t">Следить за пробоем пружин</div><div class="h">Сжатые пары держатся под наблюдением, и касание границы диапазона ловится в течение пары секунд. Выключи, чтобы движок перестал их отслеживать целиком.</div></div>
+          <div class="sw on" id="swSpring"><i></i></div></div>
         <div class="set-row"><div><div class="t">Искра: старт движения</div><div class="h">Объём, число сделок и цена трогаются одновременно. Пара сразу уходит на внеочередной разбор, план считается вне цикла.</div></div>
           <div class="sw on" id="swSpark"><i></i></div></div>
         <div class="set-row"><div><div class="t">Набор: деньги без цены</div><div class="h">Объём и сделки рванули, а цена стоит — кто-то крупный набирает позицию до движения.</div></div>
@@ -615,16 +617,18 @@ table.mini tbody tr{cursor:pointer}
           <div class="fld"><input id="tgChat" placeholder="123456789" style="width:130px" autocomplete="off"></div></div>
         <div class="set-row"><div><div class="t">Проверка</div><div class="h" id="tgStatus">Токен и chat_id не заданы.</div></div>
           <div class="row"><button class="btn sm" id="btnTgChat">Найти chat_id</button><button class="btn sm g" id="btnTgTest">Тест</button></div></div>
+        <div class="set-row"><div><div class="t">Пробой пружины</div><div class="h">Главный канал. Цена задела верх или низ сжатого диапазона — приходит сообщение с направлением, границами, степенью сжатия, что копилось (OI, дельта тейкеров, стакан, фандинг), объёмом и ориентиром стопа по обратной границе.</div></div>
+          <div class="sw on" id="swTgSpring"><i></i></div></div>
         <div class="set-row"><div><div class="t">Сигналы на вход</div><div class="h">Полный план: вход, стоп, три тейка, плечо, размер позиции и причины.</div></div>
-          <div class="sw on" id="swTgSignals"><i></i></div></div>
+          <div class="sw" id="swTgSignals"><i></i></div></div>
         <div class="set-row"><div><div class="t">С какого грейда слать</div><div class="h">B — все сигналы, A — только сильные, A+ — только топовые совпадения.</div></div>
           <div class="fld"><select id="tgGrade"><option value="B">B и выше</option><option value="A">A и выше</option><option value="A+">только A+</option></select></div></div>
         <div class="set-row"><div><div class="t">Запалы (старт движения)</div><div class="h">Короткое сообщение в первые секунды движения, до расчёта плана.</div></div>
-          <div class="sw on" id="swTgSparks"><i></i></div></div>
+          <div class="sw" id="swTgSparks"><i></i></div></div>
         <div class="set-row"><div><div class="t">Наборы (деньги без цены)</div><div class="h">Объём и сделки рванули, цена стоит.</div></div>
           <div class="sw" id="swTgAbsorb"><i></i></div></div>
         <div class="set-row"><div><div class="t">Исходы сделок</div><div class="h">TP1, TP2 и стоп по каждому отправленному сигналу.</div></div>
-          <div class="sw on" id="swTgOutcomes"><i></i></div></div>
+          <div class="sw" id="swTgOutcomes"><i></i></div></div>
         <div class="set-row"><div><div class="t">Часовая сводка</div><div class="h">Раз в час: сколько сигналов и запалов, win-rate и сумма R по журналу.</div></div>
           <div class="sw" id="swTgDigest"><i></i></div></div>
       </div>
@@ -838,6 +842,7 @@ table.mini tbody tr{cursor:pointer}
           <p>Настройка за две минуты: <b>@BotFather</b> → <code>/newbot</code> → скопируй токен → напиши своему боту <b>/start</b> → вставь токен в настройки → кнопка «Найти chat_id» → «Тест» → включи тумблер.</p>
           <p>Пять типов сообщений, каждый включается отдельно:</p>
           <ul>
+            <li><b>Пробой пружины</b> — <b>включён по умолчанию, остальное выключено</b>. Приходит, как только цена задевает верх или низ сжатого диапазона: направление, сама граница и её значение, прежний диапазон и его ширина, степень сжатия, что копилось внутри (открытый интерес, дельта тейкеров, стакан, фандинг), объём, всплеск, ATR, ориентир стопа по обратной границе и текущий score. Повторно по той же стороне не чаще раза в 30 минут.</li>
             <li><b>Сигнал на вход</b> — полный план: сторона, грейд, вход, стоп, три цели, плечо, объём позиции, маржа, риск, факторы за и против, предупреждения, фандинг, ΔOI, ATR, RSI и ссылка на пару.</li>
             <li><b>Запал</b> — короткое сообщение в первые секунды движения.</li>
             <li><b>Набор</b> — деньги идут, цена стоит.</li>
@@ -845,6 +850,7 @@ table.mini tbody tr{cursor:pointer}
             <li><b>Часовая сводка</b> — сигналы, запалы, win-rate и сумма R за период.</li>
           </ul>
           <p>Для сигналов есть фильтр по грейду: слать все, только A и выше или только A+. Очередь держит лимит телеграма в одно сообщение в секунду.</p>
+          <p class="note">Сейчас в телеграм идёт только <b>пробой пружины</b> — остальные каналы выключены. Включить обратно можно тумблерами в этом же разделе, всё остальное продолжает работать внутри приложения: сигналы на вкладке «Сигналы», запалы полосой сверху, исходы сделок в журнале, всё вместе — в ленте событий.</p>
           <p class="note">Отправка идёт из браузера — пока вкладка открыта. Закрыл вкладку, сигналы кончились: сервера у приложения нет. Токен хранится только в твоём браузере, но любой, кто его увидит, сможет писать от имени бота — не показывай экран настроек на скриншотах.</p>
         </div>
       </div>
@@ -972,8 +978,9 @@ const CFG = {
   preset: 'intraday', market: 'futures', host: 'auto',
   exclude: DEFAULT_EXCLUDE, junk: true, usdtOnly: true,
   sound: true, notif: false, wake: false, vibro: true,
-  tgOn: false, tgToken: '', tgChat: '', tgGrade: 'B',
-  tgSignals: true, tgSparks: true, tgAbsorb: false, tgOutcomes: true, tgDigest: false,
+  tgOn: false, tgToken: '', tgChat: '', tgGrade: 'B', cfgV: 2,
+  tgSpring: true, springOn: true,
+  tgSignals: false, tgSparks: false, tgAbsorb: false, tgOutcomes: false, tgDigest: false,
   weights: Object.fromEntries(WEIGHT_DEFS.map(([k, , w]) => [k, w])),
 };
 
@@ -985,6 +992,13 @@ function loadCfg() {
     for (const k of Object.keys(CFG)) if (k in o) CFG[k] = o[k];
     CFG.weights = Object.assign(
       Object.fromEntries(WEIGHT_DEFS.map(([k, , w]) => [k, w])), CFG.weights || {});
+    /* переход на телеграм только по пробою пружины: старые настройки гасим один раз */
+    if (!(o.cfgV >= 2)) {
+      CFG.tgSignals = false; CFG.tgSparks = false; CFG.tgAbsorb = false;
+      CFG.tgOutcomes = false; CFG.tgDigest = false; CFG.tgSpring = true;
+      CFG.cfgV = 2;
+      saveCfg();
+    }
   } catch (e) { /* первый запуск */ }
 }
 let saveT = 0;
@@ -1022,6 +1036,7 @@ const S = {
   sort: { k: 'score', dir: -1 },
   sideFilter: 'all', gradeFilter: 40, q: '',
   seen: new Map(),      // symbol -> {side, ts, score} — чтобы не спамить алертами
+  springHits: new Map(),// symbol+сторона -> когда последний раз ловили пробой пружины
   wakeLock: null, audio: null, started: 0,
 };
 
@@ -2203,6 +2218,38 @@ function refreshActive() {
   }
 }
 
+/* =====================================================================
+   Пробой взведённой пружины: цена коснулась границы сжатого диапазона.
+   Сама пружина — это низкий перцентиль ширины Боллинджера, границы берём
+   из последнего разбора (20 свечей рабочего ТФ).
+   ===================================================================== */
+function springState(r) {
+  const acc = Number.isFinite(r.oi15) && r.oi15 > 0.3 && Math.abs(r.p15 || 0) < 0.3
+    ? 'набор: открытый интерес растёт, цена стояла'
+    : Number.isFinite(r.oi15) && r.oi15 > 0.3 ? 'открытый интерес растёт'
+    : Number.isFinite(r.oi15) && r.oi15 < -0.3 ? 'открытый интерес уходит'
+    : 'без выраженного накопления';
+  return acc;
+}
+
+function checkSprings() {
+  if (S.paused || !CFG.springOn) return;
+  for (const r of S.an.values()) {
+    if (!(r.wRank < 0.28)) continue;                 // не пружина
+    if (!(r.dHi > 0) || !(r.dLo > 0)) continue;
+    const t = S.tick.get(r.sym); if (!t || !t.price) continue;
+    if (!volOk(t.qv)) continue;
+    const up = t.price >= r.dHi, dn = t.price <= r.dLo;
+    if (!up && !dn) continue;
+    const key = r.sym + (up ? '↑' : '↓');
+    if (now() - (S.springHits.get(key) || 0) < 30 * 60000) continue;   // раз в 30 минут на сторону
+    S.springHits.set(key, now());
+    if (S.priority.indexOf(r.sym) === -1) S.priority.push(r.sym);      // сразу пересчитать разбор
+    prioWorker();
+    springAlert(r, up ? 'up' : 'dn', t.price, t);
+  }
+}
+
 /* ограничитель шума: не больше CFG.alertCap алертов за 5 минут */
 function canAlert() {
   const t = now();
@@ -2322,6 +2369,38 @@ function tgSparkMsg(sp) {
     `🔥 <b>${tgEsc(sp.base)} · ${sp.side === 'long' ? 'СТАРТ ВВЕРХ' : 'СТАРТ ВНИЗ'}</b>`,
     `объём ×${sp.rVol.toFixed(1)} · сделки ×${sp.rTrd.toFixed(1)} · ${sp.z > 0 ? '+' : ''}${sp.z.toFixed(1)}σ · ${fmtPct(sp.ret30, 2)} за 30с`,
     `Цена ${fmtPrice(sp.price)}. Если движение подтвердится факторами — следом придёт план входа.`,
+  ].join('\n');
+}
+
+function tgSpringMsg(r, dir, price, t) {
+  const up = dir === 'up';
+  const opp = up ? r.dLo : r.dHi;                     // обратная граница — ориентир стопа
+  const stopPct = price ? Math.abs(price - opp) / price * 100 : 0;
+  const width = r.dLo ? (r.dHi - r.dLo) / r.dLo * 100 : 0;
+  const link = r.market === 'fut'
+    ? `https://www.binance.com/ru/futures/${r.sym}`
+    : `https://www.binance.com/ru/trade/${r.base}_USDT`;
+  return [
+    `${up ? '🟢' : '🔴'} <b>${tgEsc(r.base)} · ПРОБОЙ ПРУЖИНЫ ${up ? 'ВВЕРХ' : 'ВНИЗ'}</b>`,
+    ``,
+    `Цена ${fmtPrice(price)} задела ${up ? 'верх' : 'низ'} <b>${fmtPrice(up ? r.dHi : r.dLo)}</b>`,
+    `Диапазон был ${fmtPrice(r.dLo)} – ${fmtPrice(r.dHi)}, ширина ${width.toFixed(2)}%`,
+    `Сжатие: ${(r.wRank * 100).toFixed(0)}-й перцентиль ширины Боллинджера — пружина была тугой`,
+    ``,
+    `Что копилось: ${tgEsc(springState(r))}`,
+    `ΔOI 15м ${Number.isFinite(r.oi15) ? fmtPct(r.oi15, 2) : '—'}` +
+      (Number.isFinite(r.oi1h) ? ` · 1ч ${fmtPct(r.oi1h, 2)}` : '') +
+      ` · дельта тейкеров ${r.td > 0 ? '+' : ''}${(r.td * 100).toFixed(0)}%`,
+    `CVD 1ч ${r.cvd1h > 0 ? '+' : '−'}$${fmtUsd(Math.abs(r.cvd1h))}` +
+      (r.imb === null || r.imb === undefined ? '' : ` · стакан ${(r.imb * 100).toFixed(0)}%`) +
+      (r.fund === null || r.fund === undefined ? '' : ` · фандинг ${r.fund.toFixed(4)}%`),
+    `Объём 24ч $${fmtUsd(r.qv)} · всплеск ×${(t && t.burst ? t.burst : 0).toFixed(1)} · ATR ${r.atrPct.toFixed(2)}% · за сутки ${fmtPct(r.ch24, 1)}`,
+    ``,
+    `Направление: <b>${up ? 'вверх — работа от лонга' : 'вниз — работа от шорта'}</b>`,
+    `Ориентир стопа: обратная граница ${fmtPrice(opp)} (${stopPct.toFixed(2)}%)`,
+    `Score на момент пробоя ${r.score.toFixed(0)} при пороге ${CFG.thresh}` +
+      (r.grade ? ` · уже есть сигнал ${r.grade}` : ' — разбор пересчитывается, полноценный сигнал придёт, если факторы сойдутся'),
+    `<a href="${link}">Открыть на Binance</a>`,
   ].join('\n');
 }
 
@@ -2566,6 +2645,26 @@ function renderSparks() {
   }).join('');
   markFocus();
 }
+function springAlert(r, dir, price, t) {
+  const up = dir === 'up';
+  logEvent(up ? 'long' : 'short',
+    `${esc(r.base)} · пробой пружины ${up ? 'вверх' : 'вниз'}`,
+    `${fmtPrice(price)} задела ${up ? 'верх' : 'низ'} ${fmtPrice(up ? r.dHi : r.dLo)} · сжатие ${(r.wRank * 100).toFixed(0)}% · ${springState(r)}`,
+    r.sym);
+  if (CFG.tgSpring) tgSend(tgSpringMsg(r, dir, price, t));
+  if (!canAlert()) return;
+  beep(up ? 'long' : 'short');
+  if (CFG.vibro && navigator.vibrate) navigator.vibrate([30, 40, 30]);
+  if (CFG.notif && 'Notification' in window && Notification.permission === 'granted') {
+    try {
+      new Notification(`${r.base} · пробой пружины ${up ? 'вверх' : 'вниз'}`, {
+        body: `${fmtPrice(price)} · сжатие ${(r.wRank * 100).toFixed(0)}% · ${springState(r)}`,
+        tag: 'spring-' + r.sym, silent: true,
+      });
+    } catch (e) {}
+  }
+}
+
 function alertSpark(sp) {
   const title = sp.kind === 'absorb'
     ? `${esc(sp.base)} · набор без цены`
@@ -3307,6 +3406,8 @@ function bindAll() {
   $('#tgGrade').onchange = e => { CFG.tgGrade = e.target.value; saveCfg(); };
   $('#btnTgTest').onclick = tgTest;
   $('#btnTgChat').onclick = tgFindChat;
+  setSwitch('#swTgSpring', 'tgSpring');
+  setSwitch('#swSpring', 'springOn');
   setSwitch('#swTg', 'tgOn', v => { tgStatus(); if (v && tgReady()) tgTest(); });
   setSwitch('#swTgSignals', 'tgSignals');
   setSwitch('#swTgSparks', 'tgSparks');
@@ -3411,7 +3512,7 @@ async function boot() {
 
   setTimeout(() => cycle(), 7000);
   restartCycleTimer();
-  setInterval(() => { updateJournal(); render(); diag(); updateNetUI(); }, 2000);
+  setInterval(() => { checkSprings(); updateJournal(); render(); diag(); updateNetUI(); }, 2000);
   setInterval(() => { if (S.view === 'signals' && !document.hidden) renderSparks(); }, 1000);
   setInterval(restPoll, 5000);
   setInterval(wsWatchdog, 5000);
