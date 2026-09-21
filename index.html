@@ -848,13 +848,16 @@ function marketFilterAllows(marketId) {
 // 24ч% этой же пары на её прошлом появлении в этой самой ленте (а не 24ч назад):
 // 🔥 если выросло, ⬇️ если упало с того момента.
 const TOP_GAINER_INTERVAL_MS = 20000;
+const TOP_GAINER_FRESH_MS = 60000; // пара без новых тиков дольше минуты — не кандидат (мёртвые данные)
 let topGainerLastPct = {}; // key -> 24ч% на прошлом появлении пары в этой ленте
 setInterval(() => {
   if (!telegramOn || !telegramToken || !telegramChatId) return;
+  const now = Date.now();
   let best = null;
   for (const r of Object.values(rows)) {
     if (!marketFilterAllows(r.market)) continue;
     if (r.pct === null || r.pct === undefined || isNaN(r.pct)) continue;
+    if (!r.lastTick || now - r.lastTick > TOP_GAINER_FRESH_MS) continue;
     if (!best || r.pct > best.pct) best = r;
   }
   if (!best) return;
