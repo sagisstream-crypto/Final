@@ -107,6 +107,33 @@ main{flex:1;padding:14px;padding-bottom:calc(84px + env(safe-area-inset-bottom,0
 .stat .k{font-size:10px;color:var(--dim2);letter-spacing:.09em;text-transform:uppercase}
 .stat .v{font-family:var(--mono);font-size:17px;font-weight:700;margin-top:2px;color:var(--txt)}
 
+/* ---------- spark bar ---------- */
+#sparkHead{display:none;align-items:center;gap:8px;margin:0 2px 8px;font-size:11px;font-weight:700;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--amber)}
+#sparkHead .hint{font-weight:400;letter-spacing:0;text-transform:none;color:var(--dim2);font-size:10.5px}
+#sparkBar{display:none;grid-template-columns:repeat(auto-fill,minmax(258px,1fr));gap:9px;margin-bottom:13px}
+.spark-card{
+  position:relative;border-radius:13px;padding:10px 11px;cursor:pointer;
+  border:1px solid #4a3714;background:linear-gradient(150deg,#1b1408,#0e1219);
+  animation:sparkin .3s cubic-bezier(.2,.9,.3,1);overflow:hidden
+}
+.spark-card::after{content:'';position:absolute;inset:0;border-radius:13px;pointer-events:none;box-shadow:inset 0 0 26px #ffb02018}
+.spark-card.up{border-color:#17553f;background:linear-gradient(150deg,#07261c,#0c1219)}
+.spark-card.up::after{box-shadow:inset 0 0 26px #00e08a1c}
+.spark-card.dn{border-color:#66273a;background:linear-gradient(150deg,#240d14,#0f1017)}
+.spark-card.dn::after{box-shadow:inset 0 0 26px #ff4d6d18}
+@keyframes sparkin{from{opacity:0;transform:translateY(-8px) scale(.97)}to{opacity:1;transform:none}}
+.sp-h{display:flex;align-items:center;gap:7px}
+.sp-ic{font-size:13px;color:var(--amber)}
+.spark-card.up .sp-ic{color:var(--green)} .spark-card.dn .sp-ic{color:var(--red)}
+.sp-sym{font-family:var(--mono);font-weight:700;font-size:14px}
+.sp-age{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--dim2)}
+.sp-m{display:flex;flex-wrap:wrap;gap:9px;margin-top:7px;font-family:var(--mono);font-size:10.5px;color:var(--dim2)}
+.sp-m b{color:var(--txt);font-weight:600}
+.sp-plan{margin-top:7px;padding-top:6px;border-top:1px solid #1e2839;font-family:var(--mono);font-size:10.5px;color:var(--dim)}
+.blink{animation:blk 1.2s infinite}
+@keyframes blk{50%{opacity:.4}}
+
 /* ---------- signal cards ---------- */
 #cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:11px}
 .card{
@@ -317,6 +344,8 @@ textarea{
 <main>
   <!-- ============ SIGNALS ============ -->
   <section class="view on" id="v-signals">
+    <div id="sparkHead">⚡ Запал · движение начинается<span class="hint">поймано в первые секунды, счёт идёт из сокета на каждом тике</span><span class="pill" style="margin-left:auto">в работе <b id="sparkCnt">0</b></span></div>
+    <div id="sparkBar"></div>
     <div class="stats">
       <div class="stat"><div class="k">Лонг сигналы</div><div class="v g" id="stLong">0</div></div>
       <div class="stat"><div class="k">Шорт сигналы</div><div class="v r" id="stShort">0</div></div>
@@ -396,6 +425,10 @@ textarea{
           <div id="bursts"></div>
         </div>
         <div class="panel">
+          <div class="panel-h">Взведённые пружины<span class="sp d">сжатие волатильности — движение готовится</span></div>
+          <div id="coilList"></div>
+        </div>
+        <div class="panel">
           <div class="panel-h">Фандинг: перекосы толпы<span class="sp d">контртренд-зона</span></div>
           <div id="fundList"></div>
         </div>
@@ -446,6 +479,22 @@ textarea{
           <div class="fld"><input id="setMaxSpread" type="number" value="0.12" step="0.01"></div></div>
         <div class="set-row"><div><div class="t">Только совпадение с трендом BTC</div><div class="h">Лонги лишь когда BTC не падает, шорты — когда не растёт.</div></div>
           <div class="sw" id="swBtcFilter"><i></i></div></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-h">Детектор запала<span class="sp d">реакция за секунды, не за цикл</span></div>
+        <div class="set-row"><div><div class="t">Искра: старт движения</div><div class="h">Объём, число сделок и цена трогаются одновременно. Пара сразу уходит на внеочередной разбор, план считается вне цикла.</div></div>
+          <div class="sw on" id="swSpark"><i></i></div></div>
+        <div class="set-row"><div><div class="t">Набор: деньги без цены</div><div class="h">Объём и сделки рванули, а цена стоит — кто-то крупный набирает позицию до движения.</div></div>
+          <div class="sw on" id="swAbsorb"><i></i></div></div>
+        <div class="set-row"><div><div class="t">Чувствительность</div><div class="h">Выше — ловит раньше и чаще, но больше ложных. Порог считается в сигмах собственной волатильности пары, а не в процентах.</div></div>
+          <div class="fld"><select id="setSens">
+            <option value="0">спокойная</option>
+            <option value="1" selected>обычная</option>
+            <option value="2">агрессивная</option>
+          </select></div></div>
+        <div class="set-row"><div><div class="t">Отдельный звук запала</div><div class="h">Три восходящие ноты — отличается от сигнала на вход.</div></div>
+          <div class="sw on" id="swSparkSound"><i></i></div></div>
       </div>
 
       <div class="panel">
@@ -574,7 +623,8 @@ const HOSTS = {
 
 /* ---------------------------------------------------------------- config */
 const CFG = {
-  thresh: 45, depth: 70, cycle: 45, minVol: 3, maxSpread: 0.12,
+  thresh: 45, depth: 60, cycle: 30, minVol: 3, maxSpread: 0.12,
+  sens: 1, sparkOn: true, absorbOn: true, sparkSound: true,
   btcFilter: false,
   acct: 1000, riskPct: 1, atrMult: 1.5, maxLev: 20, riskAmt: 50,
   preset: 'intraday', market: 'futures', host: 'auto',
@@ -608,6 +658,8 @@ const S = {
   mark: new Map(),      // symbol -> {fund, mark, next}
   an: new Map(),        // symbol -> результат глубокого анализа
   hist: new Map(),      // symbol -> ring buffer цен из сокета
+  sparks: [],           // запалы: движение, пойманное в первые секунды
+  priority: [],         // внеочередной разбор по запалу
   liq: [],              // лента ликвидаций
   liqAgg: new Map(),    // symbol -> {long,short,ts}
   signals: [],          // отсортированные активные сигналы
@@ -890,16 +942,17 @@ function onTicker(d, mkt) {
   if (mkt === 'spot' && m.hasFut) {           // спот-цена мейджора нужна только для базиса
     m.spotPrice = +d.c; return;
   }
-  const price = +d.c, qv = +d.q, t = now();
+  const price = +d.c, qv = +d.q, t = now(), tr = +d.n || 0;
   let x = S.tick.get(sym);
   if (!x) {
     x = { sym, base: m.base, mkt, price, qv, ch24: 0, high: 0, low: 0, open: 0,
-          prevQv: qv, prevT: t, rate: 0, burst: 0, trades: 0, ts: t };
+          prevQv: qv, prevT: t, rate: 0, burst: 0, trades: tr, ts: t,
+          rv: 0, spark: null, lastSpark: 0, lastAbsorb: 0 };
     S.tick.set(sym, x);
-    S.hist.set(sym, [{ t, p: price }]);
+    S.hist.set(sym, [{ t, p: price, q: qv, n: tr }]);
   }
   const dt = (t - x.prevT) / 1000;
-  if (dt >= 2) {
+  if (dt >= 0.9) {                                  // тиковое разрешение ~1с: ловим старт движения
     const dq = Math.max(0, qv - x.prevQv);
     const rate = dq / dt;
     const avg = qv / 86400;
@@ -908,15 +961,102 @@ function onTicker(d, mkt) {
     x.rate = rate;
     x.prevQv = qv; x.prevT = t;
     const h = S.hist.get(sym);
-    h.push({ t, p: price });
-    if (h.length > 200) h.shift();
+    const prev = h[h.length - 1];
+    /* фоновая волатильность пары: EWMA квадрата односекундной доходности */
+    if (prev && prev.p > 0) {
+      const r1 = (price - prev.p) / prev.p * 100 / Math.max(1, Math.sqrt(dt));
+      x.rv = x.rv ? x.rv * 0.995 + r1 * r1 * 0.005 : r1 * r1;
+    }
+    h.push({ t, p: price, q: qv, n: tr });
+    const cap = x.qv >= CFG.minVol * 1e6 ? 200 : 24;
+    while (h.length > cap) h.shift();
+    ignite(sym, x, h);
   }
   x.price = price; x.qv = qv; x.ch24 = +d.P;
-  x.high = +d.h; x.low = +d.l; x.open = +d.o; x.trades = +d.n || 0;
+  x.high = +d.h; x.low = +d.l; x.open = +d.o; x.trades = tr;
   if (d.b) x.bid = +d.b;
   if (d.a) x.ask = +d.a;
   x.ts = t;
   if (sym === 'BTCUSDT') { S.btc.price = price; S.btc.ch24 = +d.P; }
+}
+
+/* =====================================================================
+   ДЕТЕКТОР ЗАПАЛА — работает на каждом тике сокета, а не раз в цикл.
+   Задача: поймать момент, когда движение только начинается:
+     · искра  — объём, сделки и цена стартуют одновременно (0–15 секунд);
+     · набор  — объём и сделки рванули, а цена стоит (кто-то набирает).
+   ===================================================================== */
+function at(h, secs) {                              // ближайшая запись secs секунд назад
+  const target = h[h.length - 1].t - secs * 1000;
+  for (let i = h.length - 1; i >= 0; i--) if (h[i].t <= target) return h[i];
+  return null;
+}
+
+function ignite(sym, x, h) {
+  if (!CFG.sparkOn && !CFG.absorbOn) return;
+  if (h.length < 14) return;                        // нужен разогрев буфера
+  if (x.qv < CFG.minVol * 1e6) return;
+  if (now() - S.started < 20000) return;            // не палим на старте сессии
+
+  const cur = h[h.length - 1];
+  const a10 = at(h, 10), a30 = at(h, 30), a60 = at(h, 60);
+  if (!a10 || !a30) return;
+  const dt10 = (cur.t - a10.t) / 1000, dt30 = (cur.t - a30.t) / 1000;
+  if (dt10 < 6 || dt30 < 20) return;
+
+  /* скорость денег и сделок против собственной суточной нормы */
+  const baseQ = x.qv / 86400, baseN = x.trades / 86400;
+  const rVol = baseQ > 0 ? (Math.max(0, cur.q - a10.q) / dt10) / baseQ : 0;
+  const rTrd = baseN > 0 ? (Math.max(0, cur.n - a10.n) / dt10) / baseN : 0;
+
+  /* движение в сигмах собственной волатильности, а не в процентах */
+  const ret10 = chg(cur.p, a10.p), ret30 = chg(cur.p, a30.p);
+  const ret60 = a60 ? chg(cur.p, a60.p) : ret30;
+  const sig1 = Math.sqrt(x.rv || 0);
+  const sig30 = Math.max(sig1 * Math.sqrt(30), 0.05);
+  const z = ret30 / sig30;
+
+  /* чистота импульса (Kaufman efficiency ratio за 15с): движение, а не пила */
+  let net = 0, path = 0;
+  for (let i = h.length - 1; i > 0 && cur.t - h[i - 1].t < 15000; i--) {
+    const d = h[i].p - h[i - 1].p;
+    net += d; path += Math.abs(d);
+  }
+  const consist = path ? Math.abs(net) / path : 0;
+  const accel = Math.abs(ret30) > 0 ? Math.abs(ret10) / (Math.abs(ret30) / 3) : 0;
+
+  const K = CFG.sens === 2 ? 0.72 : CFG.sens === 0 ? 1.45 : 1;   // чувствительность
+  const side = ret30 >= 0 ? 'long' : 'short';
+
+  /* --- искра: движение стартовало прямо сейчас --- */
+  if (CFG.sparkOn && now() - x.lastSpark > 240000 &&
+      rVol >= 6 * K && rTrd >= 3 * K && Math.abs(z) >= 2.2 * K &&
+      Math.abs(ret30) >= 0.25 * K && consist >= 0.5) {
+    const score = clamp(
+      Math.min(1, rVol / 14) * 34 + Math.min(1, rTrd / 8) * 20 +
+      Math.min(1, Math.abs(z) / 5) * 28 + consist * 12 + Math.min(1, accel / 2) * 6, 0, 100);
+    x.lastSpark = now();
+    pushSpark({ sym, base: x.base, kind: 'spark', side, t: now(), score,
+                rVol, rTrd, z, ret30, ret60, consist, price: cur.p });
+  }
+
+  /* --- набор: деньги пришли, цена ещё стоит --- */
+  else if (CFG.absorbOn && now() - x.lastAbsorb > 480000 &&
+           rVol >= 7 * K && rTrd >= 4 * K && Math.abs(z) < 1 && Math.abs(ret60) < 0.4) {
+    x.lastAbsorb = now();
+    pushSpark({ sym, base: x.base, kind: 'absorb', side: 'flat', t: now(),
+                score: clamp(Math.min(1, rVol / 16) * 60 + Math.min(1, rTrd / 9) * 40, 0, 100),
+                rVol, rTrd, z, ret30, ret60, consist, price: cur.p });
+  }
+}
+
+function pushSpark(sp) {
+  S.sparks.unshift(sp);
+  if (S.sparks.length > 40) S.sparks.pop();
+  if (S.priority.indexOf(sp.sym) === -1) S.priority.push(sp.sym);   // разбираем вне очереди, прямо сейчас
+  prioWorker();
+  alertSpark(sp);
+  renderSparks();
 }
 
 /* изменение цены за n секунд по собственному кольцевому буферу */
@@ -1127,15 +1267,16 @@ function rsiScore(r) {
   return 0.55;
 }
 
-async function analyze(sym) {
+async function analyze(sym, urgent) {
   const m = S.meta.get(sym); if (!m) return null;
   const t = S.tick.get(sym); if (!t) return null;
   const tf = tfSet();
 
-  const kMain = await getKlines(sym, tf.main, 200, tf.mainMin * 60000 * 0.6);
+  /* по запалу свечи тянем заново: незакрытая свеча решает */
+  const kMain = await getKlines(sym, tf.main, 200, urgent ? 0 : tf.mainMin * 60000 * 0.6);
   if (!kMain || kMain.c.length < 60) return null;
   const kSlow = await getKlines(sym, tf.slow, 150, tf.slowMin * 60000 * 0.6);
-  const k5 = tf.main === '5m' ? kMain : await getKlines(sym, '5m', 120, 120000);
+  const k5 = tf.main === '5m' ? kMain : await getKlines(sym, '5m', 120, urgent ? 0 : 120000);
 
   let depth = null, oiRows = null;
   try { depth = await getDepth(sym); } catch (e) {}
@@ -1352,8 +1493,9 @@ async function analyze(sym) {
   }
   if (blocked && CFG.btcFilter) flags.push('фильтр BTC');
 
+  const sparkRec = S.sparks.find(sp => sp.sym === sym && now() - sp.t < 6e5) || null;
   const res = {
-    sym, base: m.base, market: m.hasFut ? 'fut' : 'spot', hasSpot: m.hasSpot,
+    sym, base: m.base, market: m.hasFut ? 'fut' : 'spot', hasSpot: m.hasSpot, spark: sparkRec,
     price, score, side, grade, agree, against, C, flags,
     atrPct, atrV, rsi: rV, fund, oi15, oi1h, spread, imb, basis, burst,
     cvd1h, ch1h, ch24: t.ch24, qv: t.qv, td: tdNow, vwapV: vw, ema21: last(e21), ema50: last(e50m),
@@ -1364,6 +1506,22 @@ async function analyze(sym) {
   };
   S.an.set(sym, res);
   return res;
+}
+
+/* внеочередной разбор: запал не ждёт следующего цикла */
+let prioBusy = false;
+async function prioWorker() {
+  if (prioBusy) return;
+  prioBusy = true;
+  try {
+    while (S.priority.length) {
+      const sym = S.priority.shift();
+      try { await analyze(sym, true); } catch (e) { S.errors++; S.lastErr = String(e.message || e); }
+      rebuildSignals();
+      renderSparks();
+      render();
+    }
+  } finally { prioBusy = false; }
 }
 
 /* -------------------------------------------------- кандидаты на анализ */
@@ -1394,6 +1552,8 @@ function heatList() {
       h += Math.min(18, (now() - prev.ts) / 60000 * 2.2);   // давно не пересчитывали
     } else h += 12;
     if (S.journal.some(j => j.sym === sym && j.open)) h += 40;
+    const sp = S.sparks.find(s2 => s2.sym === sym);
+    if (sp && now() - sp.t < 6e5) h += 60 - (now() - sp.t) / 1e4;   // запал — в начало очереди
     out.push({ sym, h });
   }
   out.sort((x, y) => y.h - x.h);
@@ -1526,6 +1686,8 @@ function cardHtml(r) {
     counterReasons(r).map(x => `<span class="chip n">против: ${esc(COMP_NAMES[x.k])}</span>`).join('') +
     r.flags.map(f => `<span class="chip w">${esc(f)}</span>`).join('');
   const fresh = r.fresh && now() - r.fresh < 60000 ? ' fresh' : '';
+  const sparkChip = r.spark && now() - r.spark.t < 6e5
+    ? `<span class="chip w">⚡ запал ${sparkAge(r.spark.t)} назад</span>` : '';
   return `<div class="card ${r.side}${fresh}" data-sym="${r.sym}">
     <div class="c-top">
       <div style="min-width:0">
@@ -1546,7 +1708,7 @@ function cardHtml(r) {
       <div><div class="k">TP1</div><div class="v g">${fmtPrice(p.tp[0])}</div></div>
       <div><div class="k">ПЛЕЧО</div><div class="v">${p.lev}×</div></div>
     </div>
-    <div class="chips">${chips}</div>
+    <div class="chips">${sparkChip}${chips}</div>
   </div>`;
 }
 
@@ -1575,6 +1737,64 @@ function breadthIdx() {
     n++; if (t.ch24 > 0) up++;
   }
   return n ? up / n * 100 : null;
+}
+
+/* ------------------------------------------------------------- запалы */
+function pruneSparks() {
+  const lim = now() - 10 * 60000;
+  S.sparks = S.sparks.filter(sp => sp.t > lim);
+}
+function sparkAge(t) {
+  const s = Math.floor((now() - t) / 1000);
+  return s < 60 ? s + 'с' : Math.floor(s / 60) + 'м ' + (s % 60) + 'с';
+}
+function renderSparks() {
+  pruneSparks();
+  const bar = $('#sparkBar'), head = $('#sparkHead');
+  if (!bar) return;
+  if (!S.sparks.length) { bar.innerHTML = ''; bar.style.display = 'none'; head.style.display = 'none'; return; }
+  bar.style.display = 'grid'; head.style.display = 'flex';
+  $('#sparkCnt').textContent = S.sparks.length;
+  bar.innerHTML = S.sparks.slice(0, 12).map(sp => {
+    const a = S.an.get(sp.sym);
+    const ready = a && a.ts >= sp.t;
+    const kindCls = sp.kind === 'absorb' ? 'ab' : sp.side === 'long' ? 'up' : 'dn';
+    const icon = sp.kind === 'absorb' ? '◎' : sp.side === 'long' ? '▲' : '▼';
+    const title = sp.kind === 'absorb' ? 'НАБОР' : sp.side === 'long' ? 'СТАРТ ВВЕРХ' : 'СТАРТ ВНИЗ';
+    let plan = '<span class="d"><span class="spin"></span> считаю план…</span>';
+    if (ready) {
+      plan = a.grade
+        ? `<span class="${a.side === 'long' ? 'g' : 'r'}">${a.side === 'long' ? 'ЛОНГ' : 'ШОРТ'} ${a.grade}</span> · вход ${fmtPrice(a.plan.entry)} · стоп ${fmtPrice(a.plan.stop)} · ${a.plan.lev}×`
+        : `<span class="d">score ${a.score.toFixed(0)} — подтверждения нет${a.flags.length ? ' · ' + esc(a.flags[0]) : ''}</span>`;
+    }
+    return `<div class="spark-card ${kindCls}" data-sym="${sp.sym}">
+      <div class="sp-h">
+        <span class="sp-ic">${icon}</span>
+        <span class="sp-sym">${esc(sp.base)}</span>
+        <span class="chip ${sp.kind === 'absorb' ? 'w' : sp.side === 'long' ? 'p' : 'n'}">${title}</span>
+        <span class="sp-age blink">${sparkAge(sp.t)}</span>
+      </div>
+      <div class="sp-m">
+        <span>объём <b class="a">×${sp.rVol.toFixed(1)}</b></span>
+        <span>сделки <b class="a">×${sp.rTrd.toFixed(1)}</b></span>
+        <span>${sp.kind === 'absorb' ? 'цена стоит' : (sp.z > 0 ? '+' : '') + sp.z.toFixed(1) + 'σ'}</span>
+        <span class="${cls(sp.ret30)}">${fmtPct(sp.ret30, 2)}/30с</span>
+      </div>
+      <div class="sp-plan">${plan}</div>
+    </div>`;
+  }).join('');
+}
+function alertSpark(sp) {
+  const title = sp.kind === 'absorb'
+    ? `${esc(sp.base)} · НАБОР без цены`
+    : `${esc(sp.base)} · ${sp.side === 'long' ? 'СТАРТ ВВЕРХ' : 'СТАРТ ВНИЗ'}`;
+  const sub = `объём ×${sp.rVol.toFixed(1)} · сделки ×${sp.rTrd.toFixed(1)} · ${sp.kind === 'absorb' ? 'цена стоит' : sp.z.toFixed(1) + 'σ · ' + fmtPct(sp.ret30, 2) + ' за 30с'}`;
+  toastMsg(title, sub, sp.kind === 'absorb' ? '' : sp.side, sp.sym, 9000);
+  if (CFG.sparkSound) beep('spark');
+  if (CFG.vibro && navigator.vibrate) navigator.vibrate([25, 35, 25, 35, 45]);
+  if (CFG.notif && 'Notification' in window && Notification.permission === 'granted') {
+    try { new Notification(title, { body: sub, tag: 'spark-' + sp.sym, silent: true }); } catch (e) {}
+  }
 }
 
 /* ------------------------------------------------------------- таблица */
@@ -1678,6 +1898,18 @@ function renderFlow() {
       <span class="t">${ago(l.t)}</span></div>`).join('') ||
     '<div class="empty">Ждём ликвидации…</div>';
 
+  const coil = [...S.an.values()]
+    .filter(r => r.wRank < 0.28 && Math.abs(r.score) < CFG.thresh)
+    .sort((a, b) => a.wRank - b.wRank).slice(0, 12);
+  $('#coilList').innerHTML = coil.length ? coil.map(r =>
+    `<div class="liq" data-sym="${r.sym}" style="cursor:pointer">
+      <span class="s">${esc(r.base)}</span>
+      <span class="a">сжатие ${(r.wRank * 100).toFixed(0)}%</span>
+      <span class="d">ATR ${r.atrPct.toFixed(2)}%</span>
+      <span class="t ${cls(r.oi15 || 0)}">${Number.isFinite(r.oi15) ? fmtPct(r.oi15, 2) + ' OI' : '—'}</span>
+    </div>`).join('')
+    : '<div class="empty">Сжатых пар в разборе пока нет.</div>';
+
   const oi = [...S.an.values()].filter(r => Number.isFinite(r.oi15))
     .sort((a, b) => Math.abs(b.oi15) - Math.abs(a.oi15)).slice(0, 12);
   $('#oiList').innerHTML = oi.length ? oi.map(r =>
@@ -1778,12 +2010,12 @@ function beep(side) {
     S.audio = S.audio || new (window.AudioContext || window.webkitAudioContext)();
     const ac = S.audio;
     if (ac.state === 'suspended') ac.resume();
-    const f = side === 'long' ? [660, 990] : [440, 330];
+    const f = side === 'spark' ? [780, 1040, 1380] : side === 'long' ? [660, 990] : [440, 330];
     f.forEach((freq, i) => {
       const o = ac.createOscillator(), g = ac.createGain();
       o.type = 'triangle'; o.frequency.value = freq;
       g.gain.setValueAtTime(0.0001, ac.currentTime + i * 0.13);
-      g.gain.exponentialRampToValueAtTime(0.16, ac.currentTime + i * 0.13 + 0.02);
+      g.gain.exponentialRampToValueAtTime(side === 'spark' ? 0.2 : 0.16, ac.currentTime + i * 0.13 + 0.02);
       g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + i * 0.13 + 0.16);
       o.connect(g); g.connect(ac.destination);
       o.start(ac.currentTime + i * 0.13); o.stop(ac.currentTime + i * 0.13 + 0.18);
@@ -2046,6 +2278,7 @@ function applyCfg() {
   $('#minVol').value = CFG.minVol;
   $('#preset').value = CFG.preset;
   $('#setExcl').value = CFG.exclude;
+  $('#setSens').value = CFG.sens;
   $('#setHost').value = CFG.host;
   $('#setThreshV').textContent = CFG.thresh;
   $('#setDepthV').textContent = CFG.depth;
@@ -2144,6 +2377,10 @@ function bindAll() {
   bindNum('#setMaxLev', 'maxLev');
   $('#setExcl').onchange = e => { CFG.exclude = e.target.value; saveCfg(); buildUniverse(); };
   $('#setHost').onchange = e => { CFG.host = e.target.value; saveCfg(); };
+  setSwitch('#swSpark', 'sparkOn');
+  setSwitch('#swAbsorb', 'absorbOn');
+  setSwitch('#swSparkSound', 'sparkSound', v => { if (v) beep('spark'); });
+  $('#setSens').onchange = e => { CFG.sens = +e.target.value; saveCfg(); };
   setSwitch('#swBtcFilter', 'btcFilter');
   setSwitch('#swJunk', 'junk', () => buildUniverse());
   setSwitch('#swUsdtOnly', 'usdtOnly', () => buildUniverse());
@@ -2204,7 +2441,7 @@ function render() {
   if (document.hidden) return;
   cancelAnimationFrame(rafT);
   rafT = requestAnimationFrame(() => {
-    if (S.view === 'signals') renderCards();
+    if (S.view === 'signals') { renderSparks(); renderCards(); }
     else if (S.view === 'scanner') renderTable();
     else if (S.view === 'flow') renderFlow();
     else if (S.view === 'journal') { jStats(); renderJournal(); }
@@ -2234,6 +2471,7 @@ async function boot() {
   setTimeout(() => cycle(), 7000);
   restartCycleTimer();
   setInterval(() => { updateJournal(); render(); diag(); }, 2000);
+  setInterval(() => { if (S.view === 'signals' && !document.hidden) renderSparks(); }, 1000);
   setInterval(restFallback, 12000);
   setInterval(btcPulse, 60000);
   setInterval(() => { if (!S.scanning) buildUniverse(); }, 30 * 60000);
