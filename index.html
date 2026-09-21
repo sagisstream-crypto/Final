@@ -844,12 +844,9 @@ function marketFilterAllows(marketId) {
 // ---- "20 сек" — отдельный периодический сигнал: раз в 20 секунд шлём в Telegram одну
 // пару — ту, что сейчас быстрее всех растёт по 24ч% среди пар, разрешённых текущим
 // фильтром рынка (СПОТ/USDT-M/ВСЕ). Не зависит ни от порогов, ни от кулдаунов — просто
-// снимок текущего лидера по росту за 24ч на каждом тике таймера. "Было/стало" — это
-// 24ч% этой же пары на её прошлом появлении в этой самой ленте (а не 24ч назад):
-// 🔥 если выросло, ⬇️ если упало с того момента.
+// снимок текущего лидера на каждом тике таймера: название, объём, цена, 24ч%.
 const TOP_GAINER_INTERVAL_MS = 20000;
 const TOP_GAINER_FRESH_MS = 60000; // пара без новых тиков дольше минуты — не кандидат (мёртвые данные)
-let topGainerLastPct = {}; // key -> 24ч% на прошлом появлении пары в этой ленте
 setInterval(() => {
   if (!telegramOn || !telegramToken || !telegramChatId) return;
   const now = Date.now();
@@ -867,24 +864,11 @@ setInterval(() => {
     if (!best || r.pct > best.pct) best = r;
   }
   if (!best) return;
-  const nowPct = best.pct;
-  const wasPct = topGainerLastPct[best.key];
-  // Шлём только когда есть реальная новость: либо пара впервые попала в эту ленту,
-  // либо её 24ч% реально выросло с прошлого РАЗОСЛАННОГО значения по ней. Без роста —
-  // молчим, а не дублируем то же самое каждые 20 секунд (флэт/просадка не считаются).
-  const isFirstSighting = typeof wasPct !== "number" || isNaN(wasPct);
-  if (!isFirstSighting && nowPct <= wasPct) return;
-  const growth = typeof best.d1m === "number" && !isNaN(best.d1m) ? best.d1m : 0;
-  const nowText = `${nowPct >= 0 ? "+" : ""}${nowPct.toFixed(2)}%`;
-  let detail;
-  if (isFirstSighting) {
-    detail = `24ч ${nowText}`;
-  } else {
-    const wasText = `${wasPct >= 0 ? "+" : ""}${wasPct.toFixed(2)}%`;
-    detail = `было ${wasText} стало ${nowText}🔥`;
-  }
-  topGainerLastPct[best.key] = nowPct;
-  const line = `${marketDot(best.market)} ${best.base}/${best.quote}\n20s +$${fmtMoney(growth)} ${detail}`;
+  const growth = best.d1m;
+  const hasPrice = best.price !== null && best.price !== undefined && !isNaN(best.price);
+  const pctText = `${best.pct >= 0 ? "+" : ""}${best.pct.toFixed(2)}%`;
+  const line = `${marketDot(best.market)} ${best.base}/${best.quote}\n20s +$${fmtMoney(growth)} `
+    + `${hasPrice ? "$" + fmtPrice(best.price) : "—"} ${pctText}`;
   sendTelegram(line);
 }, TOP_GAINER_INTERVAL_MS);
 let searchTerm = "";
@@ -905,7 +889,7 @@ function buildPayload() {
     scoreThreshold, scoreOnlyMode, sortMode, takerStreamOn,
     everInTop30, everInTop15,
     thresholdLog, telegramOn, telegramToken, telegramChatId, signalSeq, lastSignalPct24h,
-    pairSignalLog, pairColumnOrder, tgPairLog, topGainerLastPct,
+    pairSignalLog, pairColumnOrder, tgPairLog,
     filtersCollapsed, totalTriggeredCount, totalEarlyCount,
     startTime, savedAt: Date.now(),
   };
@@ -953,7 +937,6 @@ function applyPayload(payload) {
   pairSignalLog = (payload.pairSignalLog && typeof payload.pairSignalLog === "object") ? payload.pairSignalLog : {};
   pairColumnOrder = Array.isArray(payload.pairColumnOrder) ? payload.pairColumnOrder : [];
   tgPairLog = (payload.tgPairLog && typeof payload.tgPairLog === "object") ? payload.tgPairLog : {};
-  topGainerLastPct = (payload.topGainerLastPct && typeof payload.topGainerLastPct === "object") ? payload.topGainerLastPct : {};
   telegramOn = !!payload.telegramOn;
   telegramToken = payload.telegramToken || "";
   telegramChatId = payload.telegramChatId || "";
@@ -2290,7 +2273,6 @@ function resetBaseline() {
   pairSignalLog = {};
   pairColumnOrder = [];
   tgPairLog = {};
-  topGainerLastPct = {};
   startTime = Date.now();
   clearState();
   render();
