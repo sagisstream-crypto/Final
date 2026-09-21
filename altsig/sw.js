@@ -14,6 +14,7 @@ self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
   if (url.hostname.indexOf('binance') !== -1) return;          // котировки всегда из сети
+  if (url.hostname.indexOf('telegram') !== -1) return;         // отправка сигналов — мимо кэша
   if (e.request.mode === 'navigate') {
     e.respondWith(fetch(e.request).catch(() => caches.match('./index.html')));
     return;

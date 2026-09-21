@@ -525,6 +525,30 @@ textarea{
       </div>
 
       <div class="panel">
+        <div class="panel-h">Telegram<span class="sp d">сигналы прилетают в чат с ботом</span></div>
+        <div class="set-row"><div><div class="t">Слать в Telegram</div><div class="h">Работает, пока открыта вкладка со сканером. Токен хранится только в этом браузере и уходит только на api.telegram.org.</div></div>
+          <div class="sw" id="swTg"><i></i></div></div>
+        <div class="set-row"><div><div class="t">Токен бота</div><div class="h">Создай бота у <b>@BotFather</b> → /newbot → скопируй строку вида <span class="mono">1234567890:AA…</span></div></div>
+          <div class="fld"><input id="tgToken" type="password" placeholder="токен" style="width:190px" autocomplete="off"></div></div>
+        <div class="set-row"><div><div class="t">chat_id</div><div class="h">Напиши своему боту <b>/start</b> в Telegram, затем нажми «Найти chat_id». Для группы — добавь бота в группу и напиши там любое сообщение.</div></div>
+          <div class="fld"><input id="tgChat" placeholder="123456789" style="width:130px" autocomplete="off"></div></div>
+        <div class="set-row"><div><div class="t">Проверка</div><div class="h" id="tgStatus">Токен и chat_id не заданы.</div></div>
+          <div class="row"><button class="btn sm" id="btnTgChat">Найти chat_id</button><button class="btn sm g" id="btnTgTest">Тест</button></div></div>
+        <div class="set-row"><div><div class="t">Сигналы на вход</div><div class="h">Полный план: вход, стоп, три тейка, плечо, размер позиции и причины.</div></div>
+          <div class="sw on" id="swTgSignals"><i></i></div></div>
+        <div class="set-row"><div><div class="t">С какого грейда слать</div><div class="h">B — все сигналы, A — только сильные, A+ — только топовые совпадения.</div></div>
+          <div class="fld"><select id="tgGrade"><option value="B">B и выше</option><option value="A">A и выше</option><option value="A+">только A+</option></select></div></div>
+        <div class="set-row"><div><div class="t">Запалы (старт движения)</div><div class="h">Короткое сообщение в первые секунды движения, до расчёта плана.</div></div>
+          <div class="sw on" id="swTgSparks"><i></i></div></div>
+        <div class="set-row"><div><div class="t">Наборы (деньги без цены)</div><div class="h">Объём и сделки рванули, цена стоит.</div></div>
+          <div class="sw" id="swTgAbsorb"><i></i></div></div>
+        <div class="set-row"><div><div class="t">Исходы сделок</div><div class="h">TP1, TP2 и стоп по каждому отправленному сигналу.</div></div>
+          <div class="sw on" id="swTgOutcomes"><i></i></div></div>
+        <div class="set-row"><div><div class="t">Часовая сводка</div><div class="h">Раз в час: сколько сигналов и запалов, win-rate и сумма R по журналу.</div></div>
+          <div class="sw" id="swTgDigest"><i></i></div></div>
+      </div>
+
+      <div class="panel">
         <div class="panel-h">Оповещения</div>
         <div class="set-row"><div><div class="t">Звук</div><div class="h">Короткий сигнал при новой точке входа.</div></div><div class="sw on" id="swSound"><i></i></div></div>
         <div class="set-row"><div><div class="t">Push-уведомления браузера</div><div class="h">Работают, когда вкладка свернута, но экран активен.</div></div><div class="sw" id="swNotif"><i></i></div></div>
@@ -630,6 +654,8 @@ const CFG = {
   preset: 'intraday', market: 'futures', host: 'auto',
   exclude: DEFAULT_EXCLUDE, junk: true, usdtOnly: true,
   sound: true, notif: false, wake: false, vibro: true,
+  tgOn: false, tgToken: '', tgChat: '', tgGrade: 'B',
+  tgSignals: true, tgSparks: true, tgAbsorb: false, tgOutcomes: true, tgDigest: false,
   weights: Object.fromEntries(WEIGHT_DEFS.map(([k, , w]) => [k, w])),
 };
 
@@ -1460,13 +1486,25 @@ async function analyze(sym, urgent) {
   /* ---------------- торговый план ---------------- */
   const aMult = PRESETS[CFG.preset].atrMult * (CFG.atrMult / 1.5);
   const lows = kMain.l.slice(-12), highs = kMain.h.slice(-12);
-  let stop, entry = price;
+
+  /* точка входа: по рынку, либо лимит на откате к EMA21/VWAP, если цену унесло.
+     Стоп и тейки считаются от той же точки, иначе стоп окажется не с той стороны. */
+  const anchor = side === 'long' ? Math.max(last(e21), vw) : Math.min(last(e21), vw);
+  let entryType = 'market', entry = price;
+  if (extATR > 1.3) {
+    if (side === 'long' && anchor < price * 0.999) { entryType = 'limit'; entry = anchor; }
+    else if (side === 'short' && anchor > price * 1.001) { entryType = 'limit'; entry = anchor; }
+  }
+
+  let stop;
   if (side === 'long') {
-    stop = Math.min(Math.min(...lows) - atrV * 0.15, price - atrV * aMult);
-    stop = Math.max(stop, price - atrV * 4);
+    stop = Math.min(Math.min(...lows) - atrV * 0.15, entry - atrV * aMult);
+    stop = Math.max(stop, entry - atrV * 4);
+    stop = Math.min(stop, entry - atrV * 0.35);
   } else {
-    stop = Math.max(Math.max(...highs) + atrV * 0.15, price + atrV * aMult);
-    stop = Math.min(stop, price + atrV * 4);
+    stop = Math.max(Math.max(...highs) + atrV * 0.15, entry + atrV * aMult);
+    stop = Math.min(stop, entry + atrV * 4);
+    stop = Math.max(stop, entry + atrV * 0.35);
   }
   const slDist = Math.abs(entry - stop);
   const slPct = entry ? slDist / entry * 100 : 0;
@@ -1477,9 +1515,6 @@ async function analyze(sym, urgent) {
   const lev = clamp(Math.round(13 / Math.max(0.25, slPct)), 1, CFG.maxLev);
   const riskUsd = CFG.riskAmt > 0 ? CFG.riskAmt : CFG.acct * CFG.riskPct / 100;
   const notional = slPct ? riskUsd / (slPct / 100) : 0;
-  const pullback = side === 'long'
-    ? Math.max(last(e21), vw) : Math.min(last(e21), vw);
-  const entryType = extATR > 1.3 ? 'limit' : 'market';
 
   /* грейд сигнала */
   let grade = null;
@@ -1500,8 +1535,8 @@ async function analyze(sym, urgent) {
     atrPct, atrV, rsi: rV, fund, oi15, oi1h, spread, imb, basis, burst,
     cvd1h, ch1h, ch24: t.ch24, qv: t.qv, td: tdNow, vwapV: vw, ema21: last(e21), ema50: last(e50m),
     dHi, dLo, wRank, div, tf: tf.main,
-    plan: { side, entry, entryType, pullback, stop, tp, slPct, R, lev, riskUsd, notional, margin: lev ? notional / lev : 0,
-            rr: 2, hold: PRESETS[CFG.preset].hold },
+    plan: { side, entry, entryType, stop, tp, slPct, R, lev, riskUsd, notional, margin: lev ? notional / lev : 0,
+            rr: 2, hold: PRESETS[CFG.preset].hold, mkt: price },
     kMain, ts: now(),
   };
   S.an.set(sym, res);
@@ -1641,6 +1676,186 @@ function rebuildSignals() {
 }
 
 /* =====================================================================
+   Telegram: отправка сигналов ботом через публичный Bot API.
+   Токен лежит только в localStorage этого браузера и уходит
+   исключительно на api.telegram.org.
+   ===================================================================== */
+const TG = { q: [], busy: false, last: 0, ok: 0, fail: 0, err: '', digestAt: 0 };
+const GRADE_RANK = { 'B': 1, 'A': 2, 'A+': 3 };
+
+const tgReady = () => !!(CFG.tgToken && CFG.tgChat);
+const tgActive = () => CFG.tgOn && tgReady();
+const tgEsc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+
+function tgSend(text, force) {
+  if (!force && !tgActive()) return;
+  if (!tgReady()) return;
+  TG.q.push({ text, tries: 0 });
+  if (TG.q.length > 80) TG.q.shift();
+  tgPump();
+}
+
+/* form-urlencoded, а не JSON: это «простой» CORS-запрос, браузер не шлёт preflight,
+   который api.telegram.org не обрабатывает */
+async function tgApi(method, params) {
+  const body = new URLSearchParams();
+  for (const [k, v] of Object.entries(params || {})) if (v !== undefined && v !== null) body.append(k, String(v));
+  const r = await fetch(`https://api.telegram.org/bot${encodeURIComponent(CFG.tgToken)}/${method}`,
+    { method: 'POST', body });
+  return r.json();
+}
+
+async function tgPump() {
+  if (TG.busy) return;
+  TG.busy = true;
+  try {
+    while (TG.q.length) {
+      const gap = 1200 - (now() - TG.last);            // лимит телеграма: ~1 сообщение/сек в чат
+      if (gap > 0) await new Promise(r => setTimeout(r, gap));
+      const item = TG.q[0];
+      item.tries++;
+      try {
+        const j = await tgApi('sendMessage', {
+          chat_id: CFG.tgChat, text: item.text,
+          parse_mode: 'HTML', disable_web_page_preview: 'true',
+        });
+        TG.last = now();
+        if (j.ok) { TG.q.shift(); TG.ok++; TG.err = ''; }
+        else if (j.error_code === 429) {
+          const ra = (j.parameters && j.parameters.retry_after) || 3;
+          if (item.tries > 4) { TG.q.shift(); TG.fail++; TG.err = 'лимит телеграма'; }
+          else await new Promise(r => setTimeout(r, ra * 1000 + 250));
+        } else { TG.q.shift(); TG.fail++; TG.err = j.description || ('код ' + j.error_code); }
+      } catch (e) {
+        TG.last = now();
+        if (item.tries > 2) { TG.q.shift(); TG.fail++; TG.err = String(e.message || e); }
+        else await new Promise(r => setTimeout(r, 2500));
+      }
+      tgStatus();
+    }
+  } finally { TG.busy = false; tgStatus(); }
+}
+
+function tgStatus(msg) {
+  const el = $('#tgStatus'); if (!el) return;
+  if (msg) { el.innerHTML = msg; return; }
+  if (!tgReady()) { el.innerHTML = 'Токен и chat_id не заданы.'; return; }
+  el.innerHTML = `${CFG.tgOn ? 'включено' : '<span class="a">выключено переключателем</span>'} · отправлено ${TG.ok}` +
+    (TG.fail ? ` · ошибок ${TG.fail}` : '') + (TG.q.length ? ` · в очереди ${TG.q.length}` : '') +
+    (TG.err ? ` · <span class="r">${esc(TG.err)}</span>` : '');
+}
+
+/* ------------------------------------------------ форматы сообщений */
+function tgSignalMsg(r) {
+  const p = r.plan, long = r.side === 'long';
+  const why = topReasons(r, 4).map(x => COMP_NAMES[x.k]).join(', ');
+  const against = counterReasons(r, 2).map(x => COMP_NAMES[x.k]).join(', ');
+  const link = r.market === 'fut'
+    ? `https://www.binance.com/ru/futures/${r.sym}`
+    : `https://www.binance.com/ru/trade/${r.base}_USDT`;
+  return [
+    `${long ? '🟢' : '🔴'} <b>${tgEsc(r.base)} · ${long ? 'ЛОНГ' : 'ШОРТ'} ${r.grade}</b> · score ${Math.abs(r.score).toFixed(0)} · ${r.market === 'fut' ? 'PERP' : 'SPOT'}`,
+    ``,
+    `Вход: ${p.entryType === 'limit' ? 'лимит <b>' + fmtPrice(p.entry) + '</b> (откат, сейчас ' + fmtPrice(p.mkt) + ')' : 'по рынку <b>' + fmtPrice(p.entry) + '</b>'}`,
+    `Стоп: <b>${fmtPrice(p.stop)}</b> (${p.slPct.toFixed(2)}%)`,
+    `TP1 ${fmtPrice(p.tp[0])} · TP2 ${fmtPrice(p.tp[1])} · TP3 ${fmtPrice(p.tp[2])}`,
+    `Плечо ${p.lev}× · позиция $${fmtUsd(p.notional)} · маржа $${fmtUsd(p.margin)} · риск $${p.riskUsd.toFixed(0)}`,
+    ``,
+    `За (${r.agree}): ${tgEsc(why)}`,
+    against ? `Против (${r.against}): ${tgEsc(against)}` : '',
+    r.flags.length ? `⚠️ ${tgEsc(r.flags.join(', '))}` : '',
+    `ATR ${r.atrPct.toFixed(2)}% · RSI ${r.rsi ? r.rsi.toFixed(0) : '—'}` +
+      (r.fund === null || r.fund === undefined ? '' : ` · фандинг ${r.fund.toFixed(4)}%`) +
+      (Number.isFinite(r.oi15) ? ` · ΔOI 15м ${fmtPct(r.oi15, 2)}` : '') +
+      ` · объём $${fmtUsd(r.qv)}`,
+    `⏱ ${PRESETS[CFG.preset].label} · удержание ${p.hold}`,
+    `<a href="${link}">Открыть на Binance</a>`,
+  ].filter(Boolean).join('\n');
+}
+
+function tgSparkMsg(sp) {
+  if (sp.kind === 'absorb') {
+    return [
+      `👁 <b>${tgEsc(sp.base)} · НАБОР</b>`,
+      `Деньги идут, цена стоит: объём ×${sp.rVol.toFixed(1)}, сделки ×${sp.rTrd.toFixed(1)}, цена ${fmtPct(sp.ret60, 2)} за минуту.`,
+      `Похоже на набор позиции до движения. Разбор считается.`,
+    ].join('\n');
+  }
+  return [
+    `🔥 <b>${tgEsc(sp.base)} · ${sp.side === 'long' ? 'СТАРТ ВВЕРХ' : 'СТАРТ ВНИЗ'}</b>`,
+    `объём ×${sp.rVol.toFixed(1)} · сделки ×${sp.rTrd.toFixed(1)} · ${sp.z > 0 ? '+' : ''}${sp.z.toFixed(1)}σ · ${fmtPct(sp.ret30, 2)} за 30с`,
+    `Цена ${fmtPrice(sp.price)}. Если движение подтвердится факторами — следом придёт план входа.`,
+  ].join('\n');
+}
+
+function tgOutcomeMsg(j, kind) {
+  const head = kind === 'tp1' ? `✅ <b>${tgEsc(j.base)}</b> · TP1 взят (+1R)`
+    : kind === 'tp2' ? `🎯 <b>${tgEsc(j.base)}</b> · TP2 взят (+2R)`
+    : `🛑 <b>${tgEsc(j.base)}</b> · стоп (−1R)`;
+  const tail = kind === 'tp1' ? 'Стоп можно двигать в безубыток.'
+    : kind === 'tp2' ? 'Сделка закрыта в плюс.' : 'Сценарий отменён.';
+  return `${head}\n${j.side === 'long' ? 'ЛОНГ' : 'ШОРТ'} от ${fmtPrice(j.entry)} · ${tail}`;
+}
+
+function tgDigest() {
+  if (!tgActive() || !CFG.tgDigest) return;
+  const closed = S.journal.filter(x => !x.open && x.result !== null);
+  const sumR = closed.reduce((s, x) => s + x.result, 0);
+  const wins = closed.filter(x => x.result > 0).length;
+  const top = S.signals.slice(0, 5)
+    .map(r => `${tgEsc(r.base)} ${r.score > 0 ? '+' : ''}${r.score.toFixed(0)}`).join(' · ');
+  tgSend([
+    `📊 <b>Сводка ALTSIG</b>`,
+    `Активных сигналов: ${S.signals.length} (${S.signals.filter(r => r.side === 'long').length} лонг / ${S.signals.filter(r => r.side === 'short').length} шорт)`,
+    `Запалов за час: ${S.sparks.filter(sp => now() - sp.t < 36e5).length} · разобрано пар: ${S.an.size}`,
+    `Журнал: ${closed.length} закрытых, win-rate ${closed.length ? (wins / closed.length * 100).toFixed(0) + '%' : '—'}, сумма ${sumR > 0 ? '+' : ''}${sumR.toFixed(1)}R`,
+    top ? `Топ сейчас: ${top}` : '',
+  ].filter(Boolean).join('\n'));
+}
+
+/* ------------------------------------------------ настройка из интерфейса */
+async function tgTest() {
+  if (!tgReady()) { tgStatus('<span class="r">Заполни токен и chat_id.</span>'); return; }
+  tgStatus('<span class="spin"></span> проверяю…');
+  try {
+    const me = await tgApi('getMe', {});
+    if (!me.ok) { tgStatus(`<span class="r">Токен не принят: ${esc(me.description || '')}</span>`); return; }
+    const j = await tgApi('sendMessage', {
+      chat_id: CFG.tgChat, parse_mode: 'HTML', disable_web_page_preview: 'true',
+      text: `✅ <b>ALTSIG подключён</b>\nБот @${tgEsc(me.result.username)} будет слать сюда сигналы, запалы и исходы сделок.`,
+    });
+    tgStatus(j.ok
+      ? `<span class="g">Готово: бот @${esc(me.result.username)}, сообщение доставлено.</span>`
+      : `<span class="r">Бот жив, но чат не принял: ${esc(j.description || '')}</span>`);
+  } catch (e) {
+    tgStatus(`<span class="r">Сеть недоступна: ${esc(String(e.message || e))}. Если api.telegram.org блокируется провайдером — нужен VPN.</span>`);
+  }
+}
+
+async function tgFindChat() {
+  if (!CFG.tgToken) { tgStatus('<span class="r">Сначала вставь токен бота.</span>'); return; }
+  tgStatus('<span class="spin"></span> ищу чаты…');
+  try {
+    const j = await tgApi('getUpdates', { limit: 20 });
+    if (!j.ok) { tgStatus(`<span class="r">${esc(j.description || 'ошибка')}</span>`); return; }
+    const seen = new Map();
+    for (const u of j.result || []) {
+      const m = u.message || u.channel_post || u.my_chat_member;
+      if (m && m.chat) seen.set(String(m.chat.id), m.chat.title || m.chat.username || m.chat.first_name || 'чат');
+    }
+    if (!seen.size) {
+      tgStatus('Чатов не видно. Открой своего бота в Telegram и напиши ему <b>/start</b> (для группы — добавь бота и напиши там любое сообщение), потом нажми ещё раз.');
+      return;
+    }
+    const list = [...seen].map(([id, name]) => `<b>${esc(id)}</b> — ${esc(name)}`).join('<br>');
+    if (!CFG.tgChat) { CFG.tgChat = [...seen.keys()][0]; $('#tgChat').value = CFG.tgChat; saveCfg(); }
+    tgStatus('Найдено:<br>' + list + '<br>Подставил первый, если поле было пустым.');
+  } catch (e) {
+    tgStatus(`<span class="r">Сеть недоступна: ${esc(String(e.message || e))}</span>`);
+  }
+}
+
+/* =====================================================================
    Интерфейс
    ===================================================================== */
 const COMP_NAMES = Object.fromEntries(WEIGHT_DEFS.map(([k, n]) => [k, n]));
@@ -1703,7 +1918,7 @@ function cardHtml(r) {
     <div class="bar"><i style="width:${w}%;background:${col}"></i></div>
     ${sparkSvg(r.kMain.c, r.side)}
     <div class="c-plan">
-      <div><div class="k">${p.entryType === 'limit' ? 'ВХОД ЛИМИТ' : 'ВХОД РЫНОК'}</div><div class="v">${fmtPrice(p.entryType === 'limit' ? p.pullback : p.entry)}</div></div>
+      <div><div class="k">${p.entryType === 'limit' ? 'ВХОД ЛИМИТ' : 'ВХОД РЫНОК'}</div><div class="v">${fmtPrice(p.entry)}</div></div>
       <div><div class="k">СТОП ${p.slPct.toFixed(1)}%</div><div class="v r">${fmtPrice(p.stop)}</div></div>
       <div><div class="k">TP1</div><div class="v g">${fmtPrice(p.tp[0])}</div></div>
       <div><div class="k">ПЛЕЧО</div><div class="v">${p.lev}×</div></div>
@@ -1785,6 +2000,7 @@ function renderSparks() {
   }).join('');
 }
 function alertSpark(sp) {
+  if (sp.kind === 'absorb' ? CFG.tgAbsorb : CFG.tgSparks) tgSend(tgSparkMsg(sp));
   const title = sp.kind === 'absorb'
     ? `${esc(sp.base)} · НАБОР без цены`
     : `${esc(sp.base)} · ${sp.side === 'long' ? 'СТАРТ ВВЕРХ' : 'СТАРТ ВНИЗ'}`;
@@ -1927,7 +2143,8 @@ function openJournal(r) {
   S.journal.unshift({
     id: r.sym + '-' + now(), sym: r.sym, base: r.base, side: r.side, grade: r.grade,
     score: Math.round(r.score), entry: r.plan.entry, stop: r.plan.stop, tp: r.plan.tp.slice(),
-    R: r.plan.R, ts: now(), open: true, mfe: 0, mae: 0, result: null, closedTs: 0, tf: r.tf,
+    R: r.plan.R, ts: now(), createdTs: now(), open: true, pending: r.plan.entryType === 'limit',
+    mfe: 0, mae: 0, result: null, closedTs: 0, tf: r.tf,
   });
   if (S.journal.length > 220) S.journal.pop();
   saveJournal();
@@ -1938,12 +2155,21 @@ function updateJournal() {
     if (!j.open) continue;
     const t = S.tick.get(j.sym); if (!t) continue;
     const p = t.price, dir = j.side === 'long' ? 1 : -1;
+    if (j.pending) {                                   // лимит ещё не исполнен
+      const hit = dir === 1 ? p <= j.entry : p >= j.entry;
+      if (hit) { j.pending = false; j.ts = now(); changed = true; }
+      else if (now() - j.createdTs > 90 * 60000) {     // цена не вернулась — отменяем
+        j.pending = false; j.open = false; j.cancelled = true; j.closedTs = now(); changed = true;
+      }
+      continue;
+    }
     const rNow = ((p - j.entry) / j.R) * dir;
     if (rNow > j.mfe) { j.mfe = rNow; changed = true; }
     if (rNow < j.mae) { j.mae = rNow; changed = true; }
     if (!j.tp1 && rNow >= 1) {
       j.tp1 = true; changed = true;
       toastMsg(`${esc(j.base)} · TP1 взят`, `+1R от входа ${fmtPrice(j.entry)} — стоп можно двигать в безубыток`, j.side, j.sym, 9000);
+      if (CFG.tgOutcomes) tgSend(tgOutcomeMsg(j, 'tp1'));
       beep('long');
     }
     const hitStop = dir === 1 ? p <= j.stop : p >= j.stop;
@@ -1951,9 +2177,11 @@ function updateJournal() {
     if (hitStop) {
       j.open = false; j.result = -1; j.closedTs = now(); changed = true;
       toastMsg(`${esc(j.base)} · стоп`, `сценарий отменён на ${fmtPrice(j.stop)} (−1R)`, 'short', j.sym, 8000);
+      if (CFG.tgOutcomes) tgSend(tgOutcomeMsg(j, 'stop'));
     } else if (hitTp2) {
       j.open = false; j.result = 2; j.closedTs = now(); changed = true;
       toastMsg(`${esc(j.base)} · TP2 взят`, `+2R от входа ${fmtPrice(j.entry)}`, 'long', j.sym, 9000);
+      if (CFG.tgOutcomes) tgSend(tgOutcomeMsg(j, 'tp2'));
       beep('long');
     }
     else if (now() - j.ts > 24 * 3600e3) { j.open = false; j.result = +rNow.toFixed(2); j.closedTs = now(); changed = true; }
@@ -1973,7 +2201,7 @@ function jStats() {
   set('#jTotal', closed.length);
   set('#jWr', wr === null ? '—' : wr.toFixed(0) + '%', wr === null ? '' : wr >= 50 ? 'g' : 'r');
   set('#jR', closed.length ? (sumR > 0 ? '+' : '') + sumR.toFixed(1) + 'R' : '—', sumR > 0 ? 'g' : sumR < 0 ? 'r' : '');
-  set('#jOpen', S.journal.filter(j => j.open).length);
+  set('#jOpen', S.journal.filter(j => j.open && !j.pending).length);
   set('#jTpSl', `${tp1} / ${closed.filter(j => j.result < 0).length}`);
   set('#jPf', gl ? (gp / gl).toFixed(2) : (gp ? '∞' : '—'), gl && gp / gl >= 1 ? 'g' : '');
   set('#stWr', wr === null ? '—' : wr.toFixed(0) + '%', wr === null ? '' : wr >= 50 ? 'g' : 'r');
@@ -1983,16 +2211,16 @@ function renderJournal() {
   $('#journal').innerHTML = S.journal.slice(0, 120).map(j => {
     const t = S.tick.get(j.sym);
     const dir = j.side === 'long' ? 1 : -1;
-    const rNow = t ? ((t.price - j.entry) / j.R) * dir : 0;
-    const v = j.open ? rNow : j.result;
+    const rNow = t && !j.pending ? ((t.price - j.entry) / j.R) * dir : 0;
+    const v = j.cancelled ? 0 : j.open ? rNow : j.result;
     const col = v > 0 ? 'g' : v < 0 ? 'r' : 'd';
     return `<div class="jrow" data-sym="${j.sym}" style="cursor:pointer">
       <div class="l">
         <div class="sym">${esc(j.base)} <span class="tag ${j.side}" style="font-size:9px">${j.side === 'long' ? 'LONG' : 'SHORT'} ${j.grade || ''}</span>
-          ${j.open ? '<span class="chip w">открыт</span>' : ''}</div>
+          ${j.cancelled ? '<span class="chip">не сработал</span>' : j.pending ? '<span class="chip w">ждёт входа</span>' : j.open ? '<span class="chip w">открыт</span>' : ''}</div>
         <div class="meta">вход ${fmtPrice(j.entry)} · стоп ${fmtPrice(j.stop)} · score ${j.score} · ${ago(j.ts)} назад · ${j.tf}</div>
       </div>
-      <div class="res ${col}">${(v > 0 ? '+' : '') + (v || 0).toFixed(2)}R<small>макс ${j.mfe.toFixed(2)}R · мин ${j.mae.toFixed(2)}R</small></div>
+      <div class="res ${col}">${j.pending ? '<span class="d">—</span>' : (v > 0 ? '+' : '') + (v || 0).toFixed(2) + 'R'}<small>${j.cancelled ? 'лимит не исполнился' : 'макс ' + j.mfe.toFixed(2) + 'R · мин ' + j.mae.toFixed(2) + 'R'}</small></div>
     </div>`;
   }).join('') || '<div class="empty"><b>Журнал пуст</b>Сюда автоматически попадает каждый выданный сигнал, и движок сам считает, дошёл ли он до тейка или до стопа.</div>';
 }
@@ -2039,6 +2267,7 @@ function toast(r) {
     r.side, r.sym);
 }
 function alertSignal(r) {
+  if (CFG.tgSignals && (GRADE_RANK[r.grade] || 0) >= (GRADE_RANK[CFG.tgGrade] || 1)) tgSend(tgSignalMsg(r));
   toast(r);
   beep(r.side);
   if (CFG.vibro && navigator.vibrate) navigator.vibrate(r.side === 'long' ? [40, 60, 40] : [90]);
@@ -2125,7 +2354,7 @@ function planText(r) {
   const p = r.plan;
   return [
     `${r.base}USDT · ${p.side === 'long' ? 'ЛОНГ' : 'ШОРТ'} ${r.grade || ''} (score ${r.score.toFixed(0)})`,
-    `Вход: ${p.entryType === 'limit' ? 'лимит ' + fmtPrice(p.pullback) : 'по рынку ' + fmtPrice(p.entry)}`,
+    `Вход: ${p.entryType === 'limit' ? 'лимит ' + fmtPrice(p.entry) + ' (откат, цена сейчас ' + fmtPrice(p.mkt) + ')' : 'по рынку ' + fmtPrice(p.entry)}`,
     `Стоп: ${fmtPrice(p.stop)} (${p.slPct.toFixed(2)}%)`,
     `TP1 ${fmtPrice(p.tp[0])} · TP2 ${fmtPrice(p.tp[1])} · TP3 ${fmtPrice(p.tp[2])}`,
     `Плечо ${p.lev}× · объём позиции $${fmtUsd(p.notional)} · маржа $${fmtUsd(p.margin)} · риск $${p.riskUsd.toFixed(0)}`,
@@ -2176,7 +2405,7 @@ function renderDrawer(r) {
     <div class="panel">
       <div class="panel-h">Торговый план<span class="sp">${esc(p.hold)}</span></div>
       <div style="padding:11px 13px" class="kv">
-        <span class="k">Вход</span><span>${p.entryType === 'limit' ? 'лимит ' + fmtPrice(p.pullback) + ' <span class="d">(откат)</span>' : 'по рынку ' + fmtPrice(p.entry)}</span>
+        <span class="k">Вход</span><span>${p.entryType === 'limit' ? 'лимит ' + fmtPrice(p.entry) + ' <span class="d">(откат, сейчас ' + fmtPrice(p.mkt) + ')</span>' : 'по рынку ' + fmtPrice(p.entry)}</span>
         <span class="k">Стоп</span><span class="r">${fmtPrice(p.stop)} · ${p.slPct.toFixed(2)}%</span>
         <span class="k">TP1 / TP2 / TP3</span><span class="g">${fmtPrice(p.tp[0])} · ${fmtPrice(p.tp[1])} · ${fmtPrice(p.tp[2])}</span>
         <span class="k">Плечо</span><span>${p.lev}× <span class="d">(стоп ≈ ${(p.slPct * p.lev).toFixed(0)}% маржи)</span></span>
@@ -2260,6 +2489,12 @@ function setSwitch(id, key, after) {
     saveCfg();
     if (after) after(CFG[key]);
   };
+}
+function bindText(id, key, after) {
+  const el = $(id); if (!el) return;
+  el.value = CFG[key] || '';
+  const upd = () => { CFG[key] = el.value.trim(); saveCfg(); tgStatus(); if (after) after(); };
+  el.onchange = upd; el.onblur = upd;
 }
 function bindNum(id, key, after) {
   const el = $(id); if (!el) return;
@@ -2377,6 +2612,18 @@ function bindAll() {
   bindNum('#setMaxLev', 'maxLev');
   $('#setExcl').onchange = e => { CFG.exclude = e.target.value; saveCfg(); buildUniverse(); };
   $('#setHost').onchange = e => { CFG.host = e.target.value; saveCfg(); };
+  bindText('#tgToken', 'tgToken');
+  bindText('#tgChat', 'tgChat');
+  $('#tgGrade').value = CFG.tgGrade;
+  $('#tgGrade').onchange = e => { CFG.tgGrade = e.target.value; saveCfg(); };
+  $('#btnTgTest').onclick = tgTest;
+  $('#btnTgChat').onclick = tgFindChat;
+  setSwitch('#swTg', 'tgOn', v => { tgStatus(); if (v && tgReady()) tgTest(); });
+  setSwitch('#swTgSignals', 'tgSignals');
+  setSwitch('#swTgSparks', 'tgSparks');
+  setSwitch('#swTgAbsorb', 'tgAbsorb');
+  setSwitch('#swTgOutcomes', 'tgOutcomes');
+  setSwitch('#swTgDigest', 'tgDigest');
   setSwitch('#swSpark', 'sparkOn');
   setSwitch('#swAbsorb', 'absorbOn');
   setSwitch('#swSparkSound', 'sparkSound', v => { if (v) beep('spark'); });
@@ -2445,7 +2692,7 @@ function render() {
     else if (S.view === 'scanner') renderTable();
     else if (S.view === 'flow') renderFlow();
     else if (S.view === 'journal') { jStats(); renderJournal(); }
-    else if (S.view === 'settings') diag();
+    else if (S.view === 'settings') { diag(); tgStatus(); }
     $('#nSig').textContent = S.signals.length;
     $('#nJrn').textContent = S.journal.length;
   });
@@ -2473,6 +2720,7 @@ async function boot() {
   setInterval(() => { updateJournal(); render(); diag(); }, 2000);
   setInterval(() => { if (S.view === 'signals' && !document.hidden) renderSparks(); }, 1000);
   setInterval(restFallback, 12000);
+  setInterval(tgDigest, 3600000);
   setInterval(btcPulse, 60000);
   setInterval(() => { if (!S.scanning) buildUniverse(); }, 30 * 60000);
   setInterval(() => {
