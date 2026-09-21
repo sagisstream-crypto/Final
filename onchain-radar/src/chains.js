@@ -2,12 +2,14 @@
 // https://docs.etherscan.io/etherscan-v2
 export const ETHERSCAN_V2_BASE = "https://api.etherscan.io/v2/api";
 
+// coingeckoPlatform — id платформы в CoinGecko (нужен для резолва контракта
+// в coin id и исторических цен в бэктесте, см. src/providers/coingeckoClient.js).
 export const CHAINS = {
-  1: { name: "ethereum", label: "Ethereum", dexscreenerId: "ethereum" },
-  42161: { name: "arbitrum", label: "Arbitrum One", dexscreenerId: "arbitrum" },
-  8453: { name: "base", label: "Base", dexscreenerId: "base" },
-  56: { name: "bsc", label: "BNB Chain", dexscreenerId: "bsc" },
-  137: { name: "polygon", label: "Polygon", dexscreenerId: "polygon" },
+  1: { name: "ethereum", label: "Ethereum", dexscreenerId: "ethereum", coingeckoPlatform: "ethereum" },
+  42161: { name: "arbitrum", label: "Arbitrum One", dexscreenerId: "arbitrum", coingeckoPlatform: "arbitrum-one" },
+  8453: { name: "base", label: "Base", dexscreenerId: "base", coingeckoPlatform: "base" },
+  56: { name: "bsc", label: "BNB Chain", dexscreenerId: "bsc", coingeckoPlatform: "binance-smart-chain" },
+  137: { name: "polygon", label: "Polygon", dexscreenerId: "polygon", coingeckoPlatform: "polygon-pos" },
 };
 
 export function chainLabel(chainId) {

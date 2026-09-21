@@ -9,7 +9,8 @@
   },
   "scripts": {
     "start": "node src/index.js",
-    "test": "node test/score.test.js"
+    "backtest": "node src/backtest.js",
+    "test": "node test/score.test.js && node test/backtestStats.test.js"
   },
   "dependencies": {}
 }

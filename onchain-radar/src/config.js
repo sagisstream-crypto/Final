@@ -38,6 +38,14 @@ export const config = {
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || "",
   telegramChatId: process.env.TELEGRAM_CHAT_ID || "",
   pollIntervalMs: Number(process.env.POLL_INTERVAL_MS) || 300000,
+
+  // --- бэктест (src/backtest.js) ---
+  backtestPeriodDays: Number(process.env.BACKTEST_PERIOD_DAYS) || 90,       // сколько дней истории просмотреть
+  backtestSampleIntervalDays: Number(process.env.BACKTEST_SAMPLE_INTERVAL_DAYS) || 7, // шаг между точками сэмплирования
+  backtestLookbackDays: Number(process.env.BACKTEST_LOOKBACK_DAYS) || 3,    // окно трансферов ДО каждой точки
+  backtestForwardDays: (process.env.BACKTEST_FORWARD_DAYS || "7,14,30").split(",").map((s) => Number(s.trim())).filter(Boolean),
+  backtestLargeTransferUsdMin: Number(process.env.BACKTEST_LARGE_TRANSFER_USD_MIN) || 5000,
+  backtestSignalMinWallets: Number(process.env.BACKTEST_SIGNAL_MIN_WALLETS) || 3, // порог "похоже на накопление" для сравнения групп
 };
 
 export function assertConfigured() {

@@ -32,8 +32,22 @@ async function callEtherscan(chainId, params) {
   return body.result;
 }
 
+function mapTransfer(t) {
+  return {
+    hash: t.hash,
+    timestamp: Number(t.timeStamp) * 1000,
+    from: t.from?.toLowerCase(),
+    to: t.to?.toLowerCase(),
+    rawValue: t.value,
+    decimals: Number(t.tokenDecimal),
+    amount: Number(t.value) / 10 ** Number(t.tokenDecimal),
+    symbol: t.tokenSymbol,
+  };
+}
+
 // Последние N ERC-20 Transfer-событий по контракту (не по конкретному кошельку —
 // это глобальная лента переводов токена, из неё вытаскиваем крупные и повторные адреса).
+// Используется живым сканером (src/watcher.js) — всегда "сейчас".
 export async function fetchRecentTokenTransfers(chainId, contractAddress, { limit = 100 } = {}) {
   const result = await callEtherscan(chainId, {
     module: "account",
@@ -44,16 +58,38 @@ export async function fetchRecentTokenTransfers(chainId, contractAddress, { limi
     sort: "desc",
   });
   if (!Array.isArray(result)) return [];
-  return result.map((t) => ({
-    hash: t.hash,
-    timestamp: Number(t.timeStamp) * 1000,
-    from: t.from?.toLowerCase(),
-    to: t.to?.toLowerCase(),
-    rawValue: t.value,
-    decimals: Number(t.tokenDecimal),
-    amount: Number(t.value) / 10 ** Number(t.tokenDecimal),
-    symbol: t.tokenSymbol,
-  }));
+  return result.map(mapTransfer);
+}
+
+// То же самое, но за произвольный диапазон блоков — для бэктеста, где нужно
+// воссоздать "что было видно" на конкретную историческую дату, а не текущий момент.
+// limit — защита от токенов с огромным числом переводов в окне; если результат
+// упёрся в limit, окно почти наверняка неполное (это видно по length === limit
+// на вызывающей стороне).
+export async function fetchTokenTransfersInRange(chainId, contractAddress, { startBlock, endBlock, limit = 1000 }) {
+  const result = await callEtherscan(chainId, {
+    module: "account",
+    action: "tokentx",
+    contractaddress: contractAddress,
+    startblock: startBlock,
+    endblock: endBlock,
+    page: 1,
+    offset: limit,
+    sort: "asc",
+  });
+  if (!Array.isArray(result)) return [];
+  return result.map(mapTransfer);
+}
+
+// Номер блока, ближайший к unix-времени (сек). closest: "before" | "after".
+export async function fetchBlockNumberByTimestamp(chainId, timestampSec, closest = "before") {
+  const result = await callEtherscan(chainId, {
+    module: "block",
+    action: "getblocknobytime",
+    timestamp: Math.round(timestampSec),
+    closest,
+  });
+  return Number(result);
 }
 
 export async function fetchTokenBalance(chainId, contractAddress, walletAddress, decimals) {
