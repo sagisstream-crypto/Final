@@ -93,10 +93,8 @@
   }
   .sound-btn.off { color: #5a6b5a; border-color: #1e2b1e; background: #0a0e0a; }
   #stop-btn.paused { color: #ff6b6b; border-color: #4a1e1e; background: #1e1010; }
-  #stats-btn.paused { color: #5eff8f; border-color: #2f4a2f; background: #131f13; }
   #wakelock-btn.paused { color: #5eff8f; border-color: #2f4a2f; background: #131f13; }
   #early-only-btn.paused { color: #ffd85e; border-color: #4a3a1e; background: #1e1810; }
-  #trade-plan-btn.paused { color: #ff6b6b; border-color: #4a1e1e; background: #1e1010; }
   .reset-btn:hover, .sound-btn:hover { background: #232838; }
   .ok-btn:hover { background: #233823; }
   .hint { font-size: 10px; color: #3f4f3f; margin-left: auto; }
@@ -192,17 +190,6 @@
   .shelf-sym { font-size: 12px; font-weight: 600; color: #ffd85e; }
   .shelf-delta { font-size: 11px; color: #ffb454; font-weight: 600; }
   .shelf-time { font-size: 9px; color: #8a7a4a; }
-  .trade-panel { border: 1px solid #1a2a3a; background: #0a0e14; border-radius: 4px; margin: 0 12px 8px; padding: 6px 8px; }
-  .trade-header { font-size: 11px; font-weight: 700; color: #5ec8ff; margin-bottom: 4px; }
-  .trade-summary { color: #8aa8bf; font-weight: 400; }
-  .trade-list { display: flex; flex-wrap: wrap; gap: 6px; max-height: 140px; overflow-y: auto; margin-bottom: 4px; }
-  .trade-empty { font-size: 11px; color: #4a6478; padding: 2px 0; }
-  .trade-item { display: flex; flex-direction: column; gap: 1px; background: #0f1a24; border: 1px solid #1a2a3a; border-radius: 3px; padding: 4px 8px; min-width: 128px; }
-  .trade-item .t-sym { font-size: 12px; font-weight: 600; color: #5ec8ff; }
-  .trade-item .t-line { font-size: 9.5px; color: #6b8494; }
-  .trade-closed-item { display: flex; align-items: center; gap: 8px; background: #0f1a24; border: 1px solid #1a2a3a; border-radius: 3px; padding: 4px 8px; }
-  .trade-closed-item .t-sym { font-size: 11px; font-weight: 600; color: #8aa8bf; min-width: 76px; }
-  .trade-closed-item .t-time { font-size: 9px; color: #4a6478; margin-left: auto; }
   /* только телефон (см. @media max-width:900px ниже) — на ПК сканер остаётся как был, без этой панели.
      Занимает место старого "🔔 ЖУРНАЛ СИГНАЛОВ" (убран целиком, он всё равно был мёртвый). */
   .pair-columns-panel {
@@ -401,14 +388,6 @@
       <button class="ok-btn" id="apply-score-threshold">OK</button>
     </div>
     <div class="box">
-      <span>📐</span>
-      <span class="stat-label">стоп −%/цель +%/часов</span>
-      <input id="trade-stop-input" value="8" style="width:34px">
-      <input id="trade-target-input" value="16" style="width:34px">
-      <input id="trade-hours-input" value="2" style="width:28px">
-      <button class="ok-btn" id="apply-trade-params">OK</button>
-    </div>
-    <div class="box">
       <span>📨</span>
       <span class="stat-label">telegram bot token / chat id</span>
       <input id="telegram-token-input" placeholder="123456:AAExample" style="width:120px">
@@ -417,7 +396,6 @@
       <button class="ok-btn" id="test-telegram">ТЕСТ</button>
     </div>
     <button class="reset-btn" id="score-only-btn">⭐ ТОЛЬКО SCORE: ВЫКЛ</button>
-    <button class="reset-btn" id="trade-plan-btn">📐 ПЛАН СДЕЛКИ: ВКЛ</button>
     <button class="reset-btn" id="telegram-btn">📨 TELEGRAM: ВЫКЛ</button>
     <button class="reset-btn" id="taker-btn">🔥 ТЕЙКЕР-ПОТОК: ВКЛ</button>
     <button class="reset-btn" id="sort-btn">⇅ СОРТ: Δ ОБЪЁМА</button>
@@ -427,7 +405,6 @@
     <button class="reset-btn" id="notif-btn">🔔 РАЗРЕШИТЬ УВЕДОМЛЕНИЯ</button>
     <button class="reset-btn" id="stop-btn">⏸ СТОП</button>
     <button class="reset-btn" id="wakelock-btn">💡 НЕ ГАСИТЬ ЭКРАН: ВЫКЛ</button>
-    <button class="reset-btn" id="stats-btn">📊 СТАТИСТИКА</button>
     <button class="reset-btn" id="early-only-btn">⚡ ТОЛЬКО РАННИЕ: ВЫКЛ</button>
     <div class="hint" id="poll-hint">live: websocket</div>
   </div>
@@ -443,22 +420,12 @@
       <div class="shelf-empty">Пока нет.</div>
     </div>
   </div>
-  <div class="trade-panel" id="trade-panel">
-    <div class="trade-header">📐 ПЛАН СДЕЛКИ <span class="trade-summary" id="trade-summary"></span></div>
-    <div class="trade-list" id="trade-open-list"><div class="trade-empty">Открытых позиций нет.</div></div>
-    <div class="trade-list" id="trade-closed-list"><div class="trade-empty">Закрытых сделок пока нет.</div></div>
-  </div>
   <div class="filters-hint">
     <b>⭐ SCORE (0–100)</b> — главный сигнал: складывает RVOL (объём против средней минуты суток), Δ% цены за 1м, пробой дневного хая, положение к VWAP, скачок среднего чека сделки, перекос стакана, долю тейкер-покупок и форму последней 1m свечи горячего потока. Стреляет только при score ≥ порога И растущей цене. «ТОЛЬКО SCORE» глушит старые пороговые сигналы.
     <b>Пороговые:</b> SPIKE (10с), SPIKE30 (30с), VEL1M (60с), VEL1M30 (30с, тот же VEL1M, но раньше) — каждый по своему $ порогу из шапки (ACCEL как отдельный сигнал убран). <b>🎯 Пороговый сигнал</b> — пришпиленная лента наверху: последние срабатывания этих четырёх сигналов. <b>📶 По парам (VEL1M/VEL1M30)</b> — на телефоне, во вкладке «СИГНАЛЫ»: та же лента, но сгруппированная по паре — своя таблица на каждую, а не общий список вперемешку. <b>🪤 Тихая полка</b> — первый вынос у пары, которая долго стояла ровно.
     <b>🔥 Тейкер-поток</b> — kline_1m по 12 самым горячим парам на каждом рынке, даёт долю покупок и форму свечи. <b>💾 CSV</b> — выгрузка всех сигналов с признаками и MFE/MAE для разбора.
-    <b>📐 План сделки</b> — встроенная стратегия из 12-месячного бэктеста (research/binance_pump_patterns): на каждый ⭐ SCORE-сигнал заводится виртуальная позиция (стоп/цель/тайм-аут, риск 1% капитала на сделку, комиссия 0.10% за круг) и ведётся сама, без участия пользователя — это не автоторговля и не финансовая рекомендация, а прозрачная проверка сигнала теми же правилами, что тестировались на истории. Не более одной позиции на пару одновременно.
     <b>📨 Telegram</b> — впиши токен бота (у @BotFather) и chat_id, нажми ТЕСТ: если тестовое сообщение дошло, рассылка пороговых сигналов (🎯) включится сама. Токен и chat_id хранятся только в этом браузере (IndexedDB), никуда, кроме Telegram, не уходят.
     Отбор при первом появлении: цена &lt; $10, нач. объём ≤ $3M. UTK и Alpha исключены.
-  </div>
-  <div id="stats-panel" style="display:none; margin-top:10px; border:1px solid #1e2b1e; border-radius:2px; background:#0a0e0a; padding:10px 12px;">
-    <div style="font-size:10px; color:#5a6b5a; letter-spacing:0.05em; margin-bottom:8px;">📊 СТАТИСТИКА ПО СИГНАЛАМ — что было с ценой ПОСЛЕ срабатывания (не рекомендация)</div>
-    <div id="stats-content" style="font-size:11px; line-height:1.7;"></div>
   </div>
   </div>
 </div>
@@ -623,7 +590,6 @@ let lastPollAt = {};
 let outcomes = [];
 let outcomesByKey = {};
 const OUTCOMES_MAX = 1000;
-let statsVisible = false;
 
 // Rank tracking
 let rankSnapshot = {};
@@ -667,23 +633,6 @@ let candleShape = {};        // key -> { o,h,l,c,v, at } последняя 1m �
 let fundingRate = {};        // symbol (USDT-M, без префикса рынка) -> { r, price, at }
 let oiHistory = {};          // symbol -> [{t, oi_usd}, ...] горячие пары + те, что дали сигнал
 let oiWatchSymbols = {};     // symbol -> ts последнего сигнала (держим в опросе OI_WATCH_TTL_MS)
-
-// ---- план сделки: стратегия из research/binance_pump_patterns (12м бэктест, 267 событий)
-// поверх сигнала ⭐ SCORE. Не автоторговля — просто считаем виртуальный P&L теми же
-// параметрами, что были провалидированы в бэктесте (стоп/цель/тайм-аут, риск 1% на
-// сделку, комиссия 0.10% за круг), чтобы видеть вживую, отработала бы сделка или нет.
-// −5% стоп в бэктесте убивал edge на любой цели; −8%/+16–20% за 2ч стабильно давал плюс.
-const TRADE_FEE_PCT = 0.10;              // комиссия+проскальзывание за круг, как в бэктесте
-const TRADE_RISK_PCT = 1;                // риск на сделку, % от текущего виртуального капитала
-const TRADE_STARTING_EQUITY = 10000;     // виртуальный старт, для сравнимости с бэктестом
-const CLOSED_TRADES_MAX = 60;            // сколько закрытых сделок держим в журнале
-let tradePlanOn = true;                  // ВКЛ/ВЫКЛ встроенной стратегии
-let tradeStopPct = 8;                    // −X% от входа
-let tradeTargetPct = 16;                 // +X% от входа
-let tradeTimeHours = 2;                  // тайм-аут, часов
-let tradeEquity = TRADE_STARTING_EQUITY; // виртуальный капитал, компаундится
-let openTrades = {};                     // key -> открытый план сделки (максимум один на пару)
-let closedTrades = [];                   // закрытые сделки, самые новые первыми
 
 // ---- пороговый сигнал: отдельная пришпиленная лента для SPIKE/VEL1M/VEL1M30,
 // в самом верху страницы. Старый "🔔 ЖУРНАЛ СИГНАЛОВ" внизу был мёртв (pushAlert()
@@ -761,42 +710,6 @@ function purgeKey(key) {
   delete dayHigh[key]; delete dayHighAt[key]; delete dayLow[key]; delete takerRatio[key]; delete candleShape[key];
   shelfAlerts = shelfAlerts.filter(e => e.key !== key);
   delete outcomesByKey[key];
-  delete openTrades[key];
-}
-
-// ---------- план сделки: открыть/закрыть виртуальную позицию ----------
-function openTradePlan(key, market, parsed, now, score) {
-  const entryPrice = parsed.price;
-  if (!(entryPrice > 0)) return;
-  const riskUsd = tradeEquity * (TRADE_RISK_PCT / 100);
-  const notional = riskUsd / (tradeStopPct / 100);
-  openTrades[key] = {
-    key, market, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
-    entryPrice, entryTime: now,
-    stopPrice: entryPrice * (1 - tradeStopPct / 100),
-    targetPrice: entryPrice * (1 + tradeTargetPct / 100),
-    expireAt: now + tradeTimeHours * 3600000,
-    notional, riskUsd, score,
-  };
-}
-function closeTradePlan(key, exitType, exitPrice, now) {
-  const ot = openTrades[key];
-  if (!ot) return;
-  const rawPct = (exitPrice / ot.entryPrice - 1) * 100;
-  const pnlPct = rawPct - TRADE_FEE_PCT;
-  const pnlUsd = ot.notional * (pnlPct / 100);
-  tradeEquity = Math.max(0, tradeEquity + pnlUsd);
-  closedTrades.unshift({
-    ...ot, exitType, exitPrice, exitTime: now,
-    pnlPct, pnlUsd, R: ot.riskUsd ? pnlUsd / ot.riskUsd : null,
-    equityAfter: tradeEquity,
-  });
-  if (closedTrades.length > CLOSED_TRADES_MAX) closedTrades.length = CLOSED_TRADES_MAX;
-  delete openTrades[key];
-  dataDirty = true;
-  const icon = exitType === "target" ? "✅" : exitType === "stop" ? "🛑" : "⏱";
-  notify(`${icon} План: ${ot.base}/${ot.quote}`,
-         `${exitType === "target" ? "цель" : exitType === "stop" ? "стоп" : "тайм-аут"} · ${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(1)}% · капитал $${tradeEquity.toFixed(0)}`);
 }
 
 // ---------- пороговый сигнал: лог + телеграм ----------
@@ -956,8 +869,6 @@ function buildPayload() {
     threshold, threshold30, threshold1m, thresholdVel1m30, maxInitialPrice, maxInitialVolume,
     scoreThreshold, scoreOnlyMode, sortMode, takerStreamOn,
     everInTop30, everInTop15,
-    tradePlanOn, tradeStopPct, tradeTargetPct, tradeTimeHours, tradeEquity,
-    openTrades, closedTrades,
     thresholdLog, telegramOn, telegramToken, telegramChatId, signalSeq, lastSignalPct24h,
     pairSignalLog, pairColumnOrder, pairTelegramMsgId,
     filtersCollapsed, totalTriggeredCount, totalEarlyCount,
@@ -994,13 +905,6 @@ function applyPayload(payload) {
   takerStreamOn = payload.takerStreamOn !== false;
   everInTop30 = payload.everInTop30 || {};
   everInTop15 = payload.everInTop15 || {};
-  tradePlanOn = payload.tradePlanOn !== false;
-  tradeStopPct = payload.tradeStopPct || tradeStopPct;
-  tradeTargetPct = payload.tradeTargetPct || tradeTargetPct;
-  tradeTimeHours = payload.tradeTimeHours || tradeTimeHours;
-  tradeEquity = typeof payload.tradeEquity === "number" ? payload.tradeEquity : TRADE_STARTING_EQUITY;
-  openTrades = payload.openTrades || {};
-  closedTrades = payload.closedTrades || [];
   thresholdLog = payload.thresholdLog || [];
   // старый формат signalSeq был { SPOT, "USDT-M" } (счётчик на весь рынок, не на пару) —
   // если сохранённое значение в этой форме, не переносим его, просто считаем заново по парам.
@@ -1819,15 +1723,6 @@ function handleTickerBatch(market, arr) {
         if (outcomesByKey[key].length === 0) delete outcomesByKey[key];
       }
 
-      // план сделки: проверяем стоп/цель/тайм-аут на каждый тик, даже во время resync —
-      // это просто сверка текущей цены с уже зафиксированными уровнями, не новый сигнал.
-      const ot = openTrades[key];
-      if (ot) {
-        if (parsed.price <= ot.stopPrice) closeTradePlan(key, "stop", ot.stopPrice, now);
-        else if (parsed.price >= ot.targetPrice) closeTradePlan(key, "target", ot.targetPrice, now);
-        else if (now >= ot.expireAt) closeTradePlan(key, "time", parsed.price, now);
-      }
-
       if (resyncing) continue; // skip firing on resync cycle
 
       // ---- пороговые сигналы: каждый по своему $ порогу из шапки, прямо в журнал ----
@@ -1946,8 +1841,6 @@ function handleTickerBatch(market, arr) {
         notify(`⭐ SCORE ${scoreObj.score}: ${parsed.base}/${parsed.quote}`,
                `${scoreObj.parts.slice(0, 3).join(" · ")} · Δ1м +$${fmtMoney(d1m)}`);
         startOutcome(key, market.id, parsed, now, "SIGNAL", { rvol, pct1m, ats, atsMedian, imbal, spreadPct, vwapDev, rng, taker, d1m, score: scoreObj.score, parts: scoreObj.parts });
-        // встроенная стратегия: одна виртуальная позиция на пару одновременно
-        if (tradePlanOn && !openTrades[key]) openTradePlan(key, market.id, parsed, now, scoreObj.score);
       }
 
       // doubling sound (kept)
@@ -2016,142 +1909,6 @@ function scheduleRender() { dataDirty = true; }
 
 function badgeClass(m) { return "badge badge-" + m; }
 function priceCellClass(m) { return "price-cell-" + m; }
-
-function pctChange(from, to) {
-  if (!from) return null;
-  return ((to - from) / from) * 100;
-}
-
-function renderStats() {
-  if (!statsVisible) return;
-  const content = document.getElementById("stats-content");
-
-  function bucket(list, field) {
-    let n = 0, sum = 0, pos = 0;
-    for (const o of list) {
-      const val = o[field];
-      if (val === null || val === undefined) continue;
-      const c = pctChange(o.signalPrice, val);
-      if (c === null) continue;
-      n++; sum += c; if (c > 0) pos++;
-    }
-    return { n, avg: n ? sum / n : null, winRate: n ? (pos / n) * 100 : null };
-  }
-  // MFE/MAE — то, ради чего это всё: максимум, до которого цена реально доходила
-  // после сигнала, и максимальная просадка. Снапшот на 15-й минуте это не показывает.
-  function excursion(list) {
-    const mfes = [], maes = [], times = [];
-    for (const o of list) {
-      if (o.mfe === undefined || o.mfe === null) continue;
-      mfes.push(o.mfe); maes.push(o.mae ?? 0);
-      if (o.mfeAt) times.push(o.mfeAt / 60000);
-    }
-    if (!mfes.length) return null;
-    const avg = a => a.reduce((x, y) => x + y, 0) / a.length;
-    const hit = t => (mfes.filter(v => v >= t).length / mfes.length) * 100;
-    return {
-      n: mfes.length, mfe: avg(mfes), medMfe: median(mfes), mae: avg(maes),
-      medTime: times.length ? median(times) : null,
-      hit1: hit(1), hit3: hit(3), hit5: hit(5),
-    };
-  }
-
-  function line(label, b) {
-    if (!b || b.n === 0) return `<div>${label}: пока нет данных</div>`;
-    const sign = b.avg >= 0 ? "+" : "";
-    return `<div>${label}: N=${b.n} · средн. ${sign}${b.avg.toFixed(2)}% · в плюсе ${b.winRate.toFixed(0)}%</div>`;
-  }
-  function exLine(label, e) {
-    if (!e) return `<div>${label}: нет данных</div>`;
-    return `<div><b>${label}</b> (N=${e.n}): макс. ход <span style="color:#5eff8f">+${e.mfe.toFixed(2)}%</span> `
-      + `(медиана +${e.medMfe.toFixed(2)}%) · просадка <span style="color:#ff6b6b">${e.mae.toFixed(2)}%</span>`
-      + (e.medTime !== null ? ` · пик через ~${e.medTime.toFixed(1)} мин` : "")
-      + ` · дошло до +1%/+3%/+5%: ${e.hit1.toFixed(0)}% / ${e.hit3.toFixed(0)}% / ${e.hit5.toFixed(0)}%</div>`;
-  }
-
-  const completed = outcomes.filter(o => o.done).length;
-  const pending = outcomes.length - completed;
-
-  const types = ["SIGNAL", "QUIET", "VEL1M", "VEL1M30", "SPIKE", "SPIKE30"];
-  const byType = types.map(t => {
-    const list = outcomes.filter(o => (o.type || "SPIKE") === t);
-    return list.length ? exLine(t === "SIGNAL" ? "⭐ SCORE" : t, excursion(list)) : "";
-  }).filter(Boolean).join("");
-
-  // разбивка SCORE-сигналов по силе — сразу видно, стоит ли поднимать порог
-  const sig = outcomes.filter(o => o.type === "SIGNAL" && o.score !== null);
-  const bands = [[80, 100], [70, 79], [60, 69]].map(([a, b]) => {
-    const list = sig.filter(o => o.score >= a && o.score <= b);
-    return list.length ? exLine(`score ${a}–${b}`, excursion(list)) : "";
-  }).filter(Boolean).join("");
-
-  content.innerHTML = `
-    <div>Всего сигналов: ${outcomes.length} (завершено: ${completed}, отслеживается: ${pending})</div>
-    <div style="margin:6px 0 2px; color:#5a6b5a;">— снапшоты по времени (все типы) —</div>
-    ${line("Через 1 мин", bucket(outcomes, "p1"))}
-    ${line("Через 5 мин", bucket(outcomes, "p5"))}
-    ${line("Через 15 мин", bucket(outcomes, "p15"))}
-    <div style="margin:8px 0 2px; color:#5a6b5a;">— MFE / MAE по типу сигнала (за 15 мин наблюдения) —</div>
-    ${byType || "<div>пока нет данных</div>"}
-    ${bands ? `<div style="margin:8px 0 2px; color:#5a6b5a;">— SCORE по силе —</div>${bands}` : ""}
-  `;
-}
-
-// ---------- план сделки: рендер ----------
-function fmtTimeLeft(ms) {
-  if (ms <= 0) return "0м";
-  const m = Math.round(ms / 60000);
-  if (m < 60) return `${m}м`;
-  return `${Math.floor(m / 60)}ч${m % 60 ? " " + (m % 60) + "м" : ""}`;
-}
-function renderTradePanel() {
-  const summaryEl = document.getElementById("trade-summary");
-  const openEl = document.getElementById("trade-open-list");
-  const closedEl = document.getElementById("trade-closed-list");
-  if (!summaryEl || !openEl || !closedEl) return;
-
-  const totalPnl = tradeEquity - TRADE_STARTING_EQUITY;
-  const totalPnlPct = (totalPnl / TRADE_STARTING_EQUITY) * 100;
-  const n = closedTrades.length;
-  const wins = closedTrades.filter(t => t.pnlUsd > 0).length;
-  const winRate = n ? (wins / n) * 100 : null;
-  summaryEl.innerHTML = ` — капитал $${tradeEquity.toFixed(0)} (${totalPnl >= 0 ? "+" : ""}${totalPnlPct.toFixed(2)}%)`
-    + (n ? ` · сделок ${n} · win-rate ${winRate.toFixed(0)}%` : " · сделок пока нет")
-    + (tradePlanOn ? "" : " · <span style=\"color:#ff6b6b\">выключен</span>");
-
-  const now = Date.now();
-  const open = Object.values(openTrades);
-  if (!open.length) {
-    openEl.innerHTML = `<div class="trade-empty">Открытых позиций нет.</div>`;
-  } else {
-    openEl.innerHTML = open.map(ot => {
-      const row = rows[ot.key];
-      const cur = row ? row.price : ot.entryPrice;
-      const floatPct = ((cur / ot.entryPrice) - 1) * 100;
-      return `
-        <div class="trade-item">
-          <span class="t-sym">${ot.base}/${ot.quote} <span style="color:#4a6478; font-weight:400;">${ot.market}</span></span>
-          <span class="t-line">вход $${fmtPrice(ot.entryPrice)} · сейчас <span class="${floatPct >= 0 ? "pct-pos" : "pct-neg"}">${floatPct >= 0 ? "+" : ""}${floatPct.toFixed(1)}%</span></span>
-          <span class="t-line">стоп $${fmtPrice(ot.stopPrice)} · цель $${fmtPrice(ot.targetPrice)}</span>
-          <span class="t-line">осталось ${fmtTimeLeft(ot.expireAt - now)} · score ${ot.score}</span>
-        </div>`;
-    }).join("");
-  }
-
-  if (!closedTrades.length) {
-    closedEl.innerHTML = `<div class="trade-empty">Закрытых сделок пока нет.</div>`;
-  } else {
-    const icon = t => t.exitType === "target" ? "✅" : t.exitType === "stop" ? "🛑" : "⏱";
-    closedEl.innerHTML = closedTrades.slice(0, 15).map(t => `
-      <div class="trade-closed-item">
-        <span>${icon(t)}</span>
-        <span class="t-sym">${t.base}/${t.quote}</span>
-        <span class="${t.pnlPct >= 0 ? "pct-pos" : "pct-neg"}">${t.pnlPct >= 0 ? "+" : ""}${t.pnlPct.toFixed(1)}%</span>
-        <span style="color:#4a6478; font-size:10px;">R ${t.R === null ? "—" : (t.R >= 0 ? "+" : "") + t.R.toFixed(2)}</span>
-        <span class="t-time">${fmtTimeMinusHour(t.exitTime)}</span>
-      </div>`).join("");
-  }
-}
 
 // ---------- пороговый сигнал: рендер ----------
 const THRESHOLD_TYPE_LABEL = { SPIKE: "10с", VEL1M: "Δ1м", VEL1M30: "Δ30с" };
@@ -2407,8 +2164,6 @@ function render() {
     `).join("");
   }
 
-  renderStats();
-  renderTradePanel();
   renderThresholdPanel();
   renderPairColumns();
 }
@@ -2655,25 +2410,6 @@ document.getElementById("apply-score-threshold").addEventListener("click", () =>
 document.getElementById("score-threshold-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter") document.getElementById("apply-score-threshold").click();
 });
-document.getElementById("apply-trade-params").addEventListener("click", () => {
-  const stopEl = document.getElementById("trade-stop-input");
-  const targetEl = document.getElementById("trade-target-input");
-  const hoursEl = document.getElementById("trade-hours-input");
-  const stop = parseFloat(stopEl.value), target = parseFloat(targetEl.value), hours = parseFloat(hoursEl.value);
-  if (stop > 0 && stop < 100 && target > 0 && target < 1000 && hours > 0 && hours <= 48) {
-    tradeStopPct = stop; tradeTargetPct = target; tradeTimeHours = hours;
-    saveState();
-    render();
-    flashApplied(stopEl); flashApplied(targetEl); flashApplied(hoursEl);
-  }
-});
-document.getElementById("trade-plan-btn").addEventListener("click", (e) => {
-  tradePlanOn = !tradePlanOn;
-  e.target.textContent = tradePlanOn ? "📐 ПЛАН СДЕЛКИ: ВКЛ" : "📐 ПЛАН СДЕЛКИ: ВЫКЛ";
-  e.target.classList.toggle("paused", !tradePlanOn);
-  saveState();
-  render();
-});
 document.getElementById("apply-telegram").addEventListener("click", () => {
   const tokenEl = document.getElementById("telegram-token-input");
   const chatEl = document.getElementById("telegram-chatid-input");
@@ -2775,12 +2511,6 @@ document.getElementById("stop-btn").addEventListener("click", (e) => {
     updateStatusLine();
   }
 });
-document.getElementById("stats-btn").addEventListener("click", (e) => {
-  statsVisible = !statsVisible;
-  document.getElementById("stats-panel").style.display = statsVisible ? "block" : "none";
-  e.target.classList.toggle("paused", statsVisible);
-  if (statsVisible) renderStats();
-});
 document.getElementById("early-only-btn").addEventListener("click", (e) => {
   earlyOnlyMode = !earlyOnlyMode;
   e.target.textContent = earlyOnlyMode ? "⚡ ТОЛЬКО РАННИЕ: ВКЛ" : "⚡ ТОЛЬКО РАННИЕ: ВЫКЛ";
@@ -2873,15 +2603,8 @@ loadStateAsync().then((ok) => {
   document.getElementById("max-price-input").value = String(maxInitialPrice);
   document.getElementById("max-volume-input").value = String(maxInitialVolume);
   document.getElementById("score-threshold-input").value = String(scoreThreshold);
-  document.getElementById("trade-stop-input").value = String(tradeStopPct);
-  document.getElementById("trade-target-input").value = String(tradeTargetPct);
-  document.getElementById("trade-hours-input").value = String(tradeTimeHours);
   document.getElementById("telegram-token-input").value = telegramToken;
   document.getElementById("telegram-chatid-input").value = telegramChatId;
-  if (!tradePlanOn) {
-    const b = document.getElementById("trade-plan-btn");
-    b.textContent = "📐 ПЛАН СДЕЛКИ: ВЫКЛ"; b.classList.add("paused");
-  }
   if (telegramOn) {
     const b = document.getElementById("telegram-btn");
     b.textContent = "📨 TELEGRAM: ВКЛ"; b.classList.add("paused");
