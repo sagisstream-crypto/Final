@@ -237,6 +237,29 @@
   .alert-delta { color: #ffb454; font-weight: 600; white-space: nowrap; }
   .alert-bottom { display: flex; justify-content: space-between; color: #5a6b5a; margin-top: 3px; }
   .alerts-empty { font-size: 11px; color: #3f4f3f; padding: 24px 12px; text-align: center; line-height: 1.5; }
+  .setup-card {
+    margin-top: 6px; padding: 6px 8px; border-radius: 4px;
+    background: #0e150e; border: 1px solid #1e2b1e; font-size: 11px;
+  }
+  .setup-row { display: flex; justify-content: space-between; padding: 1px 0; color: #b9c7b9; }
+  .setup-label { color: #5a6b5a; }
+  .setup-targets { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; }
+  .setup-tp {
+    font-size: 10px; padding: 1px 5px; border-radius: 3px;
+    border: 1px solid #1e3a2a; color: #7ee8a0; background: #101e15;
+  }
+  .setup-tp.hit { background: #17351f; border-color: #2f6b45; color: #5eff8f; font-weight: 700; }
+  .setup-status { font-weight: 600; color: #ffd85e; }
+  .setup-card.status-STOP .setup-status { color: #ff6b6b; }
+  .setup-card.status-TP1 .setup-status,
+  .setup-card.status-TP2 .setup-status,
+  .setup-card.status-TP3 .setup-status { color: #5eff8f; }
+  .setup-copy-btn {
+    margin-top: 6px; width: 100%; padding: 5px; font-size: 10px; font-weight: 600;
+    color: #b9c7b9; background: #131a13; border: 1px solid #223022; border-radius: 4px;
+    cursor: pointer;
+  }
+  .setup-copy-btn:hover { background: #1a231a; color: #e4ece4; }
   .footer {
     border-top: 1px solid #1e2b1e; background: #0d120d; padding: 6px 16px;
     font-size: 10px; color: #3f4f3f; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px;
@@ -567,6 +590,8 @@ const HISTORY_MAX_AGE_MS = 150000; // keep ~2.5 min
 const ANCHOR_TOLERANCE_MS = 8000;
 let alertsLog = [];
 const ALERTS_LOG_MAX = 400;
+let alertSeq = 0;
+let openSignalsByKey = {};   // key -> [alert refs] with a still-open trade setup (SL/TP not hit yet)
 let lastPollAt = {};
 
 let outcomes = [];
@@ -648,6 +673,7 @@ function purgeKey(key) {
   delete dayHigh[key]; delete dayHighAt[key]; delete dayLow[key]; delete takerRatio[key];
   shelfAlerts = shelfAlerts.filter(e => e.key !== key);
   alertsLog = alertsLog.filter(e => e.key !== key);
+  delete openSignalsByKey[key];
   delete outcomesByKey[key];
 }
 let marketFilter = "ALL";
@@ -946,8 +972,17 @@ function markFired(key, type) {
   ensureLastFired(key)[type] = Date.now();
 }
 function pushAlert(entry) {
-  // запись сигналов отключена по запросу — не копить журнал и не писать на диск
   signalCount[entry.key] = (signalCount[entry.key] || 0) + 1;
+  // журнал ведём только по SIGNAL (торговый вызов с сетапом) — остальные типы
+  // (VEL1M/VEL2M/ACCEL) остаются просто звуком/уведомлением, без записи.
+  if (entry.type !== "SIGNAL") return;
+  entry.seq = ++alertSeq;
+  alertsLog.unshift(entry);
+  if (alertsLog.length > ALERTS_LOG_MAX) alertsLog.length = ALERTS_LOG_MAX;
+  if (entry.setup) {
+    if (!openSignalsByKey[entry.key]) openSignalsByKey[entry.key] = [];
+    openSignalsByKey[entry.key].push(entry);
+  }
 }
 function pushShelfAlert(entry) {
   // полка тоже без записи
@@ -1023,6 +1058,47 @@ function computeScore(f) {
   if (f.spreadPct !== null && f.spreadPct >= 1.5) { s -= 10; parts.push("широкий спред"); }
 
   return { score: Math.max(0, Math.min(100, Math.round(s))), parts };
+}
+
+// ---------- v16: торговая карточка по SIGNAL — вход/стоп/цели ----------
+// SIGNAL уже требует объём+цену+стакан вместе (pct1m > 0), так что карточка не
+// выбирает направление — только размечает уровни под уже подтверждённый пробой вверх.
+const SETUP_LOOKBACK_MS = 240000;    // 4 мин истории тиков — где искать локальный лой под стоп
+const SETUP_MIN_STOP_PCT = 0.008;    // теснее 0.8% нельзя — спред/шум выбьют раньше времени
+const SETUP_MAX_STOP_PCT = 0.04;     // шире 4% нельзя — это скальп на выносе, не свинг
+const SETUP_RR = [1.5, 3, 5];        // TP1/TP2/TP3 в множителях риска (R)
+
+function computeTradeSetup(key, price, spreadPct) {
+  const now = Date.now();
+  let swingLow = null;
+  for (const s of (history[key] || [])) {
+    if (!s.p || s.p <= 0 || now - s.t > SETUP_LOOKBACK_MS) continue;
+    if (swingLow === null || s.p < swingLow) swingLow = s.p;
+  }
+  const spreadBuf = spreadPct !== null ? Math.max(spreadPct / 100, 0.001) : 0.002;
+  let stop = (swingLow !== null && swingLow < price) ? swingLow * (1 - spreadBuf) : price * (1 - SETUP_MIN_STOP_PCT * 1.5);
+  let stopPct = (price - stop) / price;
+  if (stopPct < SETUP_MIN_STOP_PCT) { stopPct = SETUP_MIN_STOP_PCT; stop = price * (1 - stopPct); }
+  if (stopPct > SETUP_MAX_STOP_PCT) { stopPct = SETUP_MAX_STOP_PCT; stop = price * (1 - stopPct); }
+  const risk = price - stop;
+  const targets = SETUP_RR.map(r => price + risk * r);
+  return { entry: price, stop, stopPct, targets, rr: SETUP_RR, hit: [], status: "OPEN", closedAt: null };
+}
+
+// вызывается на каждый тик по своему key — двигает открытые сетапы к TP/SL
+function updateSignalOutcomes(key, price, now) {
+  const list = openSignalsByKey[key];
+  if (!list || !list.length) return;
+  for (const a of list) {
+    const s = a.setup;
+    if (!s || s.status !== "OPEN") continue;
+    if (price <= s.stop) { s.status = "STOP"; s.closedAt = now; continue; }
+    for (let i = 0; i < s.targets.length; i++) {
+      if (price >= s.targets[i] && !s.hit.includes(i)) s.hit.push(i);
+    }
+    if (s.hit.length === s.targets.length) { s.status = "TP" + s.targets.length; s.closedAt = now; }
+  }
+  openSignalsByKey[key] = list.filter(a => a.setup.status === "OPEN");
 }
 
 // ---------- v15: kline_1m по «горячим» парам (taker buy ratio) ----------
@@ -1252,6 +1328,8 @@ function handleTickerBatch(market, arr) {
       history[key].push({ t: now, vol: parsed.curVol, n: parsed.trades, p: parsed.price });
       while (history[key].length && now - history[key][0].t > HISTORY_MAX_AGE_MS) history[key].shift();
 
+      updateSignalOutcomes(key, parsed.price, now);
+
       const rolling10 = rollingDelta(history[key], now, HISTORY_WINDOW_MS, parsed.curVol);
       const d1m = rollingDelta(history[key], now, HISTORY_1M_MS, parsed.curVol);
       const d2m = rollingDelta(history[key], now, HISTORY_2M_MS, parsed.curVol);
@@ -1433,11 +1511,13 @@ function handleTickerBatch(market, arr) {
           && baseAge >= SCORE_MIN_BASE_AGE_MS
           && canFire(key, "SIGNAL", SCORE_COOLDOWN_MS)) {
         markFired(key, "SIGNAL");
+        const setup = computeTradeSetup(key, parsed.price, spreadPct);
         pushAlert({
           key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
           amount: d1m, time: now, type: "SIGNAL",
           extra: `score ${scoreObj.score} · ` + (scoreObj.parts.slice(0, 4).join(" · ") || "—"),
           score: scoreObj.score,
+          setup,
         });
         signalBeep();
         notify(`⭐ SCORE ${scoreObj.score}: ${parsed.base}/${parsed.quote}`,
@@ -1583,6 +1663,38 @@ function renderStats() {
 }
 
 // ---------- v15 cell renderers ----------
+const SETUP_STATUS_LABEL = { OPEN: "⏳ в рынке", STOP: "❌ стоп", TP1: "✅ TP1", TP2: "✅✅ TP2", TP3: "✅✅✅ TP3" };
+function setupStatusLabel(s) {
+  if (s.status === "OPEN" && s.hit.length) return `⏳ TP${s.hit.length} взят, идёт дальше`;
+  return SETUP_STATUS_LABEL[s.status] || s.status;
+}
+function setupCard(a) {
+  const s = a.setup;
+  if (!s) return "";
+  const tpRows = s.targets.map((tp, i) =>
+    `<span class="setup-tp ${s.hit.includes(i) ? "hit" : ""}">TP${i + 1} ${fmtPrice(tp)} (${s.rr[i]}R)</span>`
+  ).join("");
+  return `
+    <div class="setup-card status-${s.status}">
+      <div class="setup-row"><span class="setup-label">Вход</span><span>${fmtPrice(s.entry)}</span></div>
+      <div class="setup-row"><span class="setup-label">Стоп</span><span>${fmtPrice(s.stop)} (-${(s.stopPct * 100).toFixed(2)}%)</span></div>
+      <div class="setup-targets">${tpRows}</div>
+      <div class="setup-row setup-status">${setupStatusLabel(s)}</div>
+    </div>`;
+}
+function setupCopyText(a) {
+  const s = a.setup;
+  if (!s) return "";
+  const lines = [
+    `🟢 LONG ${a.base}/${a.quote} (${a.market})`,
+    `Вход: ${fmtPrice(s.entry)}`,
+    `Стоп: ${fmtPrice(s.stop)} (-${(s.stopPct * 100).toFixed(2)}%)`,
+    ...s.targets.map((tp, i) => `TP${i + 1}: ${fmtPrice(tp)} (${s.rr[i]}R)`),
+    `Score ${a.score ?? "—"}${a.extra ? " · " + a.extra.replace(/^score \d+ · /, "") : ""}`,
+    `Это не финсовет — объёмный скан, риск свой.`,
+  ];
+  return lines.join("\n");
+}
 function scoreCell(r) {
   const v = r.score || 0;
   let cls = "score-low";
@@ -1742,9 +1854,7 @@ function render() {
   if (alertsTab === "early") shownAlerts = alertsLog.filter(a => isEarlyType(a.type));
 
   if (shownAlerts.length === 0) {
-    alertsList.innerHTML = `<div class="alerts-empty">${alertsTab === "early"
-      ? "Запись сигналов отключена."
-      : "Запись сигналов отключена."}</div>`;
+    alertsList.innerHTML = `<div class="alerts-empty">Пока нет сигналов.</div>`;
   } else {
     alertsList.innerHTML = shownAlerts.map(a => `
       <div class="alert-item market-${a.market} type-${a.type || "SPIKE"}" data-key="${a.key}" title="Показать пару в таблице">
@@ -1756,10 +1866,12 @@ function render() {
           </span>
           <span class="alert-delta">${a.amount != null ? "+$" + fmtMoney(a.amount) : ""}</span>
         </div>
+        ${setupCard(a)}
         <div class="alert-bottom">
           <span>${a.market}${a.extra ? " · " + a.extra : ""}</span>
           <span>${fmtTimeMinusHour(a.time)}</span>
         </div>
+        ${a.setup ? `<button class="setup-copy-btn" data-key="${a.key}" data-seq="${a.seq}">📋 Копировать сигнал</button>` : ""}
       </div>
     `).join("");
   }
@@ -1818,6 +1930,21 @@ function jumpToPair(key) {
   el.classList.add("row-flash");
 }
 document.getElementById("alerts-list").addEventListener("click", (e) => {
+  const copyBtn = e.target.closest(".setup-copy-btn");
+  if (copyBtn) {
+    e.stopPropagation();
+    const a = alertsLog.find(x => x.key === copyBtn.dataset.key && String(x.seq) === copyBtn.dataset.seq);
+    if (!a) return;
+    const text = setupCopyText(a);
+    const prevLabel = copyBtn.textContent;
+    const flash = (label) => { copyBtn.textContent = label; setTimeout(() => { copyBtn.textContent = prevLabel; }, 1200); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => flash("✅ Скопировано")).catch(() => flash("⚠ Не вышло"));
+    } else {
+      flash("⚠ Нет доступа к буферу");
+    }
+    return;
+  }
   const item = e.target.closest(".alert-item");
   if (!item) return;
   jumpToPair(item.dataset.key);
@@ -1837,6 +1964,7 @@ function resetBaseline() {
   lastFired = {};
   signalCount = {};
   alertsLog = [];
+  openSignalsByKey = {};
   history = {};
   rankSnapshot = {};
   lastComputedRanks = {};
