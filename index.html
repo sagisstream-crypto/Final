@@ -666,10 +666,33 @@ function recordPairSignal(entry) {
   pairColumnOrder.unshift(entry.key);
   if (pairColumnOrder.length > PAIR_COLUMN_MAX) {
     const dropped = pairColumnOrder.splice(PAIR_COLUMN_MAX);
-    for (const k of dropped) { delete pairSignalLog[k]; delete pairTelegramMsgId[k]; }
+    for (const k of dropped) delete pairSignalLog[k];
   }
   dataDirty = true;
 }
+// ---- отдельная история для Telegram-сообщения на пару — намеренно НЕ то же самое, что
+// pairSignalLog/pairColumnOrder выше. Те ограничены 12 "колонками" ради экрана телефона
+// (UI-панель "ПО ПАРАМ") и чистятся по вытеснению; здесь же чистка — по времени
+// неактивности самой пары (см. TG_PAIR_TTL_MS ниже), а не по тому, сколько других пар
+// успели отметиться между сигналами этой. Каждый новый сигнал шлётся НОВЫМ сообщением
+// (см. sendPairTelegramUpdate), но его текст строится из всей накопленной здесь истории —
+// так продолжение видно внутри самого сообщения, а не через правку предыдущего.
+const TG_PAIR_TTL_MS = 60 * 60000; // час без сигналов по паре — тему можно начинать заново
+let tgPairLog = {};      // key -> [entry,...] новые сверху, до PAIR_TG_ROWS_MAX
+let tgPairLastAt = {};   // key -> ts последнего сигнала (для чистки неактивных)
+function recordTgPairSignal(entry) {
+  if (!PAIR_TG_TYPES.includes(entry.type)) return;
+  if (!tgPairLog[entry.key]) tgPairLog[entry.key] = [];
+  tgPairLog[entry.key].unshift(entry);
+  if (tgPairLog[entry.key].length > PAIR_TG_ROWS_MAX) tgPairLog[entry.key].length = PAIR_TG_ROWS_MAX;
+  tgPairLastAt[entry.key] = Date.now();
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const k in tgPairLastAt) {
+    if (now - tgPairLastAt[k] > TG_PAIR_TTL_MS) { delete tgPairLog[k]; delete tgPairLastAt[k]; }
+  }
+}, 5 * 60000);
 
 let telegramOn = false;
 let telegramToken = "";
@@ -764,6 +787,7 @@ function recordThresholdSignal(entry) {
   // см. sendPairTelegramUpdate/buildPairTelegramText. Остальные типы (SPIKE/SPIKE30) —
   // обычным новым сообщением, но тоже в одну строку.
   if (PAIR_TG_TYPES.includes(entry.type)) {
+    recordTgPairSignal(entry);
     sendPairTelegramUpdate(entry.key);
     return;
   }
@@ -787,19 +811,17 @@ function sendTelegram(text) {
     body: JSON.stringify({ chat_id: telegramChatId, text, parse_mode: "HTML" }),
   }).catch(() => {}); // сеть/токен может быть плохим — не роняем сканер из-за этого
 }
-// ---- один эволюционирующий Telegram-месседж на пару для VEL1M/VEL1M30 ----
-// Вместо потока отдельных сообщений — шапка (пара, рынок, цена) и снизу построчно
-// последние сигналы по этой паре, новые дописываются в конец. Технически это works
-// через editMessageText поверх уже отправленного сообщения (id храним в pairTelegramMsgId);
-// если редактирование не удалось (сообщение старше ~48ч у Telegram, удалено и т.п.) —
-// отправляем новое и запоминаем его id для дальнейших правок.
+// ---- Telegram-сообщение с историей по паре для VEL1M/VEL1M30 ----
+// Каждый новый сигнал по паре уходит НОВЫМ отдельным сообщением (не правкой старого) —
+// но текст этого нового сообщения содержит всю историю по паре целиком (шапка + все
+// строки из tgPairLog, до PAIR_TG_ROWS_MAX), то есть продолжение видно внутри каждого
+// следующего сообщения, а не через редактирование предыдущего.
 const PAIR_TG_TYPES = ["VEL1M", "VEL1M30"];
 const PAIR_TG_ROWS_MAX = 15;
 const PAIR_TG_TYPE_LABEL = { VEL1M: "1m", VEL1M30: "30s" };
 const SPIKE_TG_LABEL = { SPIKE: "10s", SPIKE30: "30s" }; // короткие латинские метки для компактной строки
-let pairTelegramMsgId = {}; // key -> message_id последнего сообщения по этой паре
 function buildPairTelegramText(key) {
-  const list = pairSignalLog[key];
+  const list = tgPairLog[key];
   if (!list || !list.length) return null;
   const head = list[0];
   const header = `${marketDot(head.market)} ${head.base}/${head.quote}`;
@@ -814,33 +836,10 @@ function buildPairTelegramText(key) {
   }).join("\n");
   return `${header}\n${rows}`;
 }
-async function sendPairTelegramUpdate(key) {
-  if (!telegramOn || !telegramToken || !telegramChatId) return;
+function sendPairTelegramUpdate(key) {
   const text = buildPairTelegramText(key);
   if (!text) return;
-  try {
-    const existingId = pairTelegramMsgId[key];
-    if (existingId) {
-      const res = await fetch(`https://api.telegram.org/bot${telegramToken}/editMessageText`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: telegramChatId, message_id: existingId, text, parse_mode: "HTML" }),
-      });
-      const data = await res.json().catch(() => null);
-      if (data && data.ok) return;
-      // не вышло отредактировать — падаем ниже на отправку нового сообщения
-    }
-    const res2 = await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: telegramChatId, text, parse_mode: "HTML" }),
-    });
-    const data2 = await res2.json().catch(() => null);
-    if (data2 && data2.ok && data2.result && data2.result.message_id) {
-      pairTelegramMsgId[key] = data2.result.message_id;
-      dataDirty = true;
-    }
-  } catch (e) {} // сеть/токен может быть плохим — не роняем сканер из-за этого
+  sendTelegram(text);
 }
 let marketFilter = "ALL";
 // Раньше фильтр СПОТ/USDT-M влиял только на то, что видно в таблице — сигналы (Telegram,
@@ -868,7 +867,7 @@ function buildPayload() {
     scoreThreshold, scoreOnlyMode, sortMode, takerStreamOn,
     everInTop30, everInTop15,
     thresholdLog, telegramOn, telegramToken, telegramChatId, signalSeq, lastSignalPct24h,
-    pairSignalLog, pairColumnOrder, pairTelegramMsgId,
+    pairSignalLog, pairColumnOrder, tgPairLog, tgPairLastAt,
     filtersCollapsed, totalTriggeredCount, totalEarlyCount,
     startTime, savedAt: Date.now(),
   };
@@ -915,7 +914,8 @@ function applyPayload(payload) {
   lastSignalPct24h = (payload.lastSignalPct24h && typeof payload.lastSignalPct24h === "object") ? { ...payload.lastSignalPct24h } : {};
   pairSignalLog = (payload.pairSignalLog && typeof payload.pairSignalLog === "object") ? payload.pairSignalLog : {};
   pairColumnOrder = Array.isArray(payload.pairColumnOrder) ? payload.pairColumnOrder : [];
-  pairTelegramMsgId = (payload.pairTelegramMsgId && typeof payload.pairTelegramMsgId === "object") ? payload.pairTelegramMsgId : {};
+  tgPairLog = (payload.tgPairLog && typeof payload.tgPairLog === "object") ? payload.tgPairLog : {};
+  tgPairLastAt = (payload.tgPairLastAt && typeof payload.tgPairLastAt === "object") ? payload.tgPairLastAt : {};
   telegramOn = !!payload.telegramOn;
   telegramToken = payload.telegramToken || "";
   telegramChatId = payload.telegramChatId || "";
@@ -2251,7 +2251,8 @@ function resetBaseline() {
   lastSignalPct24h = {};
   pairSignalLog = {};
   pairColumnOrder = [];
-  pairTelegramMsgId = {};
+  tgPairLog = {};
+  tgPairLastAt = {};
   startTime = Date.now();
   clearState();
   render();
