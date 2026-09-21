@@ -671,28 +671,19 @@ function recordPairSignal(entry) {
   dataDirty = true;
 }
 // ---- отдельная история для Telegram-сообщения на пару — намеренно НЕ то же самое, что
-// pairSignalLog/pairColumnOrder выше. Те ограничены 12 "колонками" ради экрана телефона
-// (UI-панель "ПО ПАРАМ") и чистятся по вытеснению; здесь же чистка — по времени
-// неактивности самой пары (см. TG_PAIR_TTL_MS ниже), а не по тому, сколько других пар
-// успели отметиться между сигналами этой. Каждый новый сигнал шлётся НОВЫМ сообщением
-// (см. sendPairTelegramUpdate), но его текст строится из всей накопленной здесь истории —
+// pairSignalLog/pairColumnOrder выше (те ограничены 12 "колонками" ради экрана телефона,
+// UI-панель "ПО ПАРАМ", и чистятся по вытеснению). Здесь никакой отдельной чистки нет —
+// просто держим до PAIR_TG_ROWS_MAX последних строк на пару, самая ранняя вытесняется
+// при добавлении 16-й. Каждый новый сигнал шлётся НОВЫМ сообщением (см.
+// sendPairTelegramUpdate), но его текст строится из всей накопленной здесь истории —
 // так продолжение видно внутри самого сообщения, а не через правку предыдущего.
-const TG_PAIR_TTL_MS = 60 * 60000; // час без сигналов по паре — тему можно начинать заново
 let tgPairLog = {};      // key -> [entry,...] новые сверху, до PAIR_TG_ROWS_MAX
-let tgPairLastAt = {};   // key -> ts последнего сигнала (для чистки неактивных)
 function recordTgPairSignal(entry) {
   if (!PAIR_TG_TYPES.includes(entry.type)) return;
   if (!tgPairLog[entry.key]) tgPairLog[entry.key] = [];
   tgPairLog[entry.key].unshift(entry);
   if (tgPairLog[entry.key].length > PAIR_TG_ROWS_MAX) tgPairLog[entry.key].length = PAIR_TG_ROWS_MAX;
-  tgPairLastAt[entry.key] = Date.now();
 }
-setInterval(() => {
-  const now = Date.now();
-  for (const k in tgPairLastAt) {
-    if (now - tgPairLastAt[k] > TG_PAIR_TTL_MS) { delete tgPairLog[k]; delete tgPairLastAt[k]; }
-  }
-}, 5 * 60000);
 
 let telegramOn = false;
 let telegramToken = "";
@@ -867,7 +858,7 @@ function buildPayload() {
     scoreThreshold, scoreOnlyMode, sortMode, takerStreamOn,
     everInTop30, everInTop15,
     thresholdLog, telegramOn, telegramToken, telegramChatId, signalSeq, lastSignalPct24h,
-    pairSignalLog, pairColumnOrder, tgPairLog, tgPairLastAt,
+    pairSignalLog, pairColumnOrder, tgPairLog,
     filtersCollapsed, totalTriggeredCount, totalEarlyCount,
     startTime, savedAt: Date.now(),
   };
@@ -915,7 +906,6 @@ function applyPayload(payload) {
   pairSignalLog = (payload.pairSignalLog && typeof payload.pairSignalLog === "object") ? payload.pairSignalLog : {};
   pairColumnOrder = Array.isArray(payload.pairColumnOrder) ? payload.pairColumnOrder : [];
   tgPairLog = (payload.tgPairLog && typeof payload.tgPairLog === "object") ? payload.tgPairLog : {};
-  tgPairLastAt = (payload.tgPairLastAt && typeof payload.tgPairLastAt === "object") ? payload.tgPairLastAt : {};
   telegramOn = !!payload.telegramOn;
   telegramToken = payload.telegramToken || "";
   telegramChatId = payload.telegramChatId || "";
@@ -2252,7 +2242,6 @@ function resetBaseline() {
   pairSignalLog = {};
   pairColumnOrder = [];
   tgPairLog = {};
-  tgPairLastAt = {};
   startTime = Date.now();
   clearState();
   render();
