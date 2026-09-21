@@ -564,7 +564,14 @@ let threshold = 50000;       // 10-sec spike
 let threshold30 = 50000;     // 30-sec spike
 let threshold1m = 30000;     // 1-minute volume growth
 let thresholdVel1m30 = 20000; // VEL1M30 — тот же принцип, что VEL1M, но на 30-секундном окне (rolling30)
-const VEL_SIGNALS_PAUSED = true; // VEL1M/VEL1M30 приостановлены — оставлены только SPIKE/SPIKE30 и "20 сек"
+// Пустое поле порога = сигнал выключен (не просто "не применили новое значение"). Само
+// число (threshold/threshold30/…) остаётся последним известным — используется и другими
+// местами (подсветка в таблице, ТИХАЯ ПОЛКА), только фактическое срабатывание сигнала
+// смотрит на *Enabled.
+let thresholdEnabled = true;
+let threshold30Enabled = true;
+let threshold1mEnabled = true;
+let thresholdVel1m30Enabled = true;
 let soundOn = true;
 let paused = false;
 let earlyOnlyMode = false;   // table shows only pairs with recent early signals
@@ -845,10 +852,12 @@ function marketFilterAllows(marketId) {
 // пару — ту, что сейчас быстрее всех растёт по 24ч% среди пар, разрешённых текущим
 // фильтром рынка (СПОТ/USDT-M/ВСЕ). Не зависит ни от порогов, ни от кулдаунов — просто
 // снимок текущего лидера на каждом тике таймера: название, объём, цена, 24ч%.
+// Сейчас отключён (TOP_GAINER_PAUSED) — код оставлен, чтобы включить обратно одной правкой.
+const TOP_GAINER_PAUSED = true;
 const TOP_GAINER_INTERVAL_MS = 20000;
 const TOP_GAINER_FRESH_MS = 60000; // пара без новых тиков дольше минуты — не кандидат (мёртвые данные)
 setInterval(() => {
-  if (!telegramOn || !telegramToken || !telegramChatId) return;
+  if (TOP_GAINER_PAUSED || !telegramOn || !telegramToken || !telegramChatId) return;
   const now = Date.now();
   let best = null;
   for (const r of Object.values(rows)) {
@@ -885,7 +894,9 @@ function buildPayload() {
     rows, sessionBase, baseTime, priceBase, doubleLevel, lastFired, signalCount,
     shelfAlerts: [],
     outcomes: [],
-    threshold, threshold30, threshold1m, thresholdVel1m30, maxInitialPrice, maxInitialVolume,
+    threshold, threshold30, threshold1m, thresholdVel1m30,
+    thresholdEnabled, threshold30Enabled, threshold1mEnabled, thresholdVel1m30Enabled,
+    maxInitialPrice, maxInitialVolume,
     scoreThreshold, scoreOnlyMode, sortMode, takerStreamOn,
     everInTop30, everInTop15,
     thresholdLog, telegramOn, telegramToken, telegramChatId, signalSeq, lastSignalPct24h,
@@ -916,6 +927,10 @@ function applyPayload(payload) {
   threshold30 = payload.threshold30 || threshold30;
   threshold1m = payload.threshold1m || threshold1m;
   thresholdVel1m30 = payload.thresholdVel1m30 || thresholdVel1m30;
+  thresholdEnabled = payload.thresholdEnabled !== false;
+  threshold30Enabled = payload.threshold30Enabled !== false;
+  threshold1mEnabled = payload.threshold1mEnabled !== false;
+  thresholdVel1m30Enabled = payload.thresholdVel1m30Enabled !== false;
   maxInitialPrice = payload.maxInitialPrice || maxInitialPrice;
   maxInitialVolume = payload.maxInitialVolume || maxInitialVolume;
   scoreThreshold = payload.scoreThreshold || scoreThreshold;
@@ -1746,7 +1761,7 @@ function handleTickerBatch(market, arr) {
 
       // ---- пороговые сигналы: каждый по своему $ порогу из шапки, прямо в журнал ----
       // SPIKE 10s
-      if (!scoreOnlyMode && marketFilterAllows(market.id) && rolling10 !== null && rolling10 >= threshold && canFire(key, "SPIKE", HISTORY_WINDOW_MS)) {
+      if (thresholdEnabled && !scoreOnlyMode && marketFilterAllows(market.id) && rolling10 !== null && rolling10 >= threshold && canFire(key, "SPIKE", HISTORY_WINDOW_MS)) {
         markFired(key, "SPIKE");
         const alertEntry = {
           key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
@@ -1766,7 +1781,7 @@ function handleTickerBatch(market, arr) {
 
       // SPIKE 30s — тот же принцип, что 10с, но на более широком окне: ловит выносы,
       // которые набирают объём чуть медленнее и на 10с-окне остаются незамеченными.
-      if (!scoreOnlyMode && marketFilterAllows(market.id) && rolling30 !== null && rolling30 >= threshold30 && canFire(key, "SPIKE30", HISTORY_30S_MS)) {
+      if (threshold30Enabled && !scoreOnlyMode && marketFilterAllows(market.id) && rolling30 !== null && rolling30 >= threshold30 && canFire(key, "SPIKE30", HISTORY_30S_MS)) {
         markFired(key, "SPIKE30");
         const alertEntry = {
           key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
@@ -1785,7 +1800,7 @@ function handleTickerBatch(market, arr) {
       }
 
       // VEL 1M
-      if (!VEL_SIGNALS_PAUSED && !scoreOnlyMode && marketFilterAllows(market.id) && d1m !== null && d1m >= threshold1m && baseAge >= 20000 && canFire(key, "VEL1M", 45000)) {
+      if (threshold1mEnabled && !scoreOnlyMode && marketFilterAllows(market.id) && d1m !== null && d1m >= threshold1m && baseAge >= 20000 && canFire(key, "VEL1M", 45000)) {
         markFired(key, "VEL1M");
         const alertEntry = {
           key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
@@ -1806,7 +1821,7 @@ function handleTickerBatch(market, arr) {
 
       // VEL1M30 — тот же VEL1M, но на 30-секундном окне (rolling30), со своим отдельным
       // порогом: ловит то же ускорение объёма, но раньше, чем 60-секундный VEL1M.
-      if (!VEL_SIGNALS_PAUSED && !scoreOnlyMode && marketFilterAllows(market.id) && rolling30 !== null && rolling30 >= thresholdVel1m30 && canFire(key, "VEL1M30", 30000)) {
+      if (thresholdVel1m30Enabled && !scoreOnlyMode && marketFilterAllows(market.id) && rolling30 !== null && rolling30 >= thresholdVel1m30 && canFire(key, "VEL1M30", 30000)) {
         markFired(key, "VEL1M30");
         const alertEntry = {
           key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
@@ -2335,9 +2350,17 @@ function flashApplied(inputEl) {
 
 document.getElementById("apply-threshold").addEventListener("click", () => {
   const inputEl = document.getElementById("threshold-input");
+  if (inputEl.value.trim() === "") {
+    thresholdEnabled = false;
+    saveState();
+    render();
+    flashApplied(inputEl);
+    return;
+  }
   const v = parseAmountInput(inputEl.value);
   if (!isNaN(v) && v > 0) {
     threshold = v;
+    thresholdEnabled = true;
     inputEl.value = String(v);
     saveState();
     render();
@@ -2349,9 +2372,17 @@ document.getElementById("threshold-input").addEventListener("keydown", (e) => {
 });
 document.getElementById("apply-threshold-30s").addEventListener("click", () => {
   const inputEl = document.getElementById("threshold-30s-input");
+  if (inputEl.value.trim() === "") {
+    threshold30Enabled = false;
+    saveState();
+    render();
+    flashApplied(inputEl);
+    return;
+  }
   const v = parseAmountInput(inputEl.value);
   if (!isNaN(v) && v > 0) {
     threshold30 = v;
+    threshold30Enabled = true;
     inputEl.value = String(v);
     saveState();
     render();
@@ -2363,9 +2394,17 @@ document.getElementById("threshold-30s-input").addEventListener("keydown", (e) =
 });
 document.getElementById("apply-threshold-1m").addEventListener("click", () => {
   const inputEl = document.getElementById("threshold-1m-input");
+  if (inputEl.value.trim() === "") {
+    threshold1mEnabled = false;
+    saveState();
+    render();
+    flashApplied(inputEl);
+    return;
+  }
   const v = parseAmountInput(inputEl.value);
   if (!isNaN(v) && v > 0) {
     threshold1m = v;
+    threshold1mEnabled = true;
     inputEl.value = String(v);
     saveState();
     render();
@@ -2377,9 +2416,17 @@ document.getElementById("threshold-1m-input").addEventListener("keydown", (e) =>
 });
 document.getElementById("apply-threshold-vel1m30").addEventListener("click", () => {
   const inputEl = document.getElementById("threshold-vel1m30-input");
+  if (inputEl.value.trim() === "") {
+    thresholdVel1m30Enabled = false;
+    saveState();
+    render();
+    flashApplied(inputEl);
+    return;
+  }
   const v = parseAmountInput(inputEl.value);
   if (!isNaN(v) && v > 0) {
     thresholdVel1m30 = v;
+    thresholdVel1m30Enabled = true;
     inputEl.value = String(v);
     saveState();
     render();
@@ -2615,10 +2662,10 @@ const restored = false; // real restore is async below
 loadStateAsync().then((ok) => {
   if (!ok) return;
 
-  document.getElementById("threshold-input").value = String(threshold);
-  document.getElementById("threshold-30s-input").value = String(threshold30);
-  document.getElementById("threshold-1m-input").value = String(threshold1m);
-  document.getElementById("threshold-vel1m30-input").value = String(thresholdVel1m30);
+  document.getElementById("threshold-input").value = thresholdEnabled ? String(threshold) : "";
+  document.getElementById("threshold-30s-input").value = threshold30Enabled ? String(threshold30) : "";
+  document.getElementById("threshold-1m-input").value = threshold1mEnabled ? String(threshold1m) : "";
+  document.getElementById("threshold-vel1m30-input").value = thresholdVel1m30Enabled ? String(thresholdVel1m30) : "";
   document.getElementById("max-price-input").value = String(maxInitialPrice);
   document.getElementById("max-volume-input").value = String(maxInitialVolume);
   document.getElementById("score-threshold-input").value = String(scoreThreshold);
