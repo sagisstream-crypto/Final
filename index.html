@@ -867,17 +867,21 @@ setInterval(() => {
     if (!best || r.pct > best.pct) best = r;
   }
   if (!best) return;
-  const growth = typeof best.d1m === "number" && !isNaN(best.d1m) ? best.d1m : 0;
   const nowPct = best.pct;
   const wasPct = topGainerLastPct[best.key];
+  // Шлём только когда есть реальная новость: либо пара впервые попала в эту ленту,
+  // либо её 24ч% реально выросло с прошлого РАЗОСЛАННОГО значения по ней. Без роста —
+  // молчим, а не дублируем то же самое каждые 20 секунд (флэт/просадка не считаются).
+  const isFirstSighting = typeof wasPct !== "number" || isNaN(wasPct);
+  if (!isFirstSighting && nowPct <= wasPct) return;
+  const growth = typeof best.d1m === "number" && !isNaN(best.d1m) ? best.d1m : 0;
   const nowText = `${nowPct >= 0 ? "+" : ""}${nowPct.toFixed(2)}%`;
   let detail;
-  if (typeof wasPct === "number" && !isNaN(wasPct)) {
-    const icon = nowPct > wasPct ? "🔥" : (nowPct < wasPct ? "⬇️" : "");
-    const wasText = `${wasPct >= 0 ? "+" : ""}${wasPct.toFixed(2)}%`;
-    detail = `было ${wasText} стало ${nowText}${icon}`;
-  } else {
+  if (isFirstSighting) {
     detail = `24ч ${nowText}`;
+  } else {
+    const wasText = `${wasPct >= 0 ? "+" : ""}${wasPct.toFixed(2)}%`;
+    detail = `было ${wasText} стало ${nowText}🔥`;
   }
   topGainerLastPct[best.key] = nowPct;
   const line = `${marketDot(best.market)} ${best.base}/${best.quote}\n20s +$${fmtMoney(growth)} ${detail}`;
