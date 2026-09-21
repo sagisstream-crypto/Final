@@ -453,6 +453,7 @@ table.mini tbody tr{cursor:pointer}
       </div>
       <div class="fld search"><label>🔎</label><input id="q" placeholder="ФИЛЬТР ПО ТИКЕРУ" autocomplete="off"></div>
       <div class="fld"><label>Объём 24ч, млн $</label><input id="minVol" type="number" value="3" step="0.5" title="от"><span class="d mono">—</span><input id="maxVol" type="number" value="0" step="10" title="до, 0 = без ограничения"></div>
+      <div class="fld"><label>Цена $</label><input id="minPrice" type="number" value="0" step="any" title="от, 0 = без ограничения"><span class="d mono">—</span><input id="maxPrice" type="number" value="0" step="any" title="до, 0 = без ограничения"></div>
       <div class="fld"><label>Показывать</label><select id="rowLimit"><option>60</option><option selected>120</option><option>250</option><option>600</option></select></div>
       <button class="btn sm" id="btnRescan">↻ Пересканировать</button>
     </div>
@@ -550,6 +551,8 @@ table.mini tbody tr{cursor:pointer}
           <div class="fld"><input id="setCycle" type="range" min="15" max="180" step="5" value="45"><span class="mono" id="setCycleV">45</span></div></div>
         <div class="set-row"><div><div class="t">Коридор объёма 24ч, млн $</div><div class="h">Снизу отсекается неликвид, сверху — тяжёлые пары, которые почти не двигаются. 0 в поле «до» = без верхней границы.</div></div>
           <div class="fld"><input id="setMinVol" type="number" value="3" step="0.5" style="width:70px"><span class="d mono">—</span><input id="setMaxVol" type="number" value="0" step="10" style="width:70px"></div></div>
+        <div class="set-row"><div><div class="t">Коридор цены, $</div><div class="h">Отсекает пары по цене монеты. Ноль с любой стороны — без ограничения. Пример: от 0.001 — убрать «пыль» с восемью нулями, до 50 — убрать дорогие монеты.</div></div>
+          <div class="fld"><input id="setMinPrice" type="number" value="0" step="any" style="width:80px"><span class="d mono">—</span><input id="setMaxPrice" type="number" value="0" step="any" style="width:80px"></div></div>
         <div class="set-row"><div><div class="t">Не больше алертов за 5 минут</div><div class="h">Звук, уведомления и телеграм сверх лимита не идут — событие всё равно попадает в ленту «Поток».</div></div>
           <div class="fld"><input id="setAlertCap" type="number" value="6" min="1" max="60"></div></div>
         <div class="set-row"><div><div class="t">Сколько держать снятые сигналы, мин</div><div class="h">Карточка не исчезает молча: остаётся с пометкой, почему сигнал снят.</div></div>
@@ -688,7 +691,7 @@ table.mini tbody tr{cursor:pointer}
             <li><b>Кликни один раз по странице.</b> Браузеры включают звук только после действия мышью — без клика алерты будут беззвучными.</li>
             <li><b>Настройки → Риск-менеджмент:</b> впиши депозит и риск на сделку в процентах. От них считается размер позиции и рекомендация по плечу. Поле «Риск $» в шапке вкладки «Сигналы» — то же самое, только напрямую в долларах.</li>
             <li><b>Выбери пресет</b> под свой стиль: Скальп 5м, Интрадей 15м или Свинг 1ч. Он меняет рабочий таймфрейм, веса факторов, дистанцию стопа и ожидаемое время удержания.</li>
-            <li><b>Задай коридор объёма</b> во вкладке «Сканер»: например от 5 до 300 млн $. Снизу отсекается неликвид с широким спредом, сверху — тяжёлые пары, которые почти не двигаются.</li>
+            <li><b>Задай коридоры</b> во вкладке «Сканер». Объём 24ч: например от 5 до 300 млн $ — снизу отсекается неликвид с широким спредом, сверху тяжёлые пары, которые почти не двигаются. Цена: ноль с любой стороны означает «без ограничения», можно убрать «пыль» с восемью нулями после запятой или, наоборот, дорогие монеты.</li>
           </ol>
           <p class="note">Всё считается локально в твоём браузере. Ключи API не нужны и никуда не отправляются — используются только публичные эндпоинты Binance.</p>
         </div>
@@ -819,7 +822,9 @@ table.mini tbody tr{cursor:pointer}
               <tr><td><b>Порог сигнала</b></td><td>С какого score пара становится сигналом — жёсткая отсечка для всех грейдов сразу. По умолчанию 50. Мало сигналов — опусти до 42–45, слишком много — подними до 55–60. Новое значение применяется мгновенно: то, что стало ниже порога, уходит из списка.</td></tr>
               <tr><td><b>Глубина сканирования</b></td><td>Сколько кандидатов разбирать за цикл. Больше — полнее охват и выше нагрузка на лимиты Binance.</td></tr>
               <tr><td><b>Интервал цикла</b></td><td>Как часто пересчитывать разбор. 30 секунд — разумный баланс.</td></tr>
-              <tr><td><b>Коридор объёма</b></td><td>Диапазон суточного оборота «от — до» в миллионах. 0 в поле «до» — без верхней границы. Действует везде: на кандидатов, таблицу, радар и детектор запала.</td></tr>
+              <tr><td><b>Коридор объёма</b></td><td>Диапазон суточного оборота «от — до» в миллионах. 0 в поле «до» — без верхней границы.</td></tr>
+              <tr><td><b>Коридор цены</b></td><td>Диапазон цены монеты «от — до» в долларах, 0 с любой стороны — без ограничения. Удобно отсечь монеты с восемью нулями, где шаг цены крупнее движения.</td></tr>
+              <tr><td colspan="2" style="color:#5a6779;font-size:11px">Оба коридора действуют везде сразу: на кандидатов для разбора, таблицу «Сканера», радар, пружины, фандинг, открытый интерес, детектор запала и телеграм-алерты.</td></tr>
               <tr><td><b>Макс. спред</b></td><td>Пары шире этого спреда не сигналят: на входе и выходе потеряешь больше, чем возьмёшь.</td></tr>
               <tr><td><b>Фильтр BTC</b></td><td>Не лонговать при падающем BTC и не шортить при растущем. Меньше сигналов, но меньше и работы против рынка.</td></tr>
               <tr><td><b>Не больше алертов за 5 минут</b></td><td>Ограничитель шума. Сверх лимита звук, push и телеграм молчат, но событие всё равно попадает в ленту.</td></tr>
@@ -971,6 +976,7 @@ const HOSTS = {
 /* ---------------------------------------------------------------- config */
 const CFG = {
   thresh: 50, depth: 60, cycle: 30, minVol: 3, maxVol: 0, maxSpread: 0.12,
+  minPrice: 0, maxPrice: 0,
   sens: 0, sparkOn: true, absorbOn: true, sparkSound: true,
   sparkConfirm: true, alertCap: 6, keepFaded: 45,
   btcFilter: false,
@@ -1260,6 +1266,17 @@ function volOk(qv) {
   if (CFG.maxVol > 0 && qv > CFG.maxVol * 1e6) return false;
   return true;
 }
+/* цена в заданном коридоре: 0 с любой стороны = без ограничения */
+function priceOk(p) {
+  if (!(p > 0)) return false;
+  if (CFG.minPrice > 0 && p < CFG.minPrice) return false;
+  if (CFG.maxPrice > 0 && p > CFG.maxPrice) return false;
+  return true;
+}
+/* пара проходит оба коридора — объёма и цены */
+function pairOk(t) {
+  return !!t && volOk(t.qv) && priceOk(t.price);
+}
 
 /* =====================================================================
    Слой данных: вселенная пар, сокеты, кэш свечей
@@ -1376,7 +1393,7 @@ function ignite(sym, x, h) {
   if (S.paused) return;
   if (!CFG.sparkOn && !CFG.absorbOn) return;
   if (h.length < 14) return;                        // нужен разогрев буфера
-  if (!volOk(x.qv)) return;
+  if (!pairOk(x)) return;
   if (now() - S.started < 20000) return;            // не палим на старте сессии
 
   const cur = h[h.length - 1];
@@ -2068,7 +2085,7 @@ function heatList() {
     const m = S.meta.get(sym); if (!m) continue;
     if (CFG.market === 'futures' && !m.hasFut) continue;
     if (CFG.market === 'spot' && !m.hasSpot) continue;
-    if (!volOk(t.qv)) continue;
+    if (!pairOk(t)) continue;
     const c1 = Math.abs(microChg(sym, 60)), c5 = Math.abs(microChg(sym, 300));
     const mk = S.mark.get(sym);
     const liq = S.liqAgg.get(sym);
@@ -2238,7 +2255,7 @@ function checkSprings() {
     if (!(r.wRank < 0.28)) continue;                 // не пружина
     if (!(r.dHi > 0) || !(r.dLo > 0)) continue;
     const t = S.tick.get(r.sym); if (!t || !t.price) continue;
-    if (!volOk(t.qv)) continue;
+    if (!pairOk(t)) continue;
     const up = t.price >= r.dHi, dn = t.price <= r.dLo;
     if (!up && !dn) continue;
     const key = r.sym + (up ? '↑' : '↓');
@@ -2593,7 +2610,7 @@ function renderCards() {
 function breadthIdx() {
   let up = 0, n = 0;
   for (const t of S.tick.values()) {
-    if (!volOk(t.qv)) continue;
+    if (!pairOk(t)) continue;
     n++; if (t.ch24 > 0) up++;
   }
   return n ? up / n * 100 : null;
@@ -2691,7 +2708,7 @@ function tableRows() {
     const m = S.meta.get(sym); if (!m) continue;
     if (CFG.market === 'futures' && !m.hasFut) continue;
     if (CFG.market === 'spot' && !m.hasSpot) continue;
-    if (!volOk(t.qv)) continue;
+    if (!pairOk(t)) continue;
     if (q && sym.indexOf(q) === -1) continue;
     const a = S.an.get(sym);
     const mk = S.mark.get(sym);
@@ -2748,7 +2765,7 @@ function renderTable() {
 
 /* ------------------------------------------------------------- поток */
 function renderFlow() {
-  const arr = [...S.tick.values()].filter(t => volOk(t.qv));
+  const arr = [...S.tick.values()].filter(t => pairOk(t));
   const bu = arr.filter(t => t.burst > 1.5).sort((a, b) => b.burst - a.burst).slice(0, 16);
   $('#bursts').innerHTML = bu.length ? `<div class="tblwrap"><table class="mini">
     <thead><tr>
@@ -2773,7 +2790,7 @@ function renderFlow() {
     : '<div class="empty">Тишина: аномальных всплесков нет.</div>';
 
   const fu = [...S.mark.entries()]
-    .filter(([s]) => S.tick.has(s) && volOk(S.tick.get(s).qv))
+    .filter(([s]) => pairOk(S.tick.get(s)))
     .sort((a, b) => Math.abs(b[1].fund) - Math.abs(a[1].fund)).slice(0, 12);
   $('#fundList').innerHTML = fu.length ? fu.map(([s, m]) => {
     const t = S.tick.get(s);
@@ -2803,7 +2820,7 @@ function renderFlow() {
      именно их пробой и даст движение, на них и ставят алерты. */
   const coil = [...S.an.values()]
     .filter(r => r.wRank < 0.28 && Math.abs(r.score) < CFG.thresh &&
-      S.tick.has(r.sym) && volOk(S.tick.get(r.sym).qv))
+      pairOk(S.tick.get(r.sym)))
     .sort((a, b) => a.wRank - b.wRank).slice(0, 12);
   $('#coilInfo').textContent = coil.length
     ? `${coil.length} ${plural(coil.length, ['пара', 'пары', 'пар'])} · пробой этих границ и даст движение` : '';
@@ -2834,7 +2851,7 @@ function renderFlow() {
   /* Панель показывает только фьючерсные пары, которые уже прошли глубокий разбор:
      открытый интерес есть лишь у перпетуалов, и тянется он по кандидатам цикла. */
   const oi = [...S.an.values()]
-    .filter(r => Number.isFinite(r.oi15) && S.tick.has(r.sym) && volOk(S.tick.get(r.sym).qv))
+    .filter(r => Number.isFinite(r.oi15) && pairOk(S.tick.get(r.sym)))
     .sort((a, b) => Math.abs(b.oi15) - Math.abs(a.oi15)).slice(0, 12);
   $('#oiInfo').textContent = `${oi.length} из ${S.an.size} разобранных · шаг Binance 5 мин`;
   $('#oiList').innerHTML = oi.length ? oi.map(r => {
@@ -3266,6 +3283,8 @@ function applyCfg() {
   $('#riskAmt').value = CFG.riskAmt;
   $('#minVol').value = CFG.minVol;
   $('#maxVol').value = CFG.maxVol;
+  $('#minPrice').value = CFG.minPrice;
+  $('#maxPrice').value = CFG.maxPrice;
   $('#preset').value = CFG.preset;
   $('#setExcl').value = CFG.exclude;
   $('#setSens').value = CFG.sens;
@@ -3338,6 +3357,8 @@ function bindAll() {
   $('#riskAmt').oninput = e => { CFG.riskAmt = +e.target.value || 0; saveCfg(); };
   $('#minVol').oninput = e => { CFG.minVol = +e.target.value || 0; $('#setMinVol').value = CFG.minVol; saveCfg(); render(); };
   $('#maxVol').oninput = e => { CFG.maxVol = +e.target.value || 0; $('#setMaxVol').value = CFG.maxVol; saveCfg(); render(); };
+  $('#minPrice').oninput = e => { CFG.minPrice = +e.target.value || 0; $('#setMinPrice').value = CFG.minPrice; saveCfg(); render(); };
+  $('#maxPrice').oninput = e => { CFG.maxPrice = +e.target.value || 0; $('#setMaxPrice').value = CFG.maxPrice; saveCfg(); render(); };
   $('#q').oninput = e => { S.q = e.target.value.trim(); renderTable(); };
   $('#rowLimit').onchange = renderTable;
   $('#btnRescan').onclick = () => { KL.clear(); OI.clear(); restPoll(); cycle(); };
@@ -3391,6 +3412,8 @@ function bindAll() {
   bindNum('#setCycle', 'cycle', restartCycleTimer);
   bindNum('#setMinVol', 'minVol', v => { $('#minVol').value = v; render(); });
   bindNum('#setMaxVol', 'maxVol', v => { $('#maxVol').value = v; render(); });
+  bindNum('#setMinPrice', 'minPrice', v => { $('#minPrice').value = v; render(); });
+  bindNum('#setMaxPrice', 'maxPrice', v => { $('#maxPrice').value = v; render(); });
   bindNum('#setAlertCap', 'alertCap');
   bindNum('#setKeepFaded', 'keepFaded');
   bindNum('#setMaxSpread', 'maxSpread');
