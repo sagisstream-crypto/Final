@@ -728,61 +728,53 @@ const KEYCAP_DIGITS = { "0": "0️⃣", "1": "1️⃣", "2": "2️⃣", "3": "3�
 function bigNumber(n) {
   return String(n).split("").map(d => KEYCAP_DIGITS[d] || d).join("");
 }
+// Кружок рынка вместо всегда-жёлтого — синий на споте, оранжевый на фьючерсах.
+function marketDot(marketId) {
+  return marketId === "SPOT" ? "🔵" : "🟠";
+}
+// HH:MM без секунд — экономим место, чтобы сигнал помещался в одну строку.
+function fmtTimeHM(ts) {
+  const d = new Date(ts - 3600000); // тот же сдвиг на час, что и у fmtTimeMinusHour
+  return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+}
 function recordThresholdSignal(entry) {
   // Нумеруем SPIKE/VEL1M/VEL1M30 — счётчик свой на каждую пару (entry.key), не общий.
   if (signalSeq[entry.type]) {
     signalSeq[entry.type][entry.key] = (signalSeq[entry.type][entry.key] || 0) + 1;
     entry.seq = signalSeq[entry.type][entry.key];
   }
-  // 🔥/⬇️ справа в шапке сообщения — растёт или падает 24ч% пары от сигнала к сигналу
-  // (сравниваем с прошлым сигналом ЛЮБОГО типа по этой же паре, не только того же типа).
-  // На первом сигнале по паре сравнивать не с чем — без иконки.
-  let momentumIcon = "";
+  // 🔥/⬇️ — растёт или падает 24ч% пары от сигнала к сигналу (сравниваем с прошлым
+  // сигналом ЛЮБОГО типа по этой же паре, не только того же типа). На первом сигнале
+  // по паре сравнивать не с чем — без иконки. Храним на entry, чтобы buildPairTelegramText
+  // мог показать ту же иконку в своей строке (VEL1M/VEL1M30 не идут через sendTelegram ниже).
+  entry.momentumIcon = "";
   if (entry.pct24h !== null && entry.pct24h !== undefined && !isNaN(entry.pct24h)) {
     const prevPct = lastSignalPct24h[entry.key];
     if (prevPct !== undefined) {
-      if (entry.pct24h > prevPct) momentumIcon = " 🔥";
-      else if (entry.pct24h < prevPct) momentumIcon = " ⬇️";
+      if (entry.pct24h > prevPct) entry.momentumIcon = "🔥";
+      else if (entry.pct24h < prevPct) entry.momentumIcon = "⬇️";
     }
     lastSignalPct24h[entry.key] = entry.pct24h;
   }
   thresholdLog.unshift(entry);
   if (thresholdLog.length > THRESHOLD_LOG_MAX) thresholdLog.length = THRESHOLD_LOG_MAX;
   dataDirty = true;
-  const dot = directionEmoji(entry.dirPct);
-  const volLine = entry.curVol !== null && entry.curVol !== undefined
-    ? `\n🟢 Объём 24ч: <b>$${fmtMoney(entry.curVol)}</b>` + (entry.pct24h !== null && entry.pct24h !== undefined && !isNaN(entry.pct24h)
-        ? ` (${entry.pct24h >= 0 ? "+" : ""}${entry.pct24h.toFixed(2)}%)` : "")
-    : "";
-  const hasPrice = entry.price !== null && entry.price !== undefined && !isNaN(entry.price);
-  const hasDir = entry.dirPct !== null && entry.dirPct !== undefined && !isNaN(entry.dirPct);
-  const priceLine = (hasPrice || hasDir)
-    ? `\nЦена: ${hasPrice ? "$" + fmtPrice(entry.price) : ""}${hasPrice && hasDir ? " · " : ""}${hasDir ? `${dot} ${entry.dirPct >= 0 ? "+" : ""}${entry.dirPct.toFixed(2)}%` : ""}`
-    : "";
-  const imbalLine = entry.imbal !== null && entry.imbal !== undefined && !isNaN(entry.imbal)
-    ? ` · стакан ${Math.round(entry.imbal * 100)}% bid`
-    : "";
-  const fundLine = entry.fundingPct !== null && entry.fundingPct !== undefined && !isNaN(entry.fundingPct)
-    ? `\nФандинг: ${entry.fundingPct >= 0 ? "+" : ""}${entry.fundingPct.toFixed(3)}%` + (Math.abs(entry.fundingPct) >= 0.05 ? " ⚠ перегрето" : "")
-    : "";
-  const oiLine = entry.oiChangePct !== null && entry.oiChangePct !== undefined && !isNaN(entry.oiChangePct)
-    ? ` · OI: ${entry.oiChangePct >= 0 ? "+" : ""}${entry.oiChangePct.toFixed(1)}%`
-    : "";
-  // Telegram не даёт красить произвольный текст в сообщениях бота (нет тега color) —
-  // приближаем жёлтый/зелёный кружками-эмодзи (🟡 у сигнала, 🟢 у объёмов) плюс жирным
-  // шрифтом (parse_mode: HTML). 1-я строка — коротко: пара + сумма (+ 🔥/⬇️ справа), всё
-  // остальное ниже.
-  const amountStr = `${entry.amount >= 0 ? "+" : ""}$${fmtMoney(entry.amount)}`;
-  const pairAmountLine = `${entry.seq ? bigNumber(entry.seq) + " " : ""}<b>${entry.base}/${entry.quote} ${amountStr}</b>${momentumIcon}`;
-  const typeLine = `🟡 ${entry.type} (${entry.market})${entry.extra ? " · " + entry.extra : ""}`;
   // VEL1M/VEL1M30 идут не отдельными сообщениями, а одним сообщением на пару, которое
   // редактируется (дописывается новой строкой снизу) при каждом новом сигнале по ней —
-  // см. sendPairTelegramUpdate. Остальные типы — как раньше, обычным новым сообщением.
+  // см. sendPairTelegramUpdate/buildPairTelegramText. Остальные типы (SPIKE/SPIKE30) —
+  // обычным новым сообщением, но тоже в одну строку.
   if (PAIR_TG_TYPES.includes(entry.type)) {
     sendPairTelegramUpdate(entry.key);
-  } else {
-    sendTelegram(`${pairAmountLine}\n${typeLine}${volLine}${priceLine}${imbalLine}${fundLine}${oiLine}`);
+    return;
   }
+  const hasPrice = entry.price !== null && entry.price !== undefined && !isNaN(entry.price);
+  const has24h = entry.pct24h !== null && entry.pct24h !== undefined && !isNaN(entry.pct24h);
+  const amountStr = `${entry.amount >= 0 ? "+" : ""}$${fmtMoney(entry.amount)}`;
+  const pctText = has24h ? `${entry.pct24h >= 0 ? "+" : ""}${entry.pct24h.toFixed(2)}%` : "—";
+  const seqStr = entry.seq ? `${entry.seq}. ` : "";
+  const line = `${marketDot(entry.market)} ${seqStr}<b>${entry.base}/${entry.quote} ${entry.type}</b> ${amountStr} · `
+    + `${hasPrice ? "$" + fmtPrice(entry.price) : "—"} ${pctText}${entry.momentumIcon} · ${fmtTimeHM(entry.time)}`;
+  sendTelegram(line);
 }
 function sendTelegram(text) {
   if (!telegramOn || !telegramToken || !telegramChatId) return;
@@ -806,13 +798,14 @@ function buildPairTelegramText(key) {
   const list = pairSignalLog[key];
   if (!list || !list.length) return null;
   const head = list[0];
-  const header = `<b>${head.base}/${head.quote} (${head.market})</b>`;
+  const header = `${marketDot(head.market)} <b>${head.base}/${head.quote}</b>`;
   const rows = list.slice(0, PAIR_TG_ROWS_MAX).slice().reverse().map(a => {
     const hasPrice = a.price !== null && a.price !== undefined && !isNaN(a.price);
     const has24h = a.pct24h !== null && a.pct24h !== undefined && !isNaN(a.pct24h);
     const pctText = has24h ? `${a.pct24h >= 0 ? "+" : ""}${a.pct24h.toFixed(2)}%` : "—";
     const label = PAIR_TG_TYPE_LABEL[a.type] || a.type;
-    return `${label}/+$${fmtMoney(a.amount)}/${hasPrice ? fmtPrice(a.price) : "—"}/${pctText}/ ${fmtTimeMinusHour(a.time)}`;
+    const seqStr = a.seq ? `${a.seq}. ` : "";
+    return `${seqStr}${label} +$${fmtMoney(a.amount)} · ${hasPrice ? "$" + fmtPrice(a.price) : "—"} ${pctText}${a.momentumIcon || ""} · ${fmtTimeHM(a.time)}`;
   }).join("\n");
   return `${header}\n${rows}`;
 }
