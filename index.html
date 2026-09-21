@@ -564,6 +564,7 @@ let threshold = 50000;       // 10-sec spike
 let threshold30 = 50000;     // 30-sec spike
 let threshold1m = 30000;     // 1-minute volume growth
 let thresholdVel1m30 = 20000; // VEL1M30 — тот же принцип, что VEL1M, но на 30-секундном окне (rolling30)
+const VEL_SIGNALS_PAUSED = true; // VEL1M/VEL1M30 приостановлены — оставлены только SPIKE/SPIKE30 и "20 сек"
 let soundOn = true;
 let paused = false;
 let earlyOnlyMode = false;   // table shows only pairs with recent early signals
@@ -1788,7 +1789,7 @@ function handleTickerBatch(market, arr) {
       }
 
       // VEL 1M
-      if (!scoreOnlyMode && marketFilterAllows(market.id) && d1m !== null && d1m >= threshold1m && baseAge >= 20000 && canFire(key, "VEL1M", 45000)) {
+      if (!VEL_SIGNALS_PAUSED && !scoreOnlyMode && marketFilterAllows(market.id) && d1m !== null && d1m >= threshold1m && baseAge >= 20000 && canFire(key, "VEL1M", 45000)) {
         markFired(key, "VEL1M");
         const alertEntry = {
           key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
@@ -1809,7 +1810,7 @@ function handleTickerBatch(market, arr) {
 
       // VEL1M30 — тот же VEL1M, но на 30-секундном окне (rolling30), со своим отдельным
       // порогом: ловит то же ускорение объёма, но раньше, чем 60-секундный VEL1M.
-      if (!scoreOnlyMode && marketFilterAllows(market.id) && rolling30 !== null && rolling30 >= thresholdVel1m30 && canFire(key, "VEL1M30", 30000)) {
+      if (!VEL_SIGNALS_PAUSED && !scoreOnlyMode && marketFilterAllows(market.id) && rolling30 !== null && rolling30 >= thresholdVel1m30 && canFire(key, "VEL1M30", 30000)) {
         markFired(key, "VEL1M30");
         const alertEntry = {
           key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
