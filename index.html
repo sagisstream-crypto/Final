@@ -840,6 +840,25 @@ let marketFilter = "ALL";
 function marketFilterAllows(marketId) {
   return marketFilter === "ALL" || marketFilter === marketId;
 }
+// ---- "20 сек" — отдельный периодический сигнал: раз в 20 секунд шлём в Telegram одну
+// пару — ту, что сейчас быстрее всех растёт по 24ч% среди пар, разрешённых текущим
+// фильтром рынка (СПОТ/USDT-M/ВСЕ). Не зависит ни от порогов, ни от кулдаунов — просто
+// снимок текущего лидера по росту за 24ч на каждом тике таймера.
+const TOP_GAINER_INTERVAL_MS = 20000;
+setInterval(() => {
+  if (!telegramOn || !telegramToken || !telegramChatId) return;
+  let best = null;
+  for (const r of Object.values(rows)) {
+    if (!marketFilterAllows(r.market)) continue;
+    if (r.pct === null || r.pct === undefined || isNaN(r.pct)) continue;
+    if (!best || r.pct > best.pct) best = r;
+  }
+  if (!best) return;
+  const growth = typeof best.d1m === "number" && !isNaN(best.d1m) ? best.d1m : 0;
+  const pctText = `${best.pct >= 0 ? "+" : ""}${best.pct.toFixed(2)}%`;
+  const line = `${marketDot(best.market)} ${best.base}/${best.quote}\n20s +$${fmtMoney(growth)} ${pctText}`;
+  sendTelegram(line);
+}, TOP_GAINER_INTERVAL_MS);
 let searchTerm = "";
 let startTime = Date.now();
 let msgCounts = {};
