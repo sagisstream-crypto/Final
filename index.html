@@ -858,6 +858,12 @@ setInterval(() => {
     if (!marketFilterAllows(r.market)) continue;
     if (r.pct === null || r.pct === undefined || isNaN(r.pct)) continue;
     if (!r.lastTick || now - r.lastTick > TOP_GAINER_FRESH_MS) continue;
+    // Тикер Binance шлёт обновления по всем парам раз в секунду ДАЖЕ когда сделок
+    // не было (просто повторяет последнюю известную цену) — значит зависшая/неликвидная
+    // пара с застрявшим экстремальным 24ч% всё равно проходит проверку "свежий тик".
+    // Реальный признак живой пары — что по ней правда что-то торговалось только что:
+    // требуем положительный рост объёма за последнюю минуту (d1m), а не просто пинг.
+    if (typeof r.d1m !== "number" || isNaN(r.d1m) || r.d1m <= 0) continue;
     if (!best || r.pct > best.pct) best = r;
   }
   if (!best) return;
