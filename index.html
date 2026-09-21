@@ -771,9 +771,12 @@ function recordThresholdSignal(entry) {
   const has24h = entry.pct24h !== null && entry.pct24h !== undefined && !isNaN(entry.pct24h);
   const amountStr = `${entry.amount >= 0 ? "+" : ""}$${fmtMoney(entry.amount)}`;
   const pctText = has24h ? `${entry.pct24h >= 0 ? "+" : ""}${entry.pct24h.toFixed(2)}%` : "—";
-  const seqStr = entry.seq ? `${entry.seq}. ` : "";
-  const line = `${marketDot(entry.market)} ${seqStr}<b>${entry.base}/${entry.quote} ${entry.type}</b> ${amountStr} · `
-    + `${hasPrice ? "$" + fmtPrice(entry.price) : "—"} ${pctText}${entry.momentumIcon} · ${fmtTimeHM(entry.time)}`;
+  const label = SPIKE_TG_LABEL[entry.type] || entry.type;
+  // Пара — на отдельной строке (как у VEL1M/VEL1M30), а не в одну строку со всем
+  // остальным: иначе строка сигнала слишком длинная и переносится посреди себя же
+  // на узком экране телефона. Без номера, без <b>, без " · " — просто пробелы.
+  const line = `${marketDot(entry.market)} ${entry.base}/${entry.quote}\n${label} ${amountStr} `
+    + `${hasPrice ? "$" + fmtPrice(entry.price) : "—"} ${pctText}${entry.momentumIcon} ${fmtTimeHM(entry.time)}`;
   sendTelegram(line);
 }
 function sendTelegram(text) {
@@ -793,19 +796,21 @@ function sendTelegram(text) {
 const PAIR_TG_TYPES = ["VEL1M", "VEL1M30"];
 const PAIR_TG_ROWS_MAX = 15;
 const PAIR_TG_TYPE_LABEL = { VEL1M: "1m", VEL1M30: "30s" };
+const SPIKE_TG_LABEL = { SPIKE: "10s", SPIKE30: "30s" }; // короткие латинские метки для компактной строки
 let pairTelegramMsgId = {}; // key -> message_id последнего сообщения по этой паре
 function buildPairTelegramText(key) {
   const list = pairSignalLog[key];
   if (!list || !list.length) return null;
   const head = list[0];
-  const header = `${marketDot(head.market)} <b>${head.base}/${head.quote}</b>`;
+  const header = `${marketDot(head.market)} ${head.base}/${head.quote}`;
+  // Без " · " — просто пробелы: короче строка, меньше шансов перенестись на второй
+  // визуальный ряд на узком экране телефона.
   const rows = list.slice(0, PAIR_TG_ROWS_MAX).slice().reverse().map(a => {
     const hasPrice = a.price !== null && a.price !== undefined && !isNaN(a.price);
     const has24h = a.pct24h !== null && a.pct24h !== undefined && !isNaN(a.pct24h);
     const pctText = has24h ? `${a.pct24h >= 0 ? "+" : ""}${a.pct24h.toFixed(2)}%` : "—";
     const label = PAIR_TG_TYPE_LABEL[a.type] || a.type;
-    const seqStr = a.seq ? `${a.seq}. ` : "";
-    return `${seqStr}${label} +$${fmtMoney(a.amount)} · ${hasPrice ? "$" + fmtPrice(a.price) : "—"} ${pctText}${a.momentumIcon || ""} · ${fmtTimeHM(a.time)}`;
+    return `${label} +$${fmtMoney(a.amount)} ${hasPrice ? "$" + fmtPrice(a.price) : "—"} ${pctText}${a.momentumIcon || ""} ${fmtTimeHM(a.time)}`;
   }).join("\n");
   return `${header}\n${rows}`;
 }
