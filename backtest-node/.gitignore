@@ -1,0 +1,6 @@
+cache*/
+table_cols.bin
+table_meta.json
+daily.json
+engine.mjs
+*.log
