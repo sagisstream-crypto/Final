@@ -500,7 +500,7 @@ table.mini tbody tr{cursor:pointer}
           <div id="liqfeed"></div>
         </div>
         <div class="panel">
-          <div class="panel-h">Открытый интерес · рост</div>
+          <div class="panel-h">Открытый интерес · 15м<span class="sp d" id="oiInfo">—</span></div>
           <div id="oiList"></div>
         </div>
       </div>
@@ -791,7 +791,7 @@ table.mini tbody tr{cursor:pointer}
           <b>Фандинг</b> — самые сильные перекосы толпы.<br>
           <b>Лента событий</b> — все сигналы, запалы и исходы сделок по порядку. Заменяет всплывающие окна: на вкладке горит счётчик непрочитанных.<br>
           <b>Ликвидации</b> — живая лента выбитых позиций (только при работающем сокете).<br>
-          <b>Открытый интерес</b> — где OI растёт быстрее всего.</p>
+          <b>Открытый интерес</b> — где за 15 минут сильнее всего изменился открытый интерес, с расшифровкой: новые лонги, новые шорты, закрытие шортов или разгрузка лонгов. Список строится <b>только по парам, которые уже прошли глубокий разбор</b> (кандидаты текущего цикла), и только по фьючерсам — у спота открытого интереса не существует. В заголовке видно, сколько пар в списке из скольких разобранных.</p>
           <h4>Журнал</h4>
           <p>Каждый выданный сигнал записывается автоматически и ведётся по живой цене до цели или до стопа. Результат в R: +2R значит заработано два размера риска. Считаются win-rate, сумма R и профит-фактор (сколько заработано на каждый потерянный доллар). Сигнал с лимитным входом сначала висит как «ждёт входа» и попадает в статистику, только если цена реально вернулась; если за 90 минут не вернулась — помечается «не сработал» и в win-rate не идёт. Закрытие по времени — через сутки по текущей цене.</p>
           <p class="note">Журнал — это честная обратная связь по движку на текущем рынке, а не отчёт по твоим реальным сделкам. Он не знает, зашёл ты или нет.</p>
@@ -1819,12 +1819,12 @@ async function analyze(sym, urgent) {
 
   /* --- 4. открытый интерес --- */
   let oi15 = null, oi1h = null;
+  const p15 = chg(price, k5.c[k5.c.length - 4] || price);   // движение цены за то же окно
   if (oiRows && oiRows.length > 4) {
     const v = oiRows.map(r => +r.sumOpenInterestValue);
     const cur = v[v.length - 1];
     oi15 = chg(cur, v[v.length - 4]);
     oi1h = chg(cur, v[Math.max(0, v.length - 13)]);
-    const p15 = chg(price, k5.c[k5.c.length - 4] || price);
     const mag = clamp(Math.abs(oi15) / 1.4, 0, 1);
     let v15 = 0, txt = '';
     if (oi15 > 0.05 && p15 > 0.05)      { v15 = mag;        txt = 'новые лонги: OI↑ цена↑'; }
@@ -2004,7 +2004,7 @@ async function analyze(sym, urgent) {
   const res = {
     sym, base: m.base, market: m.hasFut ? 'fut' : 'spot', hasSpot: m.hasSpot, spark: sparkRec,
     price, score, side, grade, agree, against, C, flags,
-    atrPct, atrV, rsi: rV, fund, oi15, oi1h, spread, imb, basis, burst,
+    atrPct, atrV, rsi: rV, fund, oi15, oi1h, p15, spread, imb, basis, burst,
     cvd1h, ch1h, ch24: t.ch24, qv: t.qv, td: tdNow, vwapV: vw, ema21: last(e21), ema50: last(e50m),
     dHi, dLo, wRank, div, tf: tf.main,
     plan: { side, entry, entryType, stop, tp, slPct, R, lev, riskUsd, notional, margin: lev ? notional / lev : 0,
@@ -2694,15 +2694,24 @@ function renderFlow() {
     : '<div class="empty">Сжатых пар в разборе пока нет.</div>';
 
   renderEvents();
-  const oi = [...S.an.values()].filter(r => Number.isFinite(r.oi15))
+  /* Панель показывает только фьючерсные пары, которые уже прошли глубокий разбор:
+     открытый интерес есть лишь у перпетуалов, и тянется он по кандидатам цикла. */
+  const oi = [...S.an.values()]
+    .filter(r => Number.isFinite(r.oi15) && S.tick.has(r.sym) && volOk(S.tick.get(r.sym).qv))
     .sort((a, b) => Math.abs(b.oi15) - Math.abs(a.oi15)).slice(0, 12);
-  $('#oiList').innerHTML = oi.length ? oi.map(r =>
-    `<div class="liq" data-sym="${r.sym}" style="cursor:pointer">
+  $('#oiInfo').textContent = `${oi.length} из ${S.an.size} разобранных`;
+  $('#oiList').innerHTML = oi.length ? oi.map(r => {
+    const p = Number.isFinite(r.p15) ? r.p15 : r.ch1h;
+    const what = r.oi15 > 0
+      ? (p > 0 ? 'новые лонги' : p < 0 ? 'новые шорты' : 'набор позиций')
+      : (p > 0 ? 'закрытие шортов' : p < 0 ? 'разгрузка лонгов' : 'выход из позиций');
+    return `<div class="liq" data-sym="${r.sym}" style="cursor:pointer">
       <span class="s">${esc(r.base)}</span>
       <span class="${cls(r.oi15)}">${fmtPct(r.oi15, 2)}</span>
-      <span class="d">15м</span>
-      <span class="t ${cls(r.ch1h)}">${fmtPct(r.ch1h, 2)} 1ч</span></div>`).join('')
-    : '<div class="empty">OI считается на первом цикле…</div>';
+      <span class="d">${what}</span>
+      <span class="t ${cls(p)}">${fmtPct(p, 2)} цена</span></div>`;
+  }).join('')
+    : '<div class="empty">Пока пусто: открытый интерес подтягивается по мере разбора пар.</div>';
 }
 
 /* ------------------------------------------------------------- журнал */
