@@ -781,26 +781,12 @@ function recordThresholdSignal(entry) {
   thresholdLog.unshift(entry);
   if (thresholdLog.length > THRESHOLD_LOG_MAX) thresholdLog.length = THRESHOLD_LOG_MAX;
   dataDirty = true;
-  // VEL1M/VEL1M30 идут не отдельными сообщениями, а одним сообщением на пару, которое
-  // редактируется (дописывается новой строкой снизу) при каждом новом сигнале по ней —
-  // см. sendPairTelegramUpdate/buildPairTelegramText. Остальные типы (SPIKE/SPIKE30) —
-  // обычным новым сообщением, но тоже в одну строку.
-  if (PAIR_TG_TYPES.includes(entry.type)) {
-    recordTgPairSignal(entry);
-    sendPairTelegramUpdate(entry.key);
-    return;
-  }
-  const hasPrice = entry.price !== null && entry.price !== undefined && !isNaN(entry.price);
-  const has24h = entry.pct24h !== null && entry.pct24h !== undefined && !isNaN(entry.pct24h);
-  const amountStr = `${entry.amount >= 0 ? "+" : ""}$${fmtMoney(entry.amount)}`;
-  const pctText = has24h ? `${entry.pct24h >= 0 ? "+" : ""}${entry.pct24h.toFixed(2)}%` : "—";
-  const label = SPIKE_TG_LABEL[entry.type] || entry.type;
-  // Пара — на отдельной строке (как у VEL1M/VEL1M30), а не в одну строку со всем
-  // остальным: иначе строка сигнала слишком длинная и переносится посреди себя же
-  // на узком экране телефона. Без номера, без <b>, без " · " — просто пробелы.
-  const line = `${marketDot(entry.market)} ${entry.base}/${entry.quote}\n${label} ${amountStr} `
-    + `${hasPrice ? "$" + fmtPrice(entry.price) : "—"} ${pctText}${entry.momentumIcon} ${fmtTimeHM(entry.time)}`;
-  sendTelegram(line);
+  // Все четыре пороговых типа (SPIKE/SPIKE30/VEL1M/VEL1M30) идут одинаково: не отдельными
+  // сообщениями, а одним сообщением на пару, которое каждый раз пересылается заново
+  // (новое сообщение, не правка старого), но с полной накопленной историей внутри —
+  // см. sendPairTelegramUpdate/buildPairTelegramText.
+  recordTgPairSignal(entry);
+  sendPairTelegramUpdate(entry.key);
 }
 function sendTelegram(text) {
   if (!telegramOn || !telegramToken || !telegramChatId) return;
@@ -810,15 +796,14 @@ function sendTelegram(text) {
     body: JSON.stringify({ chat_id: telegramChatId, text, parse_mode: "HTML" }),
   }).catch(() => {}); // сеть/токен может быть плохим — не роняем сканер из-за этого
 }
-// ---- Telegram-сообщение с историей по паре для VEL1M/VEL1M30 ----
+// ---- Telegram-сообщение с историей по паре для всех четырёх пороговых сигналов ----
 // Каждый новый сигнал по паре уходит НОВЫМ отдельным сообщением (не правкой старого) —
 // но текст этого нового сообщения содержит всю историю по паре целиком (шапка + все
 // строки из tgPairLog, до PAIR_TG_ROWS_MAX), то есть продолжение видно внутри каждого
 // следующего сообщения, а не через редактирование предыдущего.
-const PAIR_TG_TYPES = ["VEL1M", "VEL1M30"];
+const PAIR_TG_TYPES = ["SPIKE", "SPIKE30", "VEL1M", "VEL1M30"];
 const PAIR_TG_ROWS_MAX = 15;
-const PAIR_TG_TYPE_LABEL = { VEL1M: "1m", VEL1M30: "30s" };
-const SPIKE_TG_LABEL = { SPIKE: "10s", SPIKE30: "30s" }; // короткие латинские метки для компактной строки
+const PAIR_TG_TYPE_LABEL = { SPIKE: "10s", SPIKE30: "30s", VEL1M: "1m", VEL1M30: "30s" }; // короткие латинские метки для компактной строки
 function buildPairTelegramText(key) {
   const list = tgPairLog[key];
   if (!list || !list.length) return null;
