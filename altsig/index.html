@@ -107,6 +107,12 @@ main{flex:1;padding:14px;padding-bottom:calc(84px + env(safe-area-inset-bottom,0
 .stat .k{font-size:10px;color:var(--dim2);letter-spacing:.09em;text-transform:uppercase}
 .stat .v{font-family:var(--mono);font-size:17px;font-weight:700;margin-top:2px;color:var(--txt)}
 
+.d-status{border-radius:11px;padding:10px 12px;font-size:12px;line-height:1.55}
+.d-status.ok{background:#0b2018;border:1px solid #1b5540;color:#a9e7cc}
+.d-status.no{background:#151a24;border:1px solid #2b3548;color:var(--dim)}
+.d-status b{color:var(--txt)}
+.panel.dimplan{opacity:.72}
+
 /* ---------- guide ---------- */
 .toc{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
 .toc button{
@@ -843,6 +849,7 @@ table.mini tbody tr{cursor:pointer}
         <div class="panel-h">10 · Частые вопросы</div>
         <div class="doc-body">
           <p><b>Сигнал появился и пропал — что это было?</b><br>Теперь не пропадает: карточка остаётся с пометкой «снят» и причиной. Обычно это значит, что на следующем разборе факторы рассыпались — импульс выдохся, объём высох или цена ушла слишком далеко от EMA21. Это нормальная работа движка: он снимает сигнал, когда условия перестали выполняться, а не держит его ради красоты.</p>
+          <p><b>Открыл пару, а там «Торговый план» — это сигнал?</b><br>Нет, если сверху серая полоса «Входа нет». Карточку пары можно открыть по клику в любой таблице, и план в ней считается всегда — как справочный расчёт «если бы зашёл». Настоящий сигнал видно сразу: зелёная полоса «Это сигнал», грейд рядом с тикером, кнопка «В журнал» и карточка на вкладке «Сигналы». Плашка справа вверху всегда говорит прямо: «нет входа · score» или «ЛОНГ B · score».</p>
           <p><b>Пришёл запал, а плана нет.</b><br>Запал — это только факт старта движения. Разбор проверяет, есть ли за ним качество входа. Если написано «подтверждения нет» — движение есть, но факторы не сошлись: чаще всего цена уже улетела или объём пришёл против тренда старшего таймфрейма.</p>
           <p><b>Слишком много сигналов.</b><br>Подними порог до 55–60, сузь коридор объёма, включи фильтр BTC, поставь чувствительность «спокойная» и уменьши лимит алертов.</p>
           <p><b>Слишком мало сигналов.</b><br>Опусти порог до 42–45, расширь коридор объёма вниз, подними глубину сканирования, переключи фильтр вкладки на «Все ≥40». Проверь, что не стоит «Топ ≥70».</p>
@@ -1033,6 +1040,14 @@ function ago(ts) {
   if (s < 3600) return Math.floor(s / 60) + 'м';
   if (s < 86400) return Math.floor(s / 3600) + 'ч';
   return Math.floor(s / 86400) + 'д';
+}
+/* русское склонение: 1 фактор, 2 фактора, 5 факторов */
+function plural(n, forms) {
+  const a = Math.abs(n) % 100, b = a % 10;
+  if (a > 10 && a < 20) return forms[2];
+  if (b > 1 && b < 5) return forms[1];
+  if (b === 1) return forms[0];
+  return forms[2];
 }
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -2908,13 +2923,14 @@ function planText(r) {
   const p = r.plan;
   return [
     `${r.base}USDT · ${p.side === 'long' ? 'ЛОНГ' : 'ШОРТ'} ${r.grade || ''} (score ${r.score.toFixed(0)})`,
+    r.grade ? '' : `⚠️ Сигнала нет — справочный расчёт при пороге ${CFG.thresh}`,
     `Вход: ${p.entryType === 'limit' ? 'лимит ' + fmtPrice(p.entry) + ' (откат, цена сейчас ' + fmtPrice(p.mkt) + ')' : 'по рынку ' + fmtPrice(p.entry)}`,
     `Стоп: ${fmtPrice(p.stop)} (${p.slPct.toFixed(2)}%)`,
     `TP1 ${fmtPrice(p.tp[0])} · TP2 ${fmtPrice(p.tp[1])} · TP3 ${fmtPrice(p.tp[2])}`,
     `Плечо ${p.lev}× · объём позиции $${fmtUsd(p.notional)} · маржа $${fmtUsd(p.margin)} · риск $${p.riskUsd.toFixed(0)}`,
     `Горизонт: ${p.hold}`,
     'Причины: ' + topReasons(r, 4).map(x => COMP_NAMES[x.k]).join(', '),
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 }
 
 function compRow(k, d) {
@@ -2944,6 +2960,17 @@ async function openDrawer(sym) {
 
 function renderDrawer(r) {
   const p = r.plan;
+  const hasSig = !!r.grade;
+  const sideRu = r.side === 'long' ? 'лонг' : 'шорт';
+  /* Карточку пары можно открыть по клику где угодно — и она не обязана быть сигналом.
+     Полоса статуса сверху снимает главную путаницу: это вход или просто расчёт. */
+  const status = hasSig
+    ? `<div class="d-status ok"><b>Это сигнал: ${sideRu.toUpperCase()} ${r.grade}</b>, score ${Math.abs(r.score).toFixed(0)},
+         ${r.agree} ${plural(r.agree, ['фактор', 'фактора', 'факторов'])} за и ${r.against} против. План ниже движок выдал сам — он же попал в «Сигналы» и в журнал.</div>`
+    : `<div class="d-status no"><b>Входа нет.</b> Score ${r.score.toFixed(0)} при пороге ${CFG.thresh}:
+         ${r.agree} за, ${r.against} против — движок не считает это точкой входа.
+         ${r.flags.length ? 'Мешает: ' + esc(r.flags.join(', ')) + '. ' : ''}
+         План ниже — <b>справочный расчёт</b> «как выглядел бы ${sideRu}, если бы ты всё равно зашёл». Это не рекомендация.</div>`;
   $('#dSym').textContent = r.base + (r.market === 'fut' ? ' · PERP' : ' · SPOT');
   $('#dSub').innerHTML = `${fmtPrice(r.price)} · <span class="${cls(r.ch24)}">${fmtPct(r.ch24, 1)}</span> 24ч · объём $${fmtUsd(r.qv)} · ${r.tf}`;
   const tag = $('#dTag');
@@ -2955,9 +2982,10 @@ function renderDrawer(r) {
     .map(([k, d]) => compRow(k, d)).join('');
 
   $('#dBody').innerHTML = `
+    ${status}
     <canvas id="chart"></canvas>
-    <div class="panel">
-      <div class="panel-h">Торговый план<span class="sp">${esc(p.hold)}</span></div>
+    <div class="panel${hasSig ? '' : ' dimplan'}">
+      <div class="panel-h">${hasSig ? 'Торговый план' : '<span class="a">Справочный расчёт · сигнала нет</span>'}<span class="sp">${esc(p.hold)}</span></div>
       <div style="padding:11px 13px" class="kv">
         <span class="k">Вход</span><span>${p.entryType === 'limit' ? 'лимит ' + fmtPrice(p.entry) + ' <span class="d">(откат, сейчас ' + fmtPrice(p.mkt) + ')</span>' : 'по рынку ' + fmtPrice(p.entry)}</span>
         <span class="k">Стоп</span><span class="r">${fmtPrice(p.stop)} · ${p.slPct.toFixed(2)}%</span>
@@ -2970,7 +2998,7 @@ function renderDrawer(r) {
       <div class="row" style="padding:0 13px 12px">
         <button class="btn sm ${r.side === 'long' ? 'g' : 'r'}" id="btnCopy">Скопировать план</button>
         <a class="btn sm" target="_blank" rel="noopener" href="https://www.binance.com/${r.market === 'fut' ? 'ru/futures/' + r.sym : 'ru/trade/' + r.base + '_USDT'}">Открыть на Binance</a>
-        <button class="btn sm" id="btnJ">В журнал</button>
+        ${hasSig ? '<button class="btn sm" id="btnJ">В журнал</button>' : ''}
       </div>
     </div>
     <div class="panel">
@@ -3002,7 +3030,8 @@ function renderDrawer(r) {
     catch (e) { $('#btnCopy').textContent = 'Не вышло скопировать'; }
     setTimeout(() => { const b = $('#btnCopy'); if (b) b.textContent = 'Скопировать план'; }, 1800);
   };
-  $('#btnJ').onclick = () => { openJournal(r); jStats(); $('#btnJ').textContent = 'Добавлено ✓'; };
+  const bj = $('#btnJ');
+  if (bj) bj.onclick = () => { openJournal(r); jStats(); bj.textContent = 'Добавлено ✓'; };
 }
 function closeDrawer() {
   S.sel = null;
