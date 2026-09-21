@@ -1,0 +1,15 @@
+{
+  "name": "onchain-radar",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Ончейн-сканер накопления: следит за net-flow с бирж, DEX buy/sell и крупными кошельками по ERC-20 токенам, шлёт карточки сигналов в Telegram.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node test/score.test.js"
+  },
+  "dependencies": {}
+}
