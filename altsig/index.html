@@ -107,6 +107,16 @@ main{flex:1;padding:14px;padding-bottom:calc(84px + env(safe-area-inset-bottom,0
 .stat .k{font-size:10px;color:var(--dim2);letter-spacing:.09em;text-transform:uppercase}
 .stat .v{font-family:var(--mono);font-size:17px;font-weight:700;margin-top:2px;color:var(--txt)}
 
+/* ---------- banner ---------- */
+.banner{display:none}
+.banner.warn,.banner.err{
+  display:block;margin:0 0 12px;padding:10px 13px;border-radius:12px;font-size:12px;line-height:1.5
+}
+.banner.warn{background:#1d160a;border:1px solid #5a4420;color:#ffd08a}
+.banner.err{background:#1c1015;border:1px solid #6b2334;color:#ffb3c0}
+.banner .btn{margin-left:8px;vertical-align:middle}
+#probe{font-family:var(--mono);font-size:11px;line-height:1.7;color:var(--dim);padding:2px 0}
+
 /* ---------- spark bar ---------- */
 #sparkHead{display:none;align-items:center;gap:8px;margin:0 2px 8px;font-size:11px;font-weight:700;
   letter-spacing:.12em;text-transform:uppercase;color:var(--amber)}
@@ -342,6 +352,7 @@ textarea{
 </header>
 
 <main>
+  <div class="banner" id="banner"></div>
   <!-- ============ SIGNALS ============ -->
   <section class="view on" id="v-signals">
     <div id="sparkHead">⚡ Запал · движение начинается<span class="hint">поймано в первые секунды, счёт идёт из сокета на каждом тике</span><span class="pill" style="margin-left:auto">в работе <b id="sparkCnt">0</b></span></div>
@@ -566,6 +577,9 @@ textarea{
           </select></div></div>
         <div class="set-row"><div><div class="t">Сбросить настройки</div><div class="h">Вернуть веса, пороги и вселенную к заводским.</div></div>
           <div class="row"><button class="btn sm r" id="btnReset">Сбросить</button></div></div>
+        <div class="set-row"><div><div class="t">Диагностика каналов</div><div class="h">Проверяет REST и все варианты сокетов по очереди — видно, что именно режет провайдер.</div></div>
+          <div class="row"><button class="btn sm" id="btnProbe">Проверить</button></div></div>
+        <div style="padding:0 13px 12px"><div id="probe" class="d">Нажми «Проверить», если данные не идут.</div></div>
         <div class="set-row"><div><div class="t">Статус подключения</div><div class="h" id="diag">—</div></div></div>
       </div>
       <div class="empty" style="padding:16px 4px;text-align:left;line-height:1.6">
@@ -641,8 +655,17 @@ const HOSTS = {
   fut:  'https://fapi.binance.com',
   spot: 'https://api.binance.com',
   spotAlt: 'https://data-api.binance.vision',
-  wsFut:  'wss://fstream.binance.com/stream?streams=!ticker@arr/!markPrice@arr/!forceOrder@arr',
-  wsSpot: 'wss://stream.binance.com:9443/stream?streams=!ticker@arr',
+  /* несколько вариантов подключения: провайдеры любят резать порт 9443 и комбинированные потоки */
+  wsFut: [
+    'wss://fstream.binance.com/ws/!ticker@arr',
+    'wss://fstream.binance.com/stream?streams=!ticker@arr/!markPrice@arr/!forceOrder@arr',
+    'wss://fstream.binance.com:443/ws/!ticker@arr',
+  ],
+  wsSpot: [
+    'wss://stream.binance.com/ws/!ticker@arr',
+    'wss://data-stream.binance.vision/ws/!ticker@arr',
+    'wss://stream.binance.com:9443/ws/!ticker@arr',
+  ],
 };
 
 /* ---------------------------------------------------------------- config */
@@ -693,6 +716,8 @@ const S = {
   queue: [], qi: 0,
   btc: { ch1h: 0, ch24: 0, price: 0, trend: 0 },
   scanning: false, paused: false,
+  wsFutMsg: 0, wsSpotMsg: 0, restFutAt: 0, restSpotAt: 0, markAt: 0,
+  netErr: '', mode: 'старт', wsFutKills: 0, wsSpotKills: 0,
   lastCycle: 0, cycleMs: 0, analyzed: 0, errors: 0, lastErr: '',
   view: 'signals', sel: null,
   sort: { k: 'score', dir: -1 },
@@ -1097,86 +1122,211 @@ function microChg(sym, secs) {
   return chg(cur.p, ref.p);
 }
 
-/* ------------------------------------------------------------ сокеты */
-let wsF = null, wsS = null, wsFTries = 0, wsSTries = 0;
+/* =====================================================================
+   Сокеты + REST-страховка.
+   Главное правило: данные важнее сокета. Если сокет открыт, но молчит
+   (так делают DPI и «умные» антивирусы), мы этого не ждём — опрос по REST
+   включается по признаку «нет свежих данных», а не «сокет закрыт».
+   ===================================================================== */
+let wsF = null, wsS = null, wsFTries = 0, wsSTries = 0, wsFPause = 0, wsSPause = 0;
 
 function setDot(id, state) {
   const el = $(id); if (!el) return;
   el.className = 'dot' + (state ? ' ' + state : '');
 }
 
+/* разбор любого формата: и обёртка {stream,data}, и сырой поток */
+function wsPayload(raw, mkt) {
+  let msg; try { msg = JSON.parse(raw); } catch (e) { return; }
+  const d = (msg && msg.data !== undefined) ? msg.data : msg;
+  if (!d || d.result !== undefined) return;            // ответ на SUBSCRIBE
+  const arr = Array.isArray(d) ? d : [d];
+  for (const ev of arr) {
+    if (!ev || !ev.e) continue;
+    if (ev.e === '24hrTicker') {
+      onTicker(ev, mkt);
+      if (mkt === 'fut') S.wsFutMsg = now(); else S.wsSpotMsg = now();
+    } else if (ev.e === 'markPriceUpdate') {
+      S.mark.set(ev.s, { mark: +ev.p, index: +ev.i, fund: +ev.r * 100, next: +ev.T });
+      S.wsFutMsg = now();
+    } else if (ev.e === 'forceOrder') {
+      onLiq(ev.o || ev);
+      S.wsFutMsg = now();
+    }
+  }
+}
+
 function connectFut() {
+  if (now() < wsFPause) return;
   try { wsF && wsF.close(); } catch (e) {}
-  setDot('#wsFut', 'warn');
-  wsF = new WebSocket(HOSTS.wsFut);
-  wsF.onopen = () => { wsFTries = 0; setDot('#wsFut', 'on'); diag(); };
-  wsF.onmessage = ev => {
-    let msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
-    const st = msg.stream || '', d = msg.data;
-    if (!d) return;
-    if (st.indexOf('!ticker') === 0) { for (const t of d) onTicker(t, 'fut'); }
-    else if (st.indexOf('!markPrice') === 0) {
-      for (const m of d) {
-        S.mark.set(m.s, { mark: +m.p, index: +m.i, fund: +m.r * 100, next: +m.T });
-      }
-    } else if (st.indexOf('!forceOrder') === 0) { onLiq(d.o || d); }
+  const url = HOSTS.wsFut[wsFTries % HOSTS.wsFut.length];
+  try { wsF = new WebSocket(url); } catch (e) { S.netErr = 'ws fut: ' + e.message; return; }
+  wsF.onopen = () => {
+    if (url.indexOf('/ws/') !== -1) {                  // добираем остальные потоки подпиской
+      try {
+        wsF.send(JSON.stringify({ method: 'SUBSCRIBE', params: ['!markPrice@arr', '!forceOrder@arr'], id: 1 }));
+      } catch (e) {}
+    }
+    updateNetUI(); diag();
   };
+  wsF.onmessage = ev => wsPayload(ev.data, 'fut');
   wsF.onclose = () => {
-    setDot('#wsFut', 'off');
     wsFTries++;
-    setTimeout(connectFut, Math.min(30000, 1500 * Math.pow(1.7, wsFTries)));
+    updateNetUI();
+    setTimeout(connectFut, Math.min(25000, 1500 * Math.pow(1.6, Math.min(wsFTries, 8))));
   };
   wsF.onerror = () => { try { wsF.close(); } catch (e) {} };
 }
 
 function connectSpot() {
+  if (now() < wsSPause) return;
   try { wsS && wsS.close(); } catch (e) {}
-  setDot('#wsSpot', 'warn');
-  wsS = new WebSocket(HOSTS.wsSpot);
-  wsS.onopen = () => { wsSTries = 0; setDot('#wsSpot', 'on'); diag(); };
-  wsS.onmessage = ev => {
-    let msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
-    if (!msg.data) return;
-    for (const t of msg.data) onTicker(t, 'spot');
-  };
+  const url = HOSTS.wsSpot[wsSTries % HOSTS.wsSpot.length];
+  try { wsS = new WebSocket(url); } catch (e) { S.netErr = 'ws spot: ' + e.message; return; }
+  wsS.onopen = () => { updateNetUI(); diag(); };
+  wsS.onmessage = ev => wsPayload(ev.data, 'spot');
   wsS.onclose = () => {
-    setDot('#wsSpot', 'off');
     wsSTries++;
-    setTimeout(connectSpot, Math.min(30000, 1500 * Math.pow(1.7, wsSTries)));
+    updateNetUI();
+    setTimeout(connectSpot, Math.min(25000, 1500 * Math.pow(1.6, Math.min(wsSTries, 8))));
   };
   wsS.onerror = () => { try { wsS.close(); } catch (e) {} };
 }
 
-function socketsAlive() {
-  return (wsF && wsF.readyState === 1) || (wsS && wsS.readyState === 1);
+/* сторож: сокет «открыт», но данных нет — рвём и пробуем другой адрес */
+function wsWatchdog() {
+  const t = now();
+  if (wsF && wsF.readyState === 1 && S.wsFutMsg && t - S.wsFutMsg > 20000) {
+    S.wsFutKills++; wsFTries++;
+    if (S.wsFutKills >= 3) wsFPause = t + 300000;      // не долбимся, REST уже везёт данные
+    try { wsF.close(); } catch (e) {}
+  }
+  if (wsF && wsF.readyState === 1 && !S.wsFutMsg && t - S.started > 25000) {
+    S.wsFutKills++; wsFTries++;
+    if (S.wsFutKills >= 3) wsFPause = t + 300000;
+    try { wsF.close(); } catch (e) {}
+  }
+  if (wsS && wsS.readyState === 1 && !S.wsSpotMsg && t - S.started > 35000) {
+    S.wsSpotKills++; wsSTries++;
+    if (S.wsSpotKills >= 3) wsSPause = t + 300000;
+    try { wsS.close(); } catch (e) {}
+  }
+  updateNetUI();
 }
 
-/* резервный REST-опрос, если сокеты недоступны (например, из-за прокси/фаервола) */
-async function restFallback() {
-  if (socketsAlive()) return;
+const futLive = () => now() - S.wsFutMsg < 9000;
+const spotLive = () => now() - S.wsSpotMsg < 20000;
+
+/* ------------------------------------------------ REST-опрос как равноправный источник */
+let pollBusy = false;
+async function restPoll() {
+  if (pollBusy || !S.meta.size) return;
+  pollBusy = true;
   try {
-    const arr = await api(HOSTS.fut + '/fapi/v1/ticker/24hr', 15000);
-    for (const t of arr) onTicker({ s: t.symbol, c: t.lastPrice, P: t.priceChangePercent, q: t.quoteVolume,
-      h: t.highPrice, l: t.lowPrice, o: t.openPrice, n: t.count }, 'fut');
-    setDot('#wsFut', 'warn');
-  } catch (e) {}
-  S.fbTick = (S.fbTick || 0) + 1;
-  if (S.fbTick % 3 === 1) {                       // спот тяжелее по весу — реже
-    try {
-      const arr = await api(spotHost() + '/api/v3/ticker/24hr', 20000);
-      for (const t of arr) {
-        if (!S.meta.has(t.symbol)) continue;
-        onTicker({ s: t.symbol, c: t.lastPrice, P: t.priceChangePercent, q: t.quoteVolume,
-          h: t.highPrice, l: t.lowPrice, o: t.openPrice, n: t.count, b: t.bidPrice, a: t.askPrice }, 'spot');
+    /* после 429 от Binance опрашиваем реже, чтобы не усугублять */
+    const gap = now() - (S.rateLimited || 0) < 120000 ? 15000 : 4000;
+    if (!futLive() && now() - S.restFutAt > gap) {
+      try {
+        const arr = await api(HOSTS.fut + '/fapi/v1/ticker/24hr', 20000);
+        for (const t of arr) onTicker({ s: t.symbol, c: t.lastPrice, P: t.priceChangePercent,
+          q: t.quoteVolume, h: t.highPrice, l: t.lowPrice, o: t.openPrice, n: t.count }, 'fut');
+        S.restFutAt = now(); S.netErr = '';
+      } catch (e) { S.netErr = 'фьючерсы: ' + (e.message || e); }
+
+      if (now() - S.markAt > 20000) {
+        try {
+          const pi = await api(HOSTS.fut + '/fapi/v1/premiumIndex', 15000);
+          for (const m of pi) S.mark.set(m.symbol, { mark: +m.markPrice, index: +m.indexPrice,
+            fund: +m.lastFundingRate * 100, next: +m.nextFundingTime });
+          S.markAt = now();
+        } catch (e) {}
       }
-      setDot('#wsSpot', 'warn');
-    } catch (e) {}
+    }
+    if (!spotLive() && now() - S.restSpotAt > 25000) {
+      try {
+        const arr = await api(spotHost() + '/api/v3/ticker/24hr', 25000);
+        for (const t of arr) {
+          if (!S.meta.has(t.symbol)) continue;
+          onTicker({ s: t.symbol, c: t.lastPrice, P: t.priceChangePercent, q: t.quoteVolume,
+            h: t.highPrice, l: t.lowPrice, o: t.openPrice, n: t.count, b: t.bidPrice, a: t.askPrice }, 'spot');
+        }
+        S.restSpotAt = now();
+      } catch (e) { if (!S.netErr) S.netErr = 'спот: ' + (e.message || e); }
+    }
+  } finally {
+    pollBusy = false;
+    updateNetUI();
+    if (S.tick.size && !S.scanning && !S.lastCycle) cycle();   // первый цикл сразу, как появились данные
   }
-  try {
-    const pi = await api(HOSTS.fut + '/fapi/v1/premiumIndex', 15000);
-    for (const m of pi) S.mark.set(m.symbol, {
-      mark: +m.markPrice, index: +m.indexPrice, fund: +m.lastFundingRate * 100, next: +m.nextFundingTime });
-  } catch (e) {}
+}
+
+/* ------------------------------------------------ видимый статус источника данных */
+function updateNetUI() {
+  const fl = futLive(), sl = spotLive();
+  const fr = now() - S.restFutAt < 15000, sr = now() - S.restSpotAt < 40000;
+  setDot('#wsFut', fl ? 'on' : fr ? 'warn' : 'off');
+  setDot('#wsSpot', sl ? 'on' : sr ? 'warn' : 'off');
+  S.mode = (fl || sl) ? 'сокеты' : (fr || sr) ? 'REST' : 'нет данных';
+  const el = $('#banner'); if (!el) return;
+  if (!S.tick.size && now() - S.started > 15000) {
+    el.className = 'banner err';
+    el.innerHTML = `<b>Данных от Binance нет.</b> ${S.netErr ? 'Последняя ошибка: ' + esc(S.netErr) + '. ' : ''}` +
+      `Чаще всего это блокировка провайдером: включи VPN, либо в «Настройках → Данные» переключи эндпоинт на зеркало. ` +
+      `<button class="btn sm" id="bnDiag">Диагностика</button>`;
+    bindDiagBtn();
+  } else if (!fl && S.tick.size) {
+    el.className = 'banner warn';
+    el.innerHTML = `Сокет Binance молчит — данные идут по REST, обновление раз в 5 секунд. ` +
+      `Сканер работает полностью, запалы ловятся чуть медленнее.`;
+  } else {
+    el.className = 'banner';
+    el.innerHTML = '';
+  }
+}
+function bindDiagBtn() {
+  const b = $('#bnDiag'); if (b) b.onclick = () => { go2('settings'); runProbe(); };
+}
+
+/* ------------------------------------------------ диагностика по кнопке */
+async function runProbe() {
+  const out = $('#probe'); if (!out) return;
+  out.innerHTML = '<span class="spin"></span> проверяю каналы…';
+  const lines = [];
+  const probe = async (name, fn) => {
+    const t0 = now();
+    try { const r = await fn(); lines.push(`<span class="g">✓</span> ${name} — ${r} · ${now() - t0}мс`); }
+    catch (e) { lines.push(`<span class="r">✗</span> ${name} — ${esc(String(e.message || e))}`); }
+    out.innerHTML = lines.join('<br>');
+  };
+  await probe('REST фьючерсов (fapi.binance.com)', async () => {
+    const r = await api(HOSTS.fut + '/fapi/v1/ticker/24hr', 20000); return r.length + ' пар';
+  });
+  await probe('REST спота (' + spotHost().replace('https://', '') + ')', async () => {
+    const r = await api(spotHost() + '/api/v3/exchangeInfo?symbol=BTCUSDT', 15000); return 'ок';
+  });
+  for (const url of HOSTS.wsFut) {
+    await probe('WS ' + url.replace('wss://', '').slice(0, 46), () => wsProbe(url));
+  }
+  await probe('WS спота ' + HOSTS.wsSpot[0].replace('wss://', ''), () => wsProbe(HOSTS.wsSpot[0]));
+  await probe('Telegram API', async () => {
+    const r = await fetch('https://api.telegram.org/bot0:0/getMe');
+    return r.status === 401 ? 'доступен' : 'ответ ' + r.status;
+  });
+  lines.push(`<span class="d">Режим сейчас: ${S.mode} · тикеров ${S.tick.size} · разобрано ${S.an.size}</span>`);
+  out.innerHTML = lines.join('<br>');
+}
+function wsProbe(url) {
+  return new Promise((res, rej) => {
+    let w, done = false;
+    const fin = (ok, msg) => { if (done) return; done = true; try { w && w.close(); } catch (e) {} ok ? res(msg) : rej(new Error(msg)); };
+    try { w = new WebSocket(url); } catch (e) { return fin(false, 'не создаётся: ' + e.message); }
+    const t0 = now();
+    w.onopen = () => setTimeout(() => fin(false, 'открылся, но за 6с не прислал данных (режет DPI или антивирус)'), 6000);
+    w.onmessage = () => fin(true, 'данные идут, первый пакет за ' + (now() - t0) + 'мс');
+    w.onerror = () => fin(false, 'соединение не устанавливается');
+    w.onclose = () => fin(false, 'закрыт сервером или сетью');
+    setTimeout(() => fin(false, 'таймаут 9с'), 9000);
+  });
 }
 
 /* ------------------------------------------------------------ ликвидации */
@@ -2461,9 +2611,14 @@ function closeDrawer() {
    ===================================================================== */
 function diag() {
   const el = $('#diag'); if (!el) return;
-  const st = w => !w ? 'нет' : w.readyState === 1 ? 'онлайн' : w.readyState === 0 ? 'подключается' : 'разорван';
-  el.innerHTML = `сокет фьючерсов: ${st(wsF)} · сокет спота: ${st(wsS)} · пар в базе: ${S.meta.size} · тикеров: ${S.tick.size}
-    · проанализировано: ${S.an.size} · цикл: ${(S.cycleMs / 1000).toFixed(1)}с · ошибок: ${S.errors}${S.lastErr ? ' (' + esc(S.lastErr) + ')' : ''}`;
+  const st = w => !w ? 'нет' : w.readyState === 1 ? 'открыт' : w.readyState === 0 ? 'подключается' : 'разорван';
+  const ageS = t => t ? Math.round((now() - t) / 1000) + 'с назад' : 'не было';
+  el.innerHTML = `источник данных: <b>${S.mode}</b> · сокет фьючерсов: ${st(wsF)}, данные ${ageS(S.wsFutMsg)}` +
+    ` · сокет спота: ${st(wsS)}, данные ${ageS(S.wsSpotMsg)} · REST фьючерсов ${ageS(S.restFutAt)}, спота ${ageS(S.restSpotAt)}` +
+    ` · пар в базе: ${S.meta.size} · тикеров: ${S.tick.size} · проанализировано: ${S.an.size}` +
+    ` · цикл: ${(S.cycleMs / 1000).toFixed(1)}с · ошибок: ${S.errors}` +
+    (S.netErr ? ` · <span class="r">${esc(S.netErr)}</span>` : '') +
+    (S.lastErr ? ` · <span class="d">${esc(S.lastErr)}</span>` : '');
 }
 
 function buildWeightsUI() {
@@ -2528,6 +2683,14 @@ function restartCycleTimer() {
   cycleTimer = setInterval(cycle, Math.max(15, CFG.cycle) * 1000);
 }
 
+function go2(v) {
+  S.view = v;
+  $$('.view').forEach(s => s.classList.toggle('on', s.id === 'v-' + v));
+  $$('#nav button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  $$('#bnav button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  render();
+}
+
 function bindAll() {
   /* навигация */
   const go = v => {
@@ -2537,7 +2700,7 @@ function bindAll() {
     $$('#bnav button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
     render();
   };
-  $$('#nav button, #bnav button').forEach(b => b.onclick = () => go(b.dataset.v));
+  $$('#nav button, #bnav button').forEach(b => b.onclick = () => go2(b.dataset.v));
 
   /* сегменты сигналов */
   $$('#sigSide button').forEach(b => b.onclick = () => {
@@ -2564,7 +2727,8 @@ function bindAll() {
   $('#minVol').oninput = e => { CFG.minVol = +e.target.value || 0; $('#setMinVol').value = CFG.minVol; saveCfg(); render(); };
   $('#q').oninput = e => { S.q = e.target.value.trim(); renderTable(); };
   $('#rowLimit').onchange = renderTable;
-  $('#btnRescan').onclick = () => { KL.clear(); OI.clear(); cycle(); };
+  $('#btnRescan').onclick = () => { KL.clear(); OI.clear(); restPoll(); cycle(); };
+  $('#btnProbe').onclick = runProbe;
   $('#btnClearJ').onclick = () => { if (confirm('Очистить журнал сигналов?')) { S.journal = []; saveJournal(); jStats(); renderJournal(); } };
 
   /* сортировка таблицы */
@@ -2667,6 +2831,7 @@ function bindAll() {
     if (document.hidden) return;
     if (!wsF || wsF.readyState > 1) connectFut();
     if (!wsS || wsS.readyState > 1) connectSpot();
+    restPoll();
     render();
   });
 }
@@ -2710,16 +2875,19 @@ async function boot() {
   $('#scanState').textContent = 'старт';
   setDot('#scanDot', 'warn');
 
+  S.started = now();
+  await buildUniverse();
+  restPoll();                       // данные в таблице через пару секунд, не дожидаясь сокетов
   connectFut();
   connectSpot();
-  await buildUniverse();
   btcPulse();
 
   setTimeout(() => cycle(), 7000);
   restartCycleTimer();
-  setInterval(() => { updateJournal(); render(); diag(); }, 2000);
+  setInterval(() => { updateJournal(); render(); diag(); updateNetUI(); }, 2000);
   setInterval(() => { if (S.view === 'signals' && !document.hidden) renderSparks(); }, 1000);
-  setInterval(restFallback, 12000);
+  setInterval(restPoll, 5000);
+  setInterval(wsWatchdog, 5000);
   setInterval(tgDigest, 3600000);
   setInterval(btcPulse, 60000);
   setInterval(() => { if (!S.scanning) buildUniverse(); }, 30 * 60000);
@@ -2731,7 +2899,6 @@ async function boot() {
   }, 5000);
 
   if (CFG.wake) requestWake();
-  S.started = now();
   if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     navigator.serviceWorker.register('./sw.js').catch(() => {});
   }
