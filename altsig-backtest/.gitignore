@@ -1,0 +1,5 @@
+cache*/
+tbl_*.bin
+tbl_*.json
+daily.json
+*.log
