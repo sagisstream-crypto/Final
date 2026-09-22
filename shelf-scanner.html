@@ -332,7 +332,9 @@ const DIAG = { bars:0, evals:0, maxRvol:0, maxRvolSym:"", lastBarTs:0, started:D
 
 function newSym(sym, onboard){
   return { sym, onboard: onboard||0, qv24: 0, price: 0, bars: [], daily: [],
-           score: 0, ready: 0, state: "—", feats: null, cache: null, lastSig: 0, lastEval: 0, live: null };
+           score: 0, ready: 0, state: "—", feats: null, cache: null,
+           liveRvol: null, liveBrk: null, liveReady: null,
+           lastSig: 0, lastEval: 0, live: null };
 }
 
 /* ---- свечи -------------------------------------------------------------- */
@@ -578,6 +580,13 @@ function evaluate(sym, intrabar){
   if(st.ready>DIAG.sessionBest){ DIAG.sessionBest=st.ready; DIAG.sessionBestSym=st.sym; }
   if(st.ready>=0.5) DIAG.nearMiss++;
 
+  // статичная в рамках текущего бара часть шлюза — кэшируем, чтобы дешёвая
+  // live-оценка ниже (updateLiveReady) могла обновлять RVOL/«готов» на
+  // каждый тик, а не только когда случился полный пересчёт признаков
+  if(st.cache){
+    st.cache.shelfOk = f.sw<=CFG.maxWidth && f.satr<=CFG.maxSatr && Math.abs(f.sdrift)<=CFG.maxDrift;
+  }
+
   // состояние для радара
   if(gate){ gatePass++; st.state = st.score>=CFG.minScore ? "fired" : "gate"; }
   else if(f.sw<=CFG.maxWidth && f.satr<=CFG.maxSatr && f.age>=12) st.state = "armed";
@@ -594,6 +603,26 @@ function evaluate(sym, intrabar){
 
   st.lastSig = now;
   emitSignal(st, f, intrabar);
+}
+
+function updateLiveReady(st, bar){
+  // Дешёвая live-оценка RVOL/«готов» на каждый тик форминг-бара — O(1),
+  // без пересчёта скользящих окон. Полный evaluate() дорогой и вызывается
+  // только когда пара уже почти у порога объёма; без этой функции RVOL
+  // в таблице для остальных пар обновлялся бы только раз в 15 минут,
+  // на закрытии свечи, хотя выглядел бы как «живой».
+  const c = st.cache;
+  if(!c || !(c.medQvL>0) || !(c.hi>0) || !(c.atrL>0)) return;
+  const last = st.bars[st.bars.length-1];
+  const prevC = last ? last.c : 0;
+  const rvol = bar.qv / c.medQvL;
+  const rexp = (bar.h-bar.l) / c.atrL;
+  const brk = bar.c / c.hi - 1;
+  const shapeOk = c.shelfOk && rexp>=CFG.minRexp && brk>=CFG.minBrk && brk<=CFG.maxChase
+                && prevC>0 && bar.c>prevC && st.qv24>=CFG.minQv24 && st.qv24<=CFG.maxQv24;
+  st.liveRvol = rvol;
+  st.liveBrk = brk;
+  st.liveReady = shapeOk ? Math.min(1, rvol/CFG.minRvol) : 0;
 }
 
 function emitSignal(st, f, intrabar){
@@ -806,11 +835,13 @@ function onKline(ev){
     if(!last || bar.t > last.t){ st.bars.push(bar); if(st.bars.length>260) st.bars.shift(); }
     else if(bar.t === last.t) st.bars[st.bars.length-1] = bar;
     st.live = null;
+    st.liveRvol = st.liveBrk = st.liveReady = null;
     DIAG.bars++; DIAG.lastBarTs = Date.now();
     if(sym==="BTCUSDT") BTC15 = st.bars;
     evaluate(sym, false);
   }else{
     st.live = bar;
+    updateLiveReady(st, bar);
     // внутрибарная оценка — дорогая, поэтому сначала дешёвый предфильтр из кэша
     if(!CFG.intrabar) return;
     const last = st.bars[st.bars.length-1];
@@ -851,16 +882,23 @@ function renderRadar(){
   const top = rows.slice(0,70);
   document.getElementById("radar-body").innerHTML = top.map(st=>{
     const f = st.feats;
+    // liveRvol/liveBrk/liveReady обновляются на каждый тик форминг-бара;
+    // f.rvol/st.ready — только на полном пересчёте (закрытие или уже
+    // близкая к порогу пара). Предпочитаем live — иначе таблица выглядит
+    // «живой», а на деле висит до 15 минут между закрытиями свечи.
+    const rvol = st.liveRvol!=null ? st.liveRvol : f.rvol;
+    const brk = st.liveBrk!=null ? st.liveBrk : f.brk;
+    const ready = st.liveReady!=null ? st.liveReady : st.ready;
     return `<tr class="${st.state}">
       <td><span class="sym">${st.sym.replace("USDT","")}</span>
           <span class="sub">${f.age>=12 ? f.age+" баров тихо" : "&nbsp;"}</span></td>
       <td class="scorecell ${scoreClass(st.score)}">${st.score>0?(st.score*100).toFixed(0):"·"}</td>
       <td>${fmtPx(st.price||f.price)}</td>
       <td class="${f.sw<=0.06?"up":""}">${(f.sw*100).toFixed(1)}%</td>
-      <td class="${f.rvol>=10?"hot":""}">${Number.isFinite(f.rvol)?"×"+f.rvol.toFixed(f.rvol>=10?0:1):"—"}</td>
-      <td class="${st.ready>=0.5?"hot":(st.ready>0?"":"mut")}">${st.ready>0?Math.round(st.ready*100)+"%":"·"}
-        <div class="bar"><i style="width:${Math.round((st.ready||0)*100)}%"></i></div></td>
-      <td class="${f.brk>=0?"up":"mut"}">${pct(f.brk)}</td>
+      <td class="${rvol>=10?"hot":""}">${Number.isFinite(rvol)?"×"+rvol.toFixed(rvol>=10?0:1):"—"}</td>
+      <td class="${ready>=0.5?"hot":(ready>0?"":"mut")}">${ready>0?Math.round(ready*100)+"%":"·"}
+        <div class="bar"><i style="width:${Math.round((ready||0)*100)}%"></i></div></td>
+      <td class="${brk>=0?"up":"mut"}">${pct(brk)}</td>
       <td class="mut">${fmtUsd(st.qv24)}</td>
       <td>${stateCell(st)}</td>
     </tr>`;
@@ -960,6 +998,14 @@ function renderCfg(){
       <button class="btn sec" id="btn-reboot">перезагрузить список пар</button>
     </div>
   </div>
+
+  <div class="card"><h3>О КОЛОНКЕ «ГОТОВ»</h3><div class="doc">
+    RVOL и «готов» в таблице обновляются на каждый тик формирующегося бара
+    (примерно раз в секунду, как шлёт Binance), а не только на закрытии
+    15-минутной свечи — даже для пар, которые ещё далеко от порога.
+    Полный пересчёт score (дорогой) по-прежнему считается только когда пара
+    уже почти у порога объёма — иначе на 800 парах телефон не потянет.
+  </div></div>
 
   <div class="card"><h3>ДИАГНОСТИКА</h3><div class="doc" id="cfg-diag"></div>
     <div class="btnrow"><button class="btn sec" id="btn-diag">обновить</button></div></div>

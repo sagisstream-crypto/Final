@@ -139,6 +139,7 @@ def new_sym_state(sym: str, onboard: int) -> dict:
         sym=sym, onboard=onboard, qv24=0.0, price=0.0,
         bars=deque(maxlen=BARS_KEEP), daily=[], live=None, m1=deque(maxlen=M1_KEEP),
         score=0.0, ready=0.0, state="—", feats=None, cache=None,
+        live_rvol=None, live_brk=None, live_ready=None,
         last_sig=0, last_eval=0,
     )
 
@@ -294,6 +295,14 @@ def evaluate(sym: str, intrabar: bool):
     if st["ready"] >= 0.5:
         DIAG["near_miss"] += 1
 
+    # статичная (в рамках текущего бара) часть шлюза — полка не меняется, пока
+    # не закроется 15м бар. Кэшируем, чтобы дешёвая live-оценка ниже могла
+    # обновлять RVOL/«готов» на каждый тик, а не только когда полный
+    # пересчёт признаков вообще случился (см. update_live_ready)
+    if st.get("cache"):
+        st["cache"]["shelf_ok"] = (f["sw"] <= CFG["maxWidth"] and f["satr"] <= CFG["maxSatr"]
+                                    and abs(f["sdrift"]) <= CFG["maxDrift"])
+
     if gate:
         st["state"] = "fired" if st["score"] >= CFG["minScore"] else "gate"
     else:
@@ -312,6 +321,34 @@ def evaluate(sym: str, intrabar: bool):
 
     st["last_sig"] = t
     emit_signal(st, f, intrabar)
+
+
+def update_live_ready(st: dict, bar: dict):
+    """Дешёвая live-оценка RVOL/«готов» на каждый тик форминг-бара — O(1),
+    без пересчёта скользящих окон. Полный evaluate() (дорогой) вызывается
+    только когда пара уже почти у порога объёма; без этой функции RVOL
+    в таблице для остальных пар обновлялся бы только раз в 15 минут,
+    на закрытии свечи, хотя выглядел бы как «живой»."""
+    cache = st.get("cache")
+    if not cache:
+        return
+    med_qv_l = cache.get("med_qv_l") or 0
+    hi = cache.get("hi") or 0
+    atr_l = cache.get("atr_l") or 0
+    if med_qv_l <= 0 or hi <= 0 or atr_l <= 0:
+        return
+    bars = st["bars"]
+    prev_c = bars[-1]["c"] if bars else 0
+    rvol = bar["qv"] / med_qv_l
+    rexp = (bar["h"] - bar["l"]) / atr_l
+    brk = bar["c"] / hi - 1
+    shape_ok = (cache.get("shelf_ok", False) and rexp >= CFG["minRexp"]
+                and CFG["minBrk"] <= brk <= CFG["maxChase"]
+                and prev_c > 0 and bar["c"] > prev_c
+                and CFG["minQv24"] <= st["qv24"] <= CFG["maxQv24"])
+    st["live_rvol"] = rvol
+    st["live_brk"] = brk
+    st["live_ready"] = min(1.0, rvol / max(CFG["minRvol"], 1e-6)) if shape_ok else 0.0
 
 
 def burst_diag(st: dict) -> dict | None:
@@ -483,6 +520,7 @@ def handle_kline15(sym: str, k: dict):
         elif bar["t"] == bars[-1]["t"]:
             bars[-1] = bar
         st["live"] = None
+        st["live_rvol"] = st["live_brk"] = st["live_ready"] = None
         DIAG["bars"] += 1
         DIAG["last_bar_ts"] = now_ms()
         if sym == "BTCUSDT":
@@ -491,6 +529,7 @@ def handle_kline15(sym: str, k: dict):
         evaluate(sym, False)
     else:
         st["live"] = bar
+        update_live_ready(st, bar)
         if not CFG.get("intrabar"):
             return
         bars = st["bars"]
@@ -602,10 +641,20 @@ def build_state_snapshot() -> dict:
         if st["sym"] == "BTCUSDT" or st["feats"] is None:
             continue
         f = st["feats"]
+        # live_* обновляется на каждый тик форминг-бара (см. update_live_ready);
+        # f["rvol"] и st["ready"] — только на полном пересчёте (закрытие бара
+        # или уже близкая к порогу пара). Предпочитаем live, если он есть —
+        # иначе таблица выглядит "живой", а на деле висит до 15 минут.
+        live_rvol = st.get("live_rvol")
+        live_brk = st.get("live_brk")
+        live_ready = st.get("live_ready")
         rows.append(dict(
-            sym=st["sym"], score=st["score"], ready=st["ready"], price=st["price"] or f["price"],
-            sw=f["sw"], rvol=f["rvol"], brk=f["brk"], qv24=st["qv24"], state=st["state"],
-            age=f["age"],
+            sym=st["sym"], score=st["score"],
+            ready=(live_ready if live_ready is not None else st["ready"]),
+            price=st["price"] or f["price"], sw=f["sw"],
+            rvol=(live_rvol if live_rvol is not None else f["rvol"]),
+            brk=(live_brk if live_brk is not None else f["brk"]),
+            qv24=st["qv24"], state=st["state"], age=f["age"],
         ))
     rows.sort(key=lambda r: (-r["score"], -rank.get(r["state"], 0), -(r["ready"] or 0), -r["qv24"]))
     rows = rows[:80]
