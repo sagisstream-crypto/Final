@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0a0e0a">
 <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
 <link rel="apple-touch-icon" href="./icon-192.png">
-<title>VolScan 1m · FAST + CONFIRMED</title>
+<title>VolScan · 1м + 15м · полка → пробой</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -20,14 +20,15 @@
   .brand { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .brand-icon { width: 30px; height: 30px; border-radius: 2px; background: #0e2530; border: 1px solid #1e4a5a;
     display: flex; align-items: center; justify-content: center; color: #55efc4; font-size: 15px; }
-  .brand-title { font-size: 13px; letter-spacing: 0.16em; color: #55efc4; font-weight: 600; }
+  .brand-title { font-size: 13px; letter-spacing: 0.14em; color: #55efc4; font-weight: 600; }
   .brand-sub { font-size: 9px; color: #4a6a6a; margin-top: 2px; letter-spacing: 0.03em; }
-  .status-row { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px; font-size: 10px; align-items: center; }
+  .status-row { display: flex; gap: 13px; flex-wrap: wrap; margin-top: 10px; font-size: 10px; align-items: center; }
   .stat-label { color: #4a6a6a; }
   .stat-val { color: #c8d6c8; }
   .stat-val.ok { color: #55efc4; }
   .stat-val.warn { color: #ffd85e; }
   .stat-val.err { color: #ff6b6b; }
+  .stat-val.dim { color: #4a5a4a; }
   .btn { font-family: inherit; font-size: 10px; cursor: pointer; border-radius: 2px; padding: 8px 11px; min-height: 34px;
     background: #0e2530; border: 1px solid #1e4a5a; color: #55efc4; letter-spacing: 0.03em; touch-action: manipulation; }
   .btn:hover { background: #12303d; }
@@ -36,38 +37,43 @@
   .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; align-items: center; }
   .panel { border: 1px solid #1e2b1e; background: #0d120d; border-radius: 4px; margin: 10px 14px; padding: 10px 12px; }
   .panel-title { font-size: 10px; color: #55efc4; letter-spacing: 0.06em; margin-bottom: 8px; font-weight: 700; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(178px, 1fr)); gap: 8px; }
   .field { display: flex; align-items: center; gap: 6px; background: #0a0e0a; border: 1px solid #1e2b1e; border-radius: 2px; padding: 5px 8px; }
   .field label { color: #4a6a6a; font-size: 10px; white-space: nowrap; }
   .field input { background: transparent; border: none; outline: none; color: #c8d6c8;
     font-family: inherit; font-size: 16px; width: 100%; min-width: 40px; }
   .field input::placeholder { color: #3f4f3f; }
-  .note { font-size: 9px; color: #4a6a6a; line-height: 1.6; margin-top: 8px; }
+  .note { font-size: 9px; color: #4a6a6a; line-height: 1.65; margin-top: 8px; }
   .note b { color: #7f9a9a; }
-  .tier-note { display: flex; gap: 14px; flex-wrap: wrap; font-size: 9px; color: #4a6a6a; margin-bottom: 8px; }
+  .tier-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 14px 0 6px; }
+  .tier-stats { font-size: 9px; color: #4a6a6a; }
   table { width: 100%; border-collapse: collapse; }
   thead { background: #0d120d; }
   th { text-align: right; padding: 7px 6px; font-weight: 400; font-size: 9px; color: #4a6a6a; letter-spacing: 0.04em; white-space: nowrap; }
   th:first-child, th:nth-child(2) { text-align: left; }
   td { padding: 7px 6px; border-bottom: 1px solid #141a14; text-align: right; white-space: nowrap; font-size: 11px; }
   td:first-child, td:nth-child(2) { text-align: left; }
-  tr.tier-CONFIRMED { background: #14200f; }
-  tr.tier-CONFIRMED:hover { background: #1a2a12; }
   tr:hover { background: #0f150f; }
+  tr.rank-3 { background: #12200f; }
+  tr.rank-4 { background: #1d1a07; }
   .sym { color: #e4ece4; font-weight: 600; text-decoration: none; }
   .sym:hover { color: #55efc4; }
-  .tag { font-size: 8px; font-weight: 700; padding: 2px 5px; border-radius: 2px; letter-spacing: 0.03em; }
-  .tag.FAST { color: #55efc4; background: #0e2530; border: 1px solid #1e4a5a; }
-  .tag.CONFIRMED { color: #0a0e0a; background: #5eff8f; }
+  .tag { font-size: 8px; font-weight: 700; padding: 2px 5px; border-radius: 2px; letter-spacing: 0.02em; white-space: nowrap; }
+  .tag.FAST1M { color: #55efc4; background: #0e2530; border: 1px solid #1e4a5a; }
+  .tag.STD15M { color: #74b9ff; background: #101a26; border: 1px solid #1e3a5a; }
+  .tag.CONF1M { color: #0a0e0a; background: #5eff8f; }
+  .tag.STRONG15M { color: #0a0e0a; background: #ffd85e; }
   .pos { color: #5eff8f; }
   .dim { color: #4a5a4a; }
   .hot { color: #ffd85e; font-weight: 600; }
-  .empty { text-align: center; padding: 26px; color: #3f4f3f; font-size: 11px; }
+  .empty { text-align: center; padding: 24px; color: #3f4f3f; font-size: 11px; }
   .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .shelf-chip { display: inline-flex; gap: 6px; align-items: center; background: #0d1f26; border: 1px solid #1e4a5a;
+  .chip { display: inline-flex; gap: 6px; align-items: center; background: #0d1f26; border: 1px solid #1e4a5a;
     border-radius: 3px; padding: 4px 8px; margin: 0 5px 5px 0; font-size: 10px; }
-  .shelf-chip .s { color: #dfe6e9; font-weight: 600; }
-  .shelf-chip .d { color: #ffd85e; }
+  .chip.tf15 { background: #1a1607; border-color: #4a3a14; }
+  .chip .s { color: #dfe6e9; font-weight: 600; }
+  .chip .tf { font-size: 8px; color: #4a6a6a; }
+  .chip .d { color: #ffd85e; }
   .footer { margin-top: auto; border-top: 1px solid #1e2b1e; background: #0d120d; padding: 8px 14px 18px;
     font-size: 9px; color: #3f4f3f; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
   ::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -86,12 +92,12 @@
   <div class="brand">
     <div class="brand-icon">⚡</div>
     <div>
-      <div class="brand-title">VOLSCAN 1M · FAST + CONFIRMED</div>
-      <div class="brand-sub">Binance USDT-M · минутные свечи · параметры из бэктеста на 12 мес</div>
+      <div class="brand-title">VOLSCAN · ПОЛКА → ПРОБОЙ · 1М + 15М</div>
+      <div class="brand-sub">Binance USDT-M · 4 тира · параметры из бэктеста на 12 месяцах</div>
     </div>
   </div>
   <div class="status-row">
-    <span class="stat-label">ПОТОК <span class="stat-val" id="st-feed">—</span></span>
+    <span class="stat-label">ПОТОК <span class="stat-val dim" id="st-feed">—</span></span>
     <span class="stat-label">ПАР <span class="stat-val" id="st-universe">0</span></span>
     <span class="stat-label">ЗАГРУЗКА <span class="stat-val" id="st-seed">—</span></span>
     <span class="stat-label">НА ПОЛКЕ <span class="stat-val" id="st-shelf">0</span></span>
@@ -110,73 +116,53 @@
 </div>
 
 <div class="panel" id="settings-panel" style="display:none">
-  <div class="panel-title">⚙ ПАРАМЕТРЫ</div>
-
-  <div class="tier-note">
-    <span><b style="color:#55efc4">FAST</b> · полка 30 мин · диапазон ≤4% · пробой ≥0.3% · объём ≥2× · подтверждение 2-м баром</span>
-    <span><b style="color:#5eff8f">CONFIRMED</b> · полка 3 ч · диапазон ≤2.5% · пробой ≥1% одной минутой · объём ≥2×</span>
-  </div>
-
+  <div class="panel-title">⚙ ОБЩИЕ ФИЛЬТРЫ</div>
   <div class="grid">
     <div class="field"><label>оборот 24ч от, $</label><input id="f-volmin" value="5000000"></div>
     <div class="field"><label>до, $</label><input id="f-volmax" value="1000000000"></div>
     <div class="field"><label>макс. пар</label><input id="f-maxsym" value="250"></div>
+    <div class="field"><label>антиспам, мин</label><input id="f-cross" value="15"></div>
   </div>
 
-  <div class="panel-title" style="margin-top:12px">FAST</div>
-  <div class="grid">
-    <div class="field"><label>полка, мин</label><input id="f-fw" value="30"></div>
-    <div class="field"><label>диапазон ≤ %</label><input id="f-frange" value="4.0"></div>
-    <div class="field"><label>пробой ≥ %</label><input id="f-fbreak" value="0.3"></div>
-    <div class="field"><label>объём ≥ ×</label><input id="f-fvol" value="2"></div>
-  </div>
-  <div class="btn-row"><button class="btn" id="btn-confirm2">✓ ПОДТВЕРЖДЕНИЕ 2 БАРА: ВКЛ</button></div>
+  <div id="tier-settings"></div>
 
-  <div class="panel-title" style="margin-top:12px">CONFIRMED</div>
-  <div class="grid">
-    <div class="field"><label>полка, мин</label><input id="f-cw" value="180"></div>
-    <div class="field"><label>диапазон ≤ %</label><input id="f-crange" value="2.5"></div>
-    <div class="field"><label>пробой ≥ %</label><input id="f-cbreak" value="1.0"></div>
-    <div class="field"><label>объём ≥ ×</label><input id="f-cvol" value="2"></div>
-  </div>
-
-  <div class="panel-title" style="margin-top:12px">TELEGRAM</div>
+  <div class="panel-title" style="margin-top:14px">TELEGRAM</div>
   <div class="grid">
     <div class="field"><label>токен</label><input id="f-tgtoken" type="password" placeholder="bot token"></div>
     <div class="field"><label>chat id</label><input id="f-tgchat" placeholder="chat id"></div>
   </div>
   <div class="btn-row">
     <button class="btn off" id="btn-tg">TELEGRAM: ВЫКЛ</button>
-    <button class="btn" id="btn-tg-tier">СЛАТЬ: ВСЁ</button>
+    <button class="btn" id="btn-tg-min">СЛАТЬ: ВСЕ ТИРЫ</button>
     <button class="btn" id="btn-tg-test">ТЕСТ</button>
     <button class="btn" id="btn-tg-chatid">ОПРЕДЕЛИТЬ CHAT ID</button>
   </div>
   <div class="note" id="tg-status" style="color:#ffd85e"></div>
   <div class="note">
-    Порядок: создайте бота у <b>@BotFather</b> → вставьте его токен → напишите своему боту
-    в Telegram любое сообщение (иначе он не имеет права писать вам первым) →
-    нажмите <b>ОПРЕДЕЛИТЬ CHAT ID</b> → <b>ТЕСТ</b> → включите <b>TELEGRAM</b>.
-    Для группы добавьте бота в неё и тоже напишите там сообщение.
+    Порядок: бот у <b>@BotFather</b> → токен сюда → напишите боту любое сообщение (иначе он не может писать вам первым)
+    → <b>ОПРЕДЕЛИТЬ CHAT ID</b> → <b>ТЕСТ</b> → включить <b>TELEGRAM</b>.
   </div>
 
   <div class="btn-row"><button class="btn" id="btn-apply">ПРИМЕНИТЬ И ПЕРЕЗАПУСТИТЬ</button></div>
 
   <div class="note">
-    Проверено на истории Binance (data.binance.vision), минутные свечи, 12 месяцев, 97 ликвидных пар + 182 свежих листинга.
-    «Успех» — за 3 часа после сигнала цена уходит вверх на ≥1.5% и это движение минимум в 1.5 раза больше просадки за то же время.
-    Случайный бар даёт такой исход в <b>20%</b> случаев — это шумовой пол.<br>
-    <b>FAST с подтверждением 2 бара</b>: точность <b>33.4%</b> (×1.66 к шуму), средний ход +2.15%, средняя просадка −1.94%.
-    Без подтверждения было 32.2% при вдвое большем числе сигналов — второй бар режет половину входов и добавляет ~1 п.п. точности.<br>
-    <b>CONFIRMED</b>: точность <b>38.7%</b> (×1.93 к шуму), средний ход +2.33%, просадка −1.87%.
-    Здесь подтверждение 2-м баром проверялось и <b>ухудшает</b> результат (38.7% → 35.6%), поэтому тир остаётся однобаровым.<br>
-    Фильтр по обороту $5M–$1B — не украшение: ниже $1M точность падает до ~20–25% (уровень случайности), выше $5B — до ~24%.
-    Множитель объёма на минутных данных почти не влияет на точность, он оставлен как отсечка совсем мёртвых баров.<br>
-    Сканер ищет только пробои <b>вверх</b> (лонг) — именно они проверялись на истории. Не финансовая рекомендация.
+    <b>Как это мерилось.</b> Архив Binance (data.binance.vision), 12 месяцев, 97 ликвидных вечных USDT-M пар.
+    «Полка» — W баров подряд, где (максимум−минимум)/средняя цена ≤ порога. «Пробой» — следующий бар закрывается
+    выше максимума полки на заданный процент при объёме не ниже кратности к средней по полке.
+    «Успех» — за 3 часа цена уходит вверх на ≥1.5%, и это движение минимум в 1.5 раза больше просадки за тот же срок.<br>
+    <b>Шумовой пол — 22.3%</b>: именно столько даёт случайный бар в полосе оборота $5M–$1B. По всему рынку он 20.1%,
+    но сканер работает только в этой полосе, поэтому сравнивать честно именно с 22.3% — иначе преимущество тиров выглядит
+    больше, чем есть.<br>
+    <b>Про фильтр оборота.</b> Ниже $1M точность падает до уровня случайности, выше $5B — тоже: на мегакапах такого
+    выноса не бывает. Внутри $5M–$1B точность держится плато.<br>
+    <b>Про объём.</b> На минутных данных кратность объёма почти не влияет на точность (2× и 15× дают одно и то же),
+    на 15-минутных влияет слабо (39.2% → 40.8% при 2×→5×). Это отсечка мёртвых баров, а не фильтр качества.<br>
+    Сканер ищет только пробои <b>вверх</b> — именно они проверялись. Не финансовая рекомендация.
   </div>
 </div>
 
 <div class="panel">
-  <div class="panel-title">🎯 НА ПОЛКЕ СЕЙЧАС · <span style="color:#4a6a6a;font-weight:400">пары в сжатии, ждут пробоя (уровень = максимум полки)</span></div>
+  <div class="panel-title">🎯 НА ПОЛКЕ СЕЙЧАС · <span style="color:#4a6a6a;font-weight:400">пары в сжатии, ждут пробоя</span></div>
   <div id="shelf-list"><div class="empty">Пока пусто — запустите сканер.</div></div>
 </div>
 
@@ -198,7 +184,7 @@
 </div>
 
 <div class="footer">
-  <span>Поток: WebSocket kline_1m + REST-подгрузка истории · расчёт в браузере</span>
+  <span>WebSocket kline_1m · 15-минутные свечи собираются из минутных · расчёт в браузере</span>
   <span>Не является финансовой рекомендацией</span>
 </div>
 
@@ -206,79 +192,131 @@
 "use strict";
 
 // ==========================================================================
-// Параметры по умолчанию — из бэктеста на 12 месяцах минутных свечей.
+// Четыре тира одной и той же идеи «тихая полка → пробой», на двух таймфреймах.
+// Все цифры ниже измерены в одном режиме: полоса оборота $5M–$1B, горизонт
+// оценки 3 часа, шумовой пол внутри этой полосы 22.3%.
 //
-//   FAST      полка 30 мин, диапазон ≤4%, пробой ≥0.3%, объём ≥2×,
-//             плюс подтверждение вторым баром (закрытие выше первого):
-//             точность 33.4% против шумового пола 20.1% (×1.66).
-//   CONFIRMED полка 3 ч, диапазон ≤2.5%, пробой ≥1% ОДНОЙ минутной свечой,
-//             объём ≥2×: точность 38.7% (×1.93). Подтверждение вторым баром
-//             тут проверялось и ухудшает результат, поэтому тир однобаровый.
-//   Оборот    $5M–$1B: ниже $1M точность падает до уровня случайности,
-//             выше $5B — тоже (на мегакапах такого выноса просто не бывает).
+//   FAST 1м      полка 30 мин, ≤4%, пробой ≥0.3%, объём ≥2×, подтверждение
+//                вторым баром -> 33.4% (±0.6), ×1.50 к полу, N=20961
+//   СТАНДАРТ 15м полка 3 ч (12 баров), ≤4%, пробой ≥1%, объём ≥2×
+//                -> 34.8% (±1.3), ×1.56, N=4904
+//   CONFIRMED 1м полка 3 ч (180 мин), ≤2.5%, пробой ≥1% одной минутой,
+//                объём ≥2× -> 38.7% (±4.3), ×1.73, N=501
+//   СИЛЬНЫЙ 15м  полка 6 ч (24 бара), ≤1.5%, пробой ≥1.5%, объём ≥5×
+//                -> 40.8% (±13.8), ×1.83, N=49 — самый точный, но выборка
+//                тонкая, поэтому интервал огромный: честный диапазон 27–55%.
+//
+// Подтверждение вторым баром стоит только на FAST: там оно поднимает точность
+// с 32.2% до 33.4%, вдвое сократив число входов. На остальных тирах то же
+// правило проверялось и ухудшает результат (CONFIRMED: 38.7% -> 35.6%).
+//
+// 15-минутные свечи не тянутся отдельным потоком, а собираются из минутных:
+// один и тот же поток kline_1m кормит оба таймфрейма.
 // ==========================================================================
+const TIERS = {
+  FAST1M:    { tf: 1,  label: "FAST·1м",   rank: 1, W: 30,  range: 4.0, brk: 0.3, volX: 2, confirm2: true,
+               stats: "33.4% против пола 22.3% (×1.50), ход +2.15%, просадка −1.94%" },
+  STD15M:    { tf: 15, label: "СТАНД·15м", rank: 2, W: 12,  range: 4.0, brk: 1.0, volX: 2, confirm2: false,
+               stats: "34.8% против пола 22.3% (×1.56), ход +2.15%, просадка −1.83%" },
+  CONF1M:    { tf: 1,  label: "CONF·1м",   rank: 3, W: 180, range: 2.5, brk: 1.0, volX: 2, confirm2: false,
+               stats: "38.7% против пола 22.3% (×1.73), ход +2.33%, просадка −1.87%" },
+  STRONG15M: { tf: 15, label: "СИЛЬН·15м", rank: 4, W: 24,  range: 1.5, brk: 1.5, volX: 5, confirm2: false,
+               stats: "40.8% против пола 22.3% (×1.83), ход +2.04%, просадка −1.30%; выборка тонкая (49 сигналов за год)" },
+};
+const TIER_IDS = Object.keys(TIERS);
+
 const DEFAULTS = {
-  volMin: 5e6, volMax: 1e9, maxSymbols: 250,
-  fast: { W: 30,  range: 4.0, brk: 0.3, volX: 2, confirm2: true },
-  conf: { W: 180, range: 2.5, brk: 1.0, volX: 2 },
-  tg: { on: false, token: "", chat: "", onlyConfirmed: false },
+  volMin: 5e6, volMax: 1e9, maxSymbols: 250, crossMin: 15,
+  tiers: Object.fromEntries(TIER_IDS.map(id => [id, {
+    on: true, W: TIERS[id].W, range: TIERS[id].range, brk: TIERS[id].brk,
+    volX: TIERS[id].volX, confirm2: TIERS[id].confirm2,
+  }])),
+  tg: { on: false, token: "", chat: "", minRank: 1 },
   sound: false,
 };
 const CFG_KEY = "volscan_1m_cfg_v1";
 const REST = "https://fapi.binance.com";
 const WS_BASE = "wss://fstream.binance.com/stream?streams=";
 const STREAMS_PER_SOCKET = 100;
-const SEED_LIMIT = 200;            // хватает на полку 180 + пара баров запаса
-const SEED_DELAY_MS = 120;         // пауза между REST-запросами при загрузке истории
-const BUF_MAX = 260;
+// Самому длинному тиру нужно 24 пятнадцатиминутки полки + пробойная = 375 минут.
+// Берём с запасом, чтобы неполная головная 15-минутка не съедала нужный бар.
+const BUF_MAX = 420;
+const SEED_LIMIT = 420;            // вес запроса тот же, что и при 200 (лимит 101..500)
+const SEED_DELAY_MS = 120;
 const SIGNALS_MAX = 200;
 const UNIVERSE_REFRESH_MS = 15 * 60 * 1000;
+const TF15_MS = 900000;
 
 let cfg = JSON.parse(JSON.stringify(DEFAULTS));
 let running = false;
-let universe = [];                 // [{symbol, vol24}]
-let vol24 = {};                    // symbol -> оборот за 24ч, $
-let bars = {};                     // symbol -> [{t,o,h,l,c,q}] только закрытые свечи
+let universe = [];
+let vol24 = {};
+let bars = {};                     // symbol -> минутные закрытые свечи
 let sockets = [];
 let lastSignalAt = {};             // "SYM:TIER" -> ts
+let lastAnyAt = {};                // symbol -> {rank, ts} для кросс-тирового антиспама
 let signals = [];
 let seeded = 0, seedTotal = 0, seeding = false;
 let wsAlive = 0, wsTotal = 0;
-let universeTimer = null, shelfTimer = null, clockTimer = null;
 
 // ---------- конфиг ----------
 function loadCfg() {
   try {
     const raw = localStorage.getItem(CFG_KEY);
     if (!raw) return;
-    const saved = JSON.parse(raw);
-    cfg = {
-      ...DEFAULTS, ...saved,
-      fast: { ...DEFAULTS.fast, ...(saved.fast || {}) },
-      conf: { ...DEFAULTS.conf, ...(saved.conf || {}) },
-      tg: { ...DEFAULTS.tg, ...(saved.tg || {}) },
-    };
+    const s = JSON.parse(raw);
+    cfg = { ...DEFAULTS, ...s, tg: { ...DEFAULTS.tg, ...(s.tg || {}) }, tiers: JSON.parse(JSON.stringify(DEFAULTS.tiers)) };
+    // тиры домердживаем по одному: у старых сохранённых конфигов их может не быть вовсе
+    if (s.tiers) {
+      for (const id of TIER_IDS) if (s.tiers[id]) cfg.tiers[id] = { ...cfg.tiers[id], ...s.tiers[id] };
+    }
   } catch (e) {}
 }
-function saveCfg() {
-  try { localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); } catch (e) {}
+function saveCfg() { try { localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); } catch (e) {} }
+function num(id, fb) {
+  const v = parseFloat(String((document.getElementById(id) || {}).value || "").replace(/[\s,_]/g, ""));
+  return isNaN(v) ? fb : v;
 }
-function num(id, fallback) {
-  const v = parseFloat(String(document.getElementById(id).value).replace(/[\s,_]/g, ""));
-  return isNaN(v) ? fallback : v;
+function buildTierSettings() {
+  document.getElementById("tier-settings").innerHTML = TIER_IDS.map(id => {
+    const t = TIERS[id], c = cfg.tiers[id];
+    return `
+      <div class="tier-head">
+        <span class="tag ${id}">${t.label}</span>
+        <button class="btn${c.on ? "" : " off"}" data-tier-toggle="${id}">${c.on ? "ВКЛ" : "ВЫКЛ"}</button>
+        <span class="tier-stats">${t.stats}</span>
+      </div>
+      <div class="grid">
+        <div class="field"><label>полка, ${t.tf === 1 ? "мин" : "баров по 15м"}</label><input id="f-${id}-W" value="${c.W}"></div>
+        <div class="field"><label>диапазон ≤ %</label><input id="f-${id}-range" value="${c.range}"></div>
+        <div class="field"><label>пробой ≥ %</label><input id="f-${id}-brk" value="${c.brk}"></div>
+        <div class="field"><label>объём ≥ ×</label><input id="f-${id}-volX" value="${c.volX}"></div>
+        ${t.confirm2 ? `<div class="field"><label>подтв. 2-м баром</label><input value="да" disabled></div>` : ``}
+      </div>`;
+  }).join("");
+  document.querySelectorAll("[data-tier-toggle]").forEach(b => {
+    b.addEventListener("click", () => {
+      const id = b.dataset.tierToggle;
+      cfg.tiers[id].on = !cfg.tiers[id].on;
+      b.textContent = cfg.tiers[id].on ? "ВКЛ" : "ВЫКЛ";
+      b.classList.toggle("off", !cfg.tiers[id].on);
+      saveCfg();
+    });
+  });
 }
 function cfgFromForm() {
   cfg.volMin = num("f-volmin", DEFAULTS.volMin);
   cfg.volMax = num("f-volmax", DEFAULTS.volMax);
   cfg.maxSymbols = Math.max(1, Math.min(400, num("f-maxsym", DEFAULTS.maxSymbols)));
-  cfg.fast.W = Math.max(5, num("f-fw", DEFAULTS.fast.W));
-  cfg.fast.range = num("f-frange", DEFAULTS.fast.range);
-  cfg.fast.brk = num("f-fbreak", DEFAULTS.fast.brk);
-  cfg.fast.volX = num("f-fvol", DEFAULTS.fast.volX);
-  cfg.conf.W = Math.max(5, Math.min(BUF_MAX - 5, num("f-cw", DEFAULTS.conf.W)));
-  cfg.conf.range = num("f-crange", DEFAULTS.conf.range);
-  cfg.conf.brk = num("f-cbreak", DEFAULTS.conf.brk);
-  cfg.conf.volX = num("f-cvol", DEFAULTS.conf.volX);
+  cfg.crossMin = Math.max(0, num("f-cross", DEFAULTS.crossMin));
+  for (const id of TIER_IDS) {
+    const c = cfg.tiers[id], t = TIERS[id];
+    const maxW = t.tf === 1 ? BUF_MAX - 5 : Math.floor(BUF_MAX / 15) - 2;
+    c.W = Math.max(3, Math.min(maxW, num(`f-${id}-W`, t.W)));
+    c.range = num(`f-${id}-range`, t.range);
+    c.brk = num(`f-${id}-brk`, t.brk);
+    c.volX = num(`f-${id}-volX`, t.volX);
+  }
   cfg.tg.token = document.getElementById("f-tgtoken").value.trim();
   cfg.tg.chat = document.getElementById("f-tgchat").value.trim();
   saveCfg();
@@ -287,25 +325,22 @@ function cfgToForm() {
   document.getElementById("f-volmin").value = String(cfg.volMin);
   document.getElementById("f-volmax").value = String(cfg.volMax);
   document.getElementById("f-maxsym").value = String(cfg.maxSymbols);
-  document.getElementById("f-fw").value = String(cfg.fast.W);
-  document.getElementById("f-frange").value = String(cfg.fast.range);
-  document.getElementById("f-fbreak").value = String(cfg.fast.brk);
-  document.getElementById("f-fvol").value = String(cfg.fast.volX);
-  document.getElementById("f-cw").value = String(cfg.conf.W);
-  document.getElementById("f-crange").value = String(cfg.conf.range);
-  document.getElementById("f-cbreak").value = String(cfg.conf.brk);
-  document.getElementById("f-cvol").value = String(cfg.conf.volX);
+  document.getElementById("f-cross").value = String(cfg.crossMin);
+  buildTierSettings();
   document.getElementById("f-tgtoken").value = cfg.tg.token;
   document.getElementById("f-tgchat").value = cfg.tg.chat;
-  setToggle("btn-confirm2", cfg.fast.confirm2, "✓ ПОДТВЕРЖДЕНИЕ 2 БАРА: ВКЛ", "✓ ПОДТВЕРЖДЕНИЕ 2 БАРА: ВЫКЛ");
   setToggle("btn-tg", cfg.tg.on, "TELEGRAM: ВКЛ", "TELEGRAM: ВЫКЛ");
   setToggle("btn-sound", cfg.sound, "🔊 ЗВУК: ВКЛ", "🔇 ЗВУК: ВЫКЛ");
-  document.getElementById("btn-tg-tier").textContent = cfg.tg.onlyConfirmed ? "СЛАТЬ: ТОЛЬКО CONFIRMED" : "СЛАТЬ: ВСЁ";
+  updateTgMinBtn();
 }
 function setToggle(id, on, onText, offText) {
   const b = document.getElementById(id);
   b.textContent = on ? onText : offText;
   b.classList.toggle("off", !on);
+}
+function updateTgMinBtn() {
+  const names = { 1: "ВСЕ ТИРЫ", 2: "ОТ СТАНД·15м", 3: "ОТ CONF·1м", 4: "ТОЛЬКО СИЛЬН·15м" };
+  document.getElementById("btn-tg-min").textContent = "СЛАТЬ: " + (names[cfg.tg.minRank] || "ВСЕ ТИРЫ");
 }
 
 // ---------- утилиты ----------
@@ -317,10 +352,7 @@ function fmtMoney(n) {
   if (a >= 1e3) return (n / 1e3).toFixed(0) + "K";
   return n.toFixed(0);
 }
-function fmtPrice(n) {
-  if (!isFinite(n)) return "—";
-  return n >= 1 ? n.toFixed(4) : n.toPrecision(4);
-}
+function fmtPrice(n) { return isFinite(n) ? (n >= 1 ? n.toFixed(4) : n.toPrecision(4)) : "—"; }
 function fmtTime(ts) { return new Date(ts).toLocaleTimeString(); }
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 function setStat(id, text, cls) {
@@ -335,19 +367,20 @@ function beep(freq, ms) {
   if (!cfg.sound) return;
   try {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    const osc = audioCtx.createOscillator(), g = audioCtx.createGain();
     osc.frequency.value = freq; osc.type = "sine";
-    gain.gain.setValueAtTime(0.001, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.25, audioCtx.currentTime + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + ms / 1000);
-    osc.connect(gain); gain.connect(audioCtx.destination);
+    g.gain.setValueAtTime(0.001, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.25, audioCtx.currentTime + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + ms / 1000);
+    osc.connect(g); g.connect(audioCtx.destination);
     osc.start(); osc.stop(audioCtx.currentTime + ms / 1000 + 0.02);
   } catch (e) {}
 }
-function signalBeep(tier) {
+function signalBeep(rank) {
   beep(1046, 90);
-  setTimeout(() => beep(tier === "CONFIRMED" ? 1568 : 1318, 110), 100);
-  if (tier === "CONFIRMED") setTimeout(() => beep(2093, 150), 210);
+  setTimeout(() => beep(1318, 100), 100);
+  if (rank >= 3) setTimeout(() => beep(1760, 120), 205);
+  if (rank >= 4) setTimeout(() => beep(2093, 160), 330);
 }
 function notify(title, body) {
   if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
@@ -358,18 +391,13 @@ function notify(title, body) {
 }
 
 // ---------- Telegram ----------
-// ВАЖНО про формат запроса. Отправлять JSON сюда нельзя: с заголовком
-// Content-Type: application/json браузер обязан сперва послать preflight
-// OPTIONS, а api.telegram.org отвечает на OPTIONS кодом 501, из-за чего
-// сам запрос до Telegram вообще не доходит и fetch падает с ошибкой CORS.
-// Поэтому тело уходит как URLSearchParams: это CORS-safelisted тип
-// (application/x-www-form-urlencoded), preflight для него не нужен.
-// Content-Type проставляет браузер — руками его задавать нельзя, иначе
-// вернётся ровно та же проблема.
+// Тело уходит как URLSearchParams, а не JSON. С Content-Type: application/json
+// браузер обязан сперва послать preflight OPTIONS, а api.telegram.org отвечает
+// на OPTIONS кодом 501 — из-за этого запрос до Telegram не доходит вообще.
+// URL-encoded это CORS-safelisted тип, preflight для него не нужен.
+// Content-Type руками не ставим: его проставляет браузер.
 let tgSent = 0, tgFailed = 0, tgLastError = "";
-
 function tgCreds() {
-  // читаем прямо из полей, чтобы работало и без «ПРИМЕНИТЬ»
   const el = id => (document.getElementById(id).value || "").trim();
   return { token: el("f-tgtoken") || cfg.tg.token, chat: el("f-tgchat") || cfg.tg.chat };
 }
@@ -378,8 +406,7 @@ async function tgCall(method, params) {
   if (!token) return { ok: false, error: "не указан токен бота" };
   try {
     const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
-      method: "POST",
-      body: new URLSearchParams(params || {}),
+      method: "POST", body: new URLSearchParams(params || {}),
     });
     const data = await res.json().catch(() => null);
     if (!data) return { ok: false, error: "HTTP " + res.status + " (ответ не разобран)" };
@@ -394,43 +421,38 @@ async function tgSend(text) {
   if (!chat) { tgFailed++; tgLastError = "не указан chat id"; updateTgStatus(); return { ok: false, error: tgLastError }; }
   const params = { chat_id: chat, text, parse_mode: "HTML", disable_web_page_preview: "true" };
   let r = await tgCall("sendMessage", params);
-  if (!r.ok && /не ушёл|HTTP 5/.test(r.error)) {   // разовая сетевая осечка — пробуем ещё раз
-    await sleep(1500);
-    r = await tgCall("sendMessage", params);
-  }
+  if (!r.ok && /не ушёл|HTTP 5/.test(r.error)) { await sleep(1500); r = await tgCall("sendMessage", params); }
   if (r.ok) tgSent++; else { tgFailed++; tgLastError = r.error; }
   updateTgStatus();
   return r;
 }
 function updateTgStatus() {
   const el = document.getElementById("st-tg");
-  const counts = (tgSent || tgFailed)
-    ? `${tgSent} ✓${tgFailed ? " / " + tgFailed + " ✗" : ""}`
-    : "";
+  const counts = (tgSent || tgFailed) ? `${tgSent} ✓${tgFailed ? " / " + tgFailed + " ✗" : ""}` : "";
   if (!cfg.tg.on) {
-    // счётчики показываем и в выключенном состоянии, иначе после «ТЕСТ» кажется, что ничего не произошло
     el.textContent = counts ? "выкл · " + counts : "выкл";
     el.className = "stat-val dim";
   } else {
     el.textContent = counts || "вкл, сигналов ещё не было";
     el.className = "stat-val " + (tgFailed ? "err" : "ok");
   }
+  const box = document.getElementById("tg-status");
+  if (box && tgLastError && !box.textContent.startsWith("✅")) box.textContent = "последняя ошибка: " + tgLastError;
 }
 
-// ---------- вселенная пар ----------
+// ---------- вселенная ----------
 async function loadUniverse() {
   const res = await fetch(REST + "/fapi/v1/ticker/24hr", { cache: "no-store" });
   if (!res.ok) throw new Error("ticker HTTP " + res.status);
   const arr = await res.json();
   const list = [];
   for (const t of arr) {
-    const s = t.symbol;
-    if (!s.endsWith("USDT")) continue;
+    if (!t.symbol.endsWith("USDT")) continue;
     const v = parseFloat(t.quoteVolume);
     if (!isFinite(v)) continue;
-    vol24[s] = v;
+    vol24[t.symbol] = v;
     if (v < cfg.volMin || v > cfg.volMax) continue;
-    list.push({ symbol: s, vol24: v });
+    list.push({ symbol: t.symbol, vol24: v });
   }
   list.sort((a, b) => b.vol24 - a.vol24);
   return list.slice(0, cfg.maxSymbols);
@@ -438,24 +460,20 @@ async function loadUniverse() {
 
 // ---------- история ----------
 async function seedSymbol(symbol) {
-  const url = `${REST}/fapi/v1/klines?symbol=${symbol}&interval=1m&limit=${SEED_LIMIT}`;
-  const res = await fetch(url, { cache: "no-store" });
+  const res = await fetch(`${REST}/fapi/v1/klines?symbol=${symbol}&interval=1m&limit=${SEED_LIMIT}`, { cache: "no-store" });
   if (!res.ok) throw new Error("klines HTTP " + res.status);
   const arr = await res.json();
   const now = Date.now();
-  bars[symbol] = arr
-    .filter(k => k[6] <= now)     // только закрытые свечи
+  bars[symbol] = arr.filter(k => k[6] <= now)
     .map(k => ({ t: k[0], o: +k[1], h: +k[2], l: +k[3], c: +k[4], q: +k[7] }));
 }
 async function seedAll(list) {
   seeding = true; seeded = 0; seedTotal = list.length;
   for (const item of list) {
     if (!running) break;
-    try { await seedSymbol(item.symbol); } catch (e) { /* пара догрузится при первом же разрыве */ }
+    try { await seedSymbol(item.symbol); } catch (e) {}
     seeded++;
-    if (seeded % 5 === 0 || seeded === seedTotal) {
-      setStat("st-seed", `${seeded}/${seedTotal}`, seeded === seedTotal ? "ok" : "warn");
-    }
+    if (seeded % 5 === 0 || seeded === seedTotal) setStat("st-seed", `${seeded}/${seedTotal}`, seeded === seedTotal ? "ok" : "warn");
     await sleep(SEED_DELAY_MS);
   }
   seeding = false;
@@ -463,15 +481,9 @@ async function seedAll(list) {
 }
 
 // ---------- WebSocket ----------
-function chunk(arr, size) {
-  const out = [];
-  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
-  return out;
-}
+function chunk(a, n) { const o = []; for (let i = 0; i < a.length; i += n) o.push(a.slice(i, i + n)); return o; }
 function closeSockets() {
-  for (const ws of sockets) {
-    try { ws.onclose = null; ws.close(); } catch (e) {}
-  }
+  for (const ws of sockets) { try { ws.onclose = null; ws.close(); } catch (e) {} }
   sockets = []; wsAlive = 0; wsTotal = 0;
   updateFeedStatus();
 }
@@ -484,7 +496,7 @@ function openSockets(list) {
   closeSockets();
   const groups = chunk(list.map(x => x.symbol.toLowerCase() + "@kline_1m"), STREAMS_PER_SOCKET);
   wsTotal = groups.length;
-  groups.forEach((streams, i) => connectSocket(streams, i));
+  groups.forEach((s, i) => connectSocket(s, i));
 }
 function connectSocket(streams, idx, delay) {
   if (!running) return;
@@ -497,26 +509,25 @@ function connectSocket(streams, idx, delay) {
     let msg;
     try { msg = JSON.parse(ev.data); } catch (e) { return; }
     const k = msg && msg.data && msg.data.k;
-    if (!k || !k.x) return;         // работаем только по закрытым свечам
+    if (!k || !k.x) return;
     onBarClosed(k.s, { t: k.t, o: +k.o, h: +k.h, l: +k.l, c: +k.c, q: +k.q });
   };
   ws.onerror = () => {};
   ws.onclose = () => {
     if (sockets[idx] === ws) { wsAlive = Math.max(0, wsAlive - 1); updateFeedStatus(); }
     if (!running) return;
-    const next = Math.min((delay || 1000) * 2, 30000);
-    setTimeout(() => connectSocket(streams, idx, next), delay || 1000);
+    setTimeout(() => connectSocket(streams, idx, Math.min((delay || 1000) * 2, 30000)), delay || 1000);
   };
 }
 
-// ---------- приём закрытой свечи ----------
+// ---------- приём свечи ----------
 const reseedQueue = new Set();
 function onBarClosed(symbol, bar) {
   const buf = bars[symbol];
   if (!buf || !buf.length) { reseedQueue.add(symbol); return; }
   const last = buf[buf.length - 1];
-  if (bar.t <= last.t) return;                       // дубль
-  if (bar.t !== last.t + 60000) {                    // пропуск свечей — история дырявая
+  if (bar.t <= last.t) return;
+  if (bar.t !== last.t + 60000) {          // пропуск — история дырявая, 15-минутки соберутся неверно
     reseedQueue.add(symbol);
     buf.push(bar);
     if (buf.length > BUF_MAX) buf.shift();
@@ -524,10 +535,8 @@ function onBarClosed(symbol, bar) {
   }
   buf.push(bar);
   if (buf.length > BUF_MAX) buf.shift();
-  detect(symbol);
+  detect(symbol, bar);
 }
-// Дырки в истории латаем фоном небольшими пачками. Пачка нужна, потому что после
-// возврата из фона протухают сразу все пары, и по одной очередь разгребалась бы минутами.
 let reseedBusy = false;
 const RESEED_BATCH = 4;
 async function reseedTick() {
@@ -535,24 +544,39 @@ async function reseedTick() {
   reseedBusy = true;
   try {
     const batch = [];
-    for (const s of reseedQueue) {
-      batch.push(s);
-      if (batch.length >= RESEED_BATCH) break;
-    }
+    for (const s of reseedQueue) { batch.push(s); if (batch.length >= RESEED_BATCH) break; }
     for (const s of batch) reseedQueue.delete(s);
     await Promise.all(batch.map(s => seedSymbol(s).catch(() => {})));
     setStat("st-seed", reseedQueue.size ? `догрузка ${reseedQueue.size}` : `${seeded}/${seedTotal}`,
             reseedQueue.size ? "warn" : "ok");
-  } finally {
-    reseedBusy = false;
+  } finally { reseedBusy = false; }
+}
+
+// ---------- сборка 15-минуток из минутных ----------
+// Отдельный поток kline_15m не нужен: 15-минутная свеча — это ровно 15 минутных.
+// Берём только полные корзины из 15 баров, иначе дырка в истории тихо исказит
+// и максимум полки, и объём.
+function build15m(buf) {
+  const buckets = new Map();
+  for (const b of buf) {
+    const key = b.t - (b.t % TF15_MS);
+    let arr = buckets.get(key);
+    if (!arr) { arr = []; buckets.set(key, arr); }
+    arr.push(b);
   }
+  const keys = [...buckets.keys()].sort((a, b) => a - b);
+  const out = [];
+  for (const k of keys) {
+    const arr = buckets.get(k);
+    if (arr.length !== 15) continue;
+    let hi = -Infinity, lo = Infinity, q = 0;
+    for (const b of arr) { if (b.h > hi) hi = b.h; if (b.l < lo) lo = b.l; q += b.q; }
+    out.push({ t: k, o: arr[0].o, h: hi, l: lo, c: arr[14].c, q });
+  }
+  return out;
 }
 
 // ---------- детектор ----------
-// Полка = W баров. Пробой = свеча, закрывшаяся выше максимума полки на brk%
-// при объёме ≥ volX от среднего по полке. FAST при включённом подтверждении
-// требует ещё один бар, закрывшийся выше пробойного — именно этот вариант
-// проверялся на истории (33.4% против 32.2% без подтверждения).
 function windowStats(buf, from, to) {
   let hi = -Infinity, lo = Infinity, sumC = 0, sumQ = 0;
   for (let i = from; i <= to; i++) {
@@ -562,88 +586,100 @@ function windowStats(buf, from, to) {
     sumC += b.c; sumQ += b.q;
   }
   const n = to - from + 1;
-  const meanC = sumC / n;
-  return { hi, lo, rangePct: (hi - lo) / meanC * 100, volAvg: sumQ / n };
+  return { hi, lo, rangePct: (hi - lo) / (sumC / n) * 100, volAvg: sumQ / n };
 }
-function evalTier(buf, W, maxRange, minBrk, minVolX, confirm2) {
-  const n = buf.length;
-  const need = W + (confirm2 ? 2 : 1);
-  if (n < need) return null;
-  const brkIdx = confirm2 ? n - 2 : n - 1;           // бар пробоя
-  const shelfTo = brkIdx - 1;
-  const shelfFrom = shelfTo - W + 1;
+function evalTier(series, p) {
+  const n = series.length;
+  if (n < p.W + (p.confirm2 ? 2 : 1)) return null;
+  const brkIdx = p.confirm2 ? n - 2 : n - 1;
+  const shelfTo = brkIdx - 1, shelfFrom = shelfTo - p.W + 1;
   if (shelfFrom < 0) return null;
-  const st = windowStats(buf, shelfFrom, shelfTo);
-  if (!(st.volAvg > 0) || !isFinite(st.rangePct)) return null;
-  if (st.rangePct > maxRange) return null;
-  const brkBar = buf[brkIdx];
+  const st = windowStats(series, shelfFrom, shelfTo);
+  if (!(st.volAvg > 0) || !isFinite(st.rangePct) || st.rangePct > p.range) return null;
+  const brkBar = series[brkIdx];
   const brkPct = (brkBar.c - st.hi) / st.hi * 100;
-  if (brkPct < minBrk) return null;
+  if (brkPct < p.brk) return null;
   const volX = brkBar.q / st.volAvg;
-  if (volX < minVolX) return null;
-  if (confirm2) {
-    const confBar = buf[n - 1];
-    if (!(confBar.c > brkBar.c)) return null;        // второй бар обязан закрыться выше первого
-  }
-  const entry = buf[n - 1];
-  return {
-    rangePct: st.rangePct, brkPct, volX, level: st.hi,
-    price: entry.c, barTime: entry.t,
-  };
+  if (volX < p.volX) return null;
+  if (p.confirm2 && !(series[n - 1].c > brkBar.c)) return null;
+  const entry = series[n - 1];
+  return { rangePct: st.rangePct, brkPct, volX, level: st.hi, price: entry.c };
 }
-function scoreOf(hit, tier, p) {
-  let s = tier === "CONFIRMED" ? 72 : 52;
+function scoreOf(hit, p, rank) {
+  let s = 40 + rank * 8;
   s += Math.max(0, Math.min(12, (1 - hit.rangePct / p.range) * 12));
   s += Math.max(0, Math.min(10, (hit.brkPct / p.brk - 1) * 6));
   s += Math.max(0, Math.min(6, (hit.volX / p.volX - 1) * 3));
   return Math.round(Math.max(0, Math.min(100, s)));
 }
-function detect(symbol) {
+function detect(symbol, lastBar) {
   const buf = bars[symbol];
   if (!buf) return;
   const v = vol24[symbol];
   if (!(v >= cfg.volMin && v <= cfg.volMax)) return;
 
-  const c = evalTier(buf, cfg.conf.W, cfg.conf.range, cfg.conf.brk, cfg.conf.volX, false);
-  if (c) { fire(symbol, "CONFIRMED", c, cfg.conf); return; }   // старший тир перебивает младший
+  // 15-минутные тиры считаем только в момент закрытия 15-минутной свечи
+  const closes15m = ((lastBar.t + 60000) % TF15_MS) === 0;
+  let series15 = null;
 
-  const f = evalTier(buf, cfg.fast.W, cfg.fast.range, cfg.fast.brk, cfg.fast.volX, cfg.fast.confirm2);
-  if (f) fire(symbol, "FAST", f, cfg.fast);
+  const hits = [];
+  for (const id of TIER_IDS) {
+    const p = cfg.tiers[id], meta = TIERS[id];
+    if (!p.on) continue;
+    let series;
+    if (meta.tf === 1) series = buf;
+    else {
+      if (!closes15m) continue;
+      if (!series15) series15 = build15m(buf);
+      series = series15;
+    }
+    const hit = evalTier(series, { ...p, confirm2: meta.confirm2 });
+    if (hit) hits.push({ id, meta, p, hit });
+  }
+  if (!hits.length) return;
+  hits.sort((a, b) => b.meta.rank - a.meta.rank);   // сильнейший тир первым
+  fire(symbol, hits[0]);
 }
 
 // ---------- сигнал ----------
-function fire(symbol, tier, hit, params) {
-  const key = symbol + ":" + tier;
-  const cooldownMs = params.W * 60000;               // как в бэктесте: не чаще раза в длину полки
-  if (Date.now() - (lastSignalAt[key] || 0) < cooldownMs) return;
-  lastSignalAt[key] = Date.now();
+function fire(symbol, { id, meta, p, hit }) {
+  const now = Date.now();
+  const key = symbol + ":" + id;
+  const tierCooldown = p.W * meta.tf * 60000;       // как в бэктесте: раз в длину полки
+  if (now - (lastSignalAt[key] || 0) < tierCooldown) return;
+
+  // кросс-тировый антиспам: одно движение не должно прилетать четырьмя сообщениями.
+  // Более сильный тир пройти может — это новая информация, а не повтор.
+  const prev = lastAnyAt[symbol];
+  if (prev && prev.rank >= meta.rank && (now - prev.ts) < cfg.crossMin * 60000) return;
+
+  lastSignalAt[key] = now;
+  lastAnyAt[symbol] = { rank: meta.rank, ts: now };
 
   const entry = {
-    time: Date.now(), symbol, tier, price: hit.price, brkPct: hit.brkPct,
-    rangePct: hit.rangePct, volX: hit.volX, level: hit.level,
-    vol24: vol24[symbol] || 0, score: scoreOf(hit, tier, params),
+    time: now, symbol, tier: id, label: meta.label, rank: meta.rank,
+    price: hit.price, brkPct: hit.brkPct, rangePct: hit.rangePct, volX: hit.volX,
+    level: hit.level, vol24: vol24[symbol] || 0, score: scoreOf(hit, p, meta.rank),
   };
   signals.unshift(entry);
   if (signals.length > SIGNALS_MAX) signals.pop();
   renderSignals();
-  signalBeep(tier);
-  notify(`⚡ ${tier} · ${symbol}`,
+  signalBeep(meta.rank);
+  notify(`⚡ ${meta.label} · ${symbol}`,
     `пробой +${hit.brkPct.toFixed(2)}% · полка ${hit.rangePct.toFixed(2)}% · объём ×${hit.volX.toFixed(1)}`);
 
-  if (cfg.tg.on && (!cfg.tg.onlyConfirmed || tier === "CONFIRMED")) {
-    const stats = tier === "CONFIRMED"
-      ? "точность на истории ~38.7% (×1.93 к случайности), средний ход +2.33%, просадка −1.87%"
-      : "точность на истории ~33.4% (×1.66 к случайности), средний ход +2.15%, просадка −1.94%";
-    const text =
-      `⚡ <b>${tier}</b> · <b>${symbol}</b> · USDT-M\n` +
+  if (cfg.tg.on && meta.rank >= (cfg.tg.minRank || 1)) {
+    const shelfLen = meta.tf === 1 ? `${p.W} мин` : `${p.W} × 15м (${(p.W * 15 / 60).toFixed(1)} ч)`;
+    tgSend(
+      `⚡ <b>${meta.label}</b> · <b>${symbol}</b> · USDT-M\n` +
       `Пробой вверх: +${hit.brkPct.toFixed(2)}% над уровнем ${fmtPrice(hit.level)}\n` +
-      `Полка: ${params.W} мин, диапазон ${hit.rangePct.toFixed(2)}%\n` +
+      `Полка: ${shelfLen}, диапазон ${hit.rangePct.toFixed(2)}%\n` +
       `Объём: ×${hit.volX.toFixed(1)} к средней по полке\n` +
       `Цена: ${fmtPrice(hit.price)} · оборот 24ч: $${fmtMoney(entry.vol24)}\n` +
-      `Score: ${entry.score}/100\n` +
-      (tier === "FAST" && cfg.fast.confirm2 ? `Подтверждено вторым баром\n` : ``) +
-      `<i>${stats}. Не финсовет.</i>`;
-    tgSend(text);   // счётчики и текст ошибки обновит сам tgSend
+      `Score: ${entry.score}/100` +
+      (meta.confirm2 ? `\nПодтверждено вторым баром` : ``) +
+      `\n<i>На истории: ${meta.stats}. Не финсовет.</i>`
+    );
   }
 }
 
@@ -651,70 +687,74 @@ function fire(symbol, tier, hit, params) {
 function renderSignals() {
   setStat("st-signals", String(signals.length), "ok");
   const body = document.getElementById("signals-body");
-  if (!signals.length) {
-    body.innerHTML = `<tr><td colspan="9" class="empty">Сигналов пока нет.</td></tr>`;
-    return;
-  }
+  if (!signals.length) { body.innerHTML = `<tr><td colspan="9" class="empty">Сигналов пока нет.</td></tr>`; return; }
   body.innerHTML = signals.map(s => `
-    <tr class="tier-${s.tier}">
+    <tr class="rank-${s.rank}">
       <td class="dim">${fmtTime(s.time)}</td>
       <td><a class="sym" href="https://www.binance.com/ru/futures/${s.symbol}" target="_blank" rel="noopener">${s.symbol}</a></td>
-      <td><span class="tag ${s.tier}">${s.tier}</span></td>
+      <td><span class="tag ${s.tier}">${s.label}</span></td>
       <td>${fmtPrice(s.price)}</td>
       <td class="pos">+${s.brkPct.toFixed(2)}%</td>
       <td class="dim">${s.rangePct.toFixed(2)}%</td>
       <td class="${s.volX >= 5 ? "hot" : ""}">×${s.volX.toFixed(1)}</td>
       <td class="dim">$${fmtMoney(s.vol24)}</td>
       <td class="${s.score >= 80 ? "hot" : ""}">${s.score}</td>
-    </tr>
-  `).join("");
+    </tr>`).join("");
 }
+// показываем пары в сжатии по самым строгим тирам каждого таймфрейма
 function renderShelf() {
   const el = document.getElementById("shelf-list");
   const out = [];
+  const watch = [
+    { id: "CONF1M", tf: 1 },
+    { id: "STRONG15M", tf: 15 },
+  ].filter(w => cfg.tiers[w.id].on);
   for (const item of universe) {
     const buf = bars[item.symbol];
-    if (!buf || buf.length < cfg.conf.W + 2) continue;
-    const to = buf.length - 1, from = to - cfg.conf.W + 1;
-    if (from < 0) continue;
-    const st = windowStats(buf, from, to);
-    if (!isFinite(st.rangePct) || st.rangePct > cfg.conf.range) continue;
-    const price = buf[to].c;
-    const toLevel = (st.hi - price) / price * 100;
-    out.push({ symbol: item.symbol, rangePct: st.rangePct, toLevel, level: st.hi });
+    if (!buf) continue;
+    let series15 = null;
+    for (const w of watch) {
+      const p = cfg.tiers[w.id];
+      const series = w.tf === 1 ? buf : (series15 || (series15 = build15m(buf)));
+      if (series.length < p.W + 1) continue;
+      const to = series.length - 1, from = to - p.W + 1;
+      if (from < 0) continue;
+      const st = windowStats(series, from, to);
+      if (!isFinite(st.rangePct) || st.rangePct > p.range) continue;
+      const price = series[to].c;
+      out.push({ symbol: item.symbol, tf: w.tf, rangePct: st.rangePct, toLevel: (st.hi - price) / price * 100 });
+    }
   }
   out.sort((a, b) => a.toLevel - b.toLevel);
   setStat("st-shelf", String(out.length));
   if (!out.length) {
-    el.innerHTML = `<div class="empty">${running ? "Сейчас никто не стоит в сжатии по параметрам CONFIRMED." : "Пока пусто — запустите сканер."}</div>`;
+    el.innerHTML = `<div class="empty">${running ? "Сейчас никто не стоит в сжатии по строгим тирам." : "Пока пусто — запустите сканер."}</div>`;
     return;
   }
   el.innerHTML = out.slice(0, 30).map(x => `
-    <span class="shelf-chip">
+    <span class="chip${x.tf === 15 ? " tf15" : ""}">
       <span class="s">${x.symbol}</span>
+      <span class="tf">${x.tf}м</span>
       <span class="dim">${x.rangePct.toFixed(2)}%</span>
-      <span class="d">до пробоя ${x.toLevel >= 0 ? "+" + x.toLevel.toFixed(2) : x.toLevel.toFixed(2)}%</span>
-    </span>
-  `).join("");
+      <span class="d">до пробоя ${x.toLevel >= 0 ? "+" : ""}${x.toLevel.toFixed(2)}%</span>
+    </span>`).join("");
 }
 
-// ---------- запуск / остановка ----------
+// ---------- запуск ----------
 async function start() {
   if (running) return;
   running = true;
   setToggle("btn-run", true, "⏸ ОСТАНОВИТЬ", "▶ ЗАПУСТИТЬ");
-  document.getElementById("btn-run").classList.remove("off");
   updateFeedStatus();
-  try {
-    universe = await loadUniverse();
-  } catch (e) {
+  try { universe = await loadUniverse(); }
+  catch (e) {
     setStat("st-feed", "ошибка загрузки списка пар", "err");
     running = false;
     setToggle("btn-run", false, "⏸ ОСТАНОВИТЬ", "▶ ЗАПУСТИТЬ");
     return;
   }
   setStat("st-universe", String(universe.length), "ok");
-  openSockets(universe);            // сокеты поднимаем сразу, историю догружаем параллельно
+  openSockets(universe);
   await seedAll(universe);
   renderShelf();
 }
@@ -722,7 +762,6 @@ function stop() {
   running = false;
   closeSockets();
   setToggle("btn-run", false, "⏸ ОСТАНОВИТЬ", "▶ ЗАПУСТИТЬ");
-  document.getElementById("btn-run").classList.add("off");
   setStat("st-feed", "остановлен", "dim");
 }
 async function restart() {
@@ -740,11 +779,6 @@ document.getElementById("btn-settings").addEventListener("click", () => {
   p.style.display = p.style.display === "none" ? "block" : "none";
 });
 document.getElementById("btn-apply").addEventListener("click", () => { cfgFromForm(); restart(); });
-document.getElementById("btn-confirm2").addEventListener("click", () => {
-  cfg.fast.confirm2 = !cfg.fast.confirm2;
-  setToggle("btn-confirm2", cfg.fast.confirm2, "✓ ПОДТВЕРЖДЕНИЕ 2 БАРА: ВКЛ", "✓ ПОДТВЕРЖДЕНИЕ 2 БАРА: ВЫКЛ");
-  saveCfg();
-});
 document.getElementById("btn-sound").addEventListener("click", () => {
   cfg.sound = !cfg.sound;
   setToggle("btn-sound", cfg.sound, "🔊 ЗВУК: ВКЛ", "🔇 ЗВУК: ВЫКЛ");
@@ -753,18 +787,18 @@ document.getElementById("btn-sound").addEventListener("click", () => {
 });
 document.getElementById("btn-notif").addEventListener("click", () => {
   if (typeof Notification === "undefined") return;
-  Notification.requestPermission().then(p => {
-    if (p === "granted") notify("VolScan 1m", "Уведомления включены");
-  });
+  Notification.requestPermission().then(p => { if (p === "granted") notify("VolScan", "Уведомления включены"); });
 });
 document.getElementById("btn-tg").addEventListener("click", () => {
   cfgFromForm();
   cfg.tg.on = !cfg.tg.on;
   setToggle("btn-tg", cfg.tg.on, "TELEGRAM: ВКЛ", "TELEGRAM: ВЫКЛ");
-  saveCfg();
-  updateTgStatus();
+  saveCfg(); updateTgStatus();
 });
-// сохраняем токен/chat id прямо по мере ввода, чтобы их не терять при перезагрузке
+document.getElementById("btn-tg-min").addEventListener("click", () => {
+  cfg.tg.minRank = (cfg.tg.minRank || 1) % 4 + 1;
+  updateTgMinBtn(); saveCfg();
+});
 ["f-tgtoken", "f-tgchat"].forEach(id => {
   document.getElementById(id).addEventListener("input", () => {
     cfg.tg.token = document.getElementById("f-tgtoken").value.trim();
@@ -772,19 +806,14 @@ document.getElementById("btn-tg").addEventListener("click", () => {
     saveCfg();
   });
 });
-document.getElementById("btn-tg-tier").addEventListener("click", () => {
-  cfg.tg.onlyConfirmed = !cfg.tg.onlyConfirmed;
-  document.getElementById("btn-tg-tier").textContent = cfg.tg.onlyConfirmed ? "СЛАТЬ: ТОЛЬКО CONFIRMED" : "СЛАТЬ: ВСЁ";
-  saveCfg();
-});
 document.getElementById("btn-tg-test").addEventListener("click", async () => {
   cfgFromForm();
   const box = document.getElementById("tg-status");
   box.textContent = "шаг 1/2: проверяю токен…";
-  const me = await tgCall("getMe");            // сперва токен — иначе непонятно, что именно не так
+  const me = await tgCall("getMe");
   if (!me.ok) { box.textContent = "❌ токен не принят: " + me.error; return; }
-  box.textContent = `шаг 2/2: токен ок (@${me.result.username}), отправляю сообщение…`;
-  const r = await tgSend("⚡ VolScan 1m: тестовое сообщение. Если видите это — Telegram настроен верно.");
+  box.textContent = `шаг 2/2: токен ок (@${me.result.username}), отправляю…`;
+  const r = await tgSend("⚡ VolScan: тестовое сообщение. Если видите это — Telegram настроен верно.");
   box.textContent = r.ok
     ? `✅ доставлено. Бот @${me.result.username}, chat id ${tgCreds().chat}`
     : `❌ токен ок (@${me.result.username}), но сообщение не ушло: ${r.error}`;
@@ -792,7 +821,7 @@ document.getElementById("btn-tg-test").addEventListener("click", async () => {
 document.getElementById("btn-tg-chatid").addEventListener("click", async () => {
   cfgFromForm();
   const box = document.getElementById("tg-status");
-  box.textContent = "ищу ваш chat id в последних сообщениях бота…";
+  box.textContent = "ищу chat id в последних сообщениях бота…";
   const r = await tgCall("getUpdates", { limit: "20" });
   if (!r.ok) { box.textContent = "❌ " + r.error; return; }
   const chats = [];
@@ -803,17 +832,16 @@ document.getElementById("btn-tg-chatid").addEventListener("click", async () => {
     }
   }
   if (!chats.length) {
-    box.textContent = "❌ бот не видит ни одного сообщения. Напишите ему что-нибудь в Telegram и нажмите ещё раз. "
-      + "(Если бот уже подключён к другому приложению через webhook, getUpdates будет пустым.)";
+    box.textContent = "❌ бот не видит ни одного сообщения. Напишите ему в Telegram и нажмите ещё раз.";
     return;
   }
   document.getElementById("f-tgchat").value = String(chats[0].id);
   cfgFromForm();
   box.textContent = `✅ подставил chat id ${chats[0].id} (${chats[0].name})`
-    + (chats.length > 1 ? ` · найдены ещё: ${chats.slice(1).map(c => c.id + " (" + c.name + ")").join(", ")}` : "");
+    + (chats.length > 1 ? ` · есть ещё: ${chats.slice(1).map(c => c.id).join(", ")}` : "");
 });
 document.getElementById("btn-clear").addEventListener("click", () => {
-  signals = []; lastSignalAt = {};
+  signals = []; lastSignalAt = {}; lastAnyAt = {};
   renderSignals();
 });
 document.getElementById("btn-csv").addEventListener("click", () => {
@@ -821,28 +849,23 @@ document.getElementById("btn-csv").addEventListener("click", () => {
   const head = ["time_iso","symbol","tier","price","breakout_pct","shelf_range_pct","vol_x","level","vol24_usd","score"];
   const lines = [head.join(",")];
   for (const s of signals) {
-    lines.push([
-      new Date(s.time).toISOString(), s.symbol, s.tier, s.price,
-      s.brkPct.toFixed(4), s.rangePct.toFixed(4), s.volX.toFixed(3),
-      s.level, Math.round(s.vol24), s.score,
-    ].join(","));
+    lines.push([new Date(s.time).toISOString(), s.symbol, s.tier, s.price,
+      s.brkPct.toFixed(4), s.rangePct.toFixed(4), s.volX.toFixed(3), s.level,
+      Math.round(s.vol24), s.score].join(","));
   }
   const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = "volscan_1m_" + new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-") + ".csv";
+  a.download = "volscan_" + new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-") + ".csv";
   document.body.appendChild(a); a.click();
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
 });
-
-// мобильный фон: сокеты всё равно умрут, поэтому закрываем сами и поднимаем при возврате
 document.addEventListener("visibilitychange", () => {
   if (!running) return;
-  if (document.visibilityState === "hidden") {
-    closeSockets();
-  } else {
+  if (document.visibilityState === "hidden") closeSockets();
+  else {
     openSockets(universe);
-    for (const item of universe) reseedQueue.add(item.symbol);  // история за время в фоне протухла
+    for (const item of universe) reseedQueue.add(item.symbol);
   }
 });
 
@@ -852,14 +875,16 @@ cfgToForm();
 renderSignals();
 renderShelf();
 setStat("st-feed", "остановлен", "dim");
-shelfTimer = setInterval(() => { if (running) renderShelf(); }, 15000);
+setInterval(() => { if (running) renderShelf(); }, 15000);
 setInterval(reseedTick, 1500);
-clockTimer = setInterval(() => {
+setInterval(() => {
   const d = new Date();
-  document.getElementById("st-clock").textContent = d.toLocaleTimeString() +
-    " · до закрытия свечи " + (59 - d.getSeconds()) + "с";
+  const sec = d.getSeconds();
+  const min15 = 14 - (d.getMinutes() % 15);
+  document.getElementById("st-clock").textContent =
+    `${d.toLocaleTimeString()} · 1м: ${59 - sec}с · 15м: ${min15}м ${59 - sec}с`;
 }, 1000);
-universeTimer = setInterval(async () => {
+setInterval(async () => {
   if (!running || seeding) return;
   try {
     const next = await loadUniverse();
