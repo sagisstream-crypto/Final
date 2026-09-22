@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#080b08">
+<title>ShelfScan (Python) · тихая полка → вынос</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#080b08;color:#c6d4c6;font-family:'SF Mono',Consolas,Menlo,monospace;font-size:12px;
+       display:flex;flex-direction:column;min-height:100vh;-webkit-text-size-adjust:100%}
+  input,select,button{font-family:inherit;font-size:16px}
+  .hdr{border-bottom:1px solid #1c2a1c;background:#0c110c;padding:10px 12px;position:sticky;top:0;z-index:30}
+  .hdr-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+  .brand{font-size:13px;letter-spacing:.18em;color:#5eff8f;font-weight:600}
+  .brand small{display:block;font-size:9px;letter-spacing:.03em;color:#54664f;margin-top:2px;font-weight:400}
+  .stats{display:flex;gap:12px;flex-wrap:wrap;font-size:10px;align-items:center}
+  .stats b{color:#c6d4c6;font-weight:600}
+  .stats span{color:#54664f}
+  .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#3a4a3a;margin-right:4px;vertical-align:middle}
+  .dot.on{background:#5eff8f;box-shadow:0 0 6px #5eff8f}
+  .dot.warn{background:#ffb454}
+  .tabs{display:flex;border-bottom:1px solid #1c2a1c;background:#0c110c;position:sticky;top:0;z-index:20}
+  .tabs button{flex:1;background:transparent;border:none;border-bottom:2px solid transparent;color:#54664f;
+       font-size:11px;letter-spacing:.06em;padding:11px 4px;cursor:pointer}
+  .tabs button.on{color:#5eff8f;border-bottom-color:#5eff8f;background:#101810}
+  .tabs .badge{display:inline-block;min-width:16px;padding:0 4px;margin-left:4px;border-radius:8px;
+       background:#2a1e10;color:#ffb454;font-size:9px;line-height:14px}
+  main{flex:1;overflow-x:hidden;padding-bottom:16px}
+  .pane{display:none;padding:10px 8px}
+  .pane.on{display:block}
+  table{width:100%;border-collapse:collapse;font-size:11px}
+  th{position:sticky;top:0;background:#0c110c;color:#54664f;font-weight:400;font-size:9px;letter-spacing:.06em;
+     text-align:right;padding:6px 5px;border-bottom:1px solid #1c2a1c;white-space:nowrap;z-index:5}
+  th:first-child,td:first-child{text-align:left}
+  td{padding:7px 5px;border-bottom:1px solid #131a13;text-align:right;white-space:nowrap}
+  tr.armed td{background:#0e1509}
+  tr.fired td{background:#141a07}
+  .sym{color:#c6d4c6;font-weight:600}
+  .sub{display:block;color:#465646;font-size:9px;margin-top:2px}
+  .up{color:#5eff8f}.dn{color:#ff6b6b}.mut{color:#54664f}.warn{color:#ffb454}.hot{color:#ffd85e}
+  .scorecell{font-weight:600}
+  .s0{color:#3f4f3f}.s1{color:#7f8f6f}.s2{color:#c6d4c6}.s3{color:#ffd85e}.s4{color:#ffb454}.s5{color:#ff8f5e}
+  .pill{display:inline-block;padding:1px 5px;border-radius:2px;font-size:9px;border:1px solid #23331f;color:#7f8f6f}
+  .pill.q{border-color:#2a3a4a;color:#7ab8ff}
+  .pill.a{border-color:#4a3a1e;color:#ffd85e}
+  .pill.f{border-color:#4a4a1e;color:#ffb454}
+  .card{border:1px solid #1c2a1c;border-radius:3px;padding:10px;margin-bottom:8px;background:#0c110c}
+  .card h3{font-size:11px;letter-spacing:.08em;color:#5eff8f;margin-bottom:8px;font-weight:600}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 0;flex-wrap:wrap}
+  .row label{color:#8fa08f;font-size:11px;flex:1;min-width:150px}
+  .row .hint{display:block;color:#465646;font-size:9px;margin-top:2px;font-weight:400;white-space:normal}
+  input[type=text],input[type=number],input[type=password]{
+     background:#080b08;border:1px solid #23331f;color:#c6d4c6;border-radius:2px;padding:7px 8px;width:130px;outline:none}
+  input.wide{width:100%}
+  .btn{background:#16250f;border:1px solid #2f4a2f;color:#5eff8f;border-radius:2px;padding:8px 12px;font-size:11px;cursor:pointer}
+  .btn:active{background:#20351a}
+  .btn.sec{background:#101a22;border-color:#25394a;color:#7ab8ff}
+  .btn.red{background:#1e1010;border-color:#4a1e1e;color:#ff6b6b}
+  .btnrow{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+  .log{font-size:10px;color:#54664f;max-height:160px;overflow-y:auto;line-height:1.5;margin-top:6px;
+       border-top:1px solid #131a13;padding-top:6px}
+  .sig{border:1px solid #23331f;border-left:3px solid #ffb454;border-radius:2px;padding:9px;margin-bottom:7px;background:#0c110c}
+  .sig .top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  .sig .name{font-size:13px;color:#ffd85e;font-weight:600}
+  .sig .meta{font-size:9px;color:#465646;margin-top:5px;line-height:1.6;white-space:normal}
+  .sig .why{font-size:10px;color:#8fa08f;margin-top:5px;white-space:normal;line-height:1.5}
+  .empty{color:#3f4f3f;text-align:center;padding:36px 12px;font-size:11px;line-height:1.7}
+  .doc{font-size:11px;line-height:1.75;color:#8fa08f;white-space:normal}
+  .doc code{background:#111a11;padding:1px 4px;border-radius:2px;color:#ffd85e;font-size:10px}
+  .doc ul{margin:4px 0 4px 16px}
+  .doc li{margin-bottom:3px}
+  .bar{height:3px;background:#131a13;border-radius:2px;overflow:hidden;margin-top:3px}
+  .bar i{display:block;height:100%;background:#5eff8f}
+  .progress{padding:24px 14px;text-align:center;color:#54664f;font-size:11px;line-height:1.9}
+  .progress .big{font-size:22px;color:#5eff8f;display:block;margin-bottom:6px}
+  .banner{background:#1e1810;border:1px solid #4a3a1e;color:#ffd85e;padding:8px 10px;border-radius:2px;
+          font-size:10px;margin-bottom:8px;display:none}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-row">
+    <div class="brand">SHELFSCAN · PYTHON<small>тихая полка → вынос · настоящие 1м свечи в диагностике</small></div>
+    <div class="stats" id="stats"></div>
+  </div>
+</div>
+
+<div class="tabs">
+  <button data-tab="radar" class="on">РАДАР</button>
+  <button data-tab="signals">СИГНАЛЫ<span class="badge" id="sigbadge" style="display:none">0</span></button>
+  <button data-tab="cfg">НАСТРОЙКИ</button>
+  <button data-tab="doc">МОДЕЛЬ</button>
+</div>
+
+<main>
+  <div class="pane on" id="pane-radar">
+    <div id="boot" class="progress"><span class="big">…</span>подключаюсь к Python-бэкенду</div>
+    <table id="radar" style="display:none">
+      <thead><tr>
+        <th>пара</th><th>score</th><th>цена</th><th>полка</th><th>RVOL</th><th>готов</th><th>пробой</th><th>24ч $</th><th>статус</th>
+      </tr></thead>
+      <tbody id="radar-body"></tbody>
+    </table>
+  </div>
+
+  <div class="pane" id="pane-signals">
+    <div class="btnrow" style="margin-bottom:10px">
+      <button class="btn sec" id="btn-test-tg">тест Telegram</button>
+      <button class="btn red" id="btn-clear-sig">очистить</button>
+    </div>
+    <div id="siglist"><div class="empty">Сигналов пока нет.<br>Сканер ждёт, пока на тихой полке взорвётся объём.</div></div>
+  </div>
+
+  <div class="pane" id="pane-cfg"></div>
+  <div class="pane" id="pane-doc"></div>
+</main>
+
+<script>
+"use strict";
+const BASE = {p5:0.1423, p10:0.0635, p20:0.0191, p40:0.0028};
+const CALIB = [
+  {t:0.00, day:51.6, p10:0.0635, p20:0.0191, p40:0.0028},
+  {t:0.05, day:21.8, p10:0.1477, p20:0.0453, p40:0.0067},
+  {t:0.10, day:13.3, p10:0.2075, p20:0.0655, p40:0.0109},
+  {t:0.15, day: 8.0, p10:0.2617, p20:0.0892, p40:0.0183},
+  {t:0.20, day: 5.4, p10:0.2866, p20:0.1075, p40:0.0239},
+  {t:0.25, day: 3.5, p10:0.3180, p20:0.1290, p40:0.0369},
+  {t:0.30, day: 2.4, p10:0.3510, p20:0.1589, p40:0.0530},
+  {t:0.40, day: 1.2, p10:0.4521, p20:0.1918, p40:0.0685},
+  {t:0.50, day: 0.6, p10:0.5278, p20:0.1944, p40:0.0278}
+];
+
+function fmtUsd(v){
+  if(v==null||!isFinite(v)) return "—";
+  if(v>=1e9) return (v/1e9).toFixed(2)+"B";
+  if(v>=1e6) return (v/1e6).toFixed(1)+"M";
+  if(v>=1e3) return (v/1e3).toFixed(0)+"K";
+  return v.toFixed(0);
+}
+function fmtPx(v){
+  if(v==null||!isFinite(v)) return "—";
+  if(v>=1000) return v.toFixed(1);
+  if(v>=1) return v.toFixed(3);
+  if(v>=0.01) return v.toFixed(5);
+  return v.toPrecision(4);
+}
+function pct(v,d){ return (v>=0?"+":"")+(v*100).toFixed(d===undefined?1:d)+"%"; }
+function hhmm(ts){ const d=new Date(ts); return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); }
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function scoreClass(s){
+  if(s>=0.30) return "s5"; if(s>=0.20) return "s4"; if(s>=0.10) return "s3";
+  if(s>=0.05) return "s2"; if(s>0) return "s1"; return "s0";
+}
+
+let CFG = {};
+let booted = false;
+
+async function api(path, opts){
+  const r = await fetch(path, opts);
+  return r.json();
+}
+
+function stateCell(st){
+  if(st.state==="fired") return '<span class="pill f">ВЫНОС</span>';
+  if(st.state==="gate")  return '<span class="pill a">пробой</span>';
+  if(st.state==="armed") return '<span class="pill q">полка</span>';
+  if(st.state==="quiet") return '<span class="pill">тихо</span>';
+  return '<span class="mut">—</span>';
+}
+
+function renderRadar(rows){
+  const body = document.getElementById("radar-body");
+  if(!rows.length){ body.innerHTML = `<tr><td colspan="9" class="empty">жду данные…</td></tr>`; return; }
+  body.innerHTML = rows.map(st=>{
+    return `<tr class="${st.state}">
+      <td><span class="sym">${st.sym.replace("USDT","")}</span>
+          <span class="sub">${st.age>=12? st.age+" баров тихо" : "&nbsp;"}</span></td>
+      <td class="scorecell ${scoreClass(st.score)}">${st.score>0?(st.score*100).toFixed(0):"·"}</td>
+      <td>${fmtPx(st.price)}</td>
+      <td class="${st.sw<=0.06?"up":""}">${(st.sw*100).toFixed(1)}%</td>
+      <td class="${st.rvol>=10?"hot":""}">${(st.rvol!=null&&isFinite(st.rvol))?"×"+st.rvol.toFixed(st.rvol>=10?0:1):"—"}</td>
+      <td class="${st.ready>=0.5?"hot":(st.ready>0?"":"mut")}">${st.ready>0?Math.round(st.ready*100)+"%":"·"}
+        <div class="bar"><i style="width:${Math.round((st.ready||0)*100)}%"></i></div></td>
+      <td class="${st.brk>=0?"up":"mut"}">${pct(st.brk)}</td>
+      <td class="mut">${fmtUsd(st.qv24)}</td>
+      <td>${stateCell(st)}</td>
+    </tr>`;
+  }).join("");
+}
+
+function renderStats(stats){
+  const alive = stats.last_bar_age_s!==null && stats.last_bar_age_s<90;
+  document.getElementById("stats").innerHTML =
+    `<div><span class="dot ${stats.ready?"on":"warn"}"></span><b>${stats.pairs}</b> <span>пар</span></div>`+
+    `<div><b>${stats.armed}</b> <span>на полке</span></div>`+
+    `<div><b>${stats.signals}</b> <span>сигналов</span></div>`+
+    (stats.best_sym
+      ? `<div><span>ближе всех</span> <b class="${stats.best_ready>=50?"hot":""}">${stats.best_sym.replace("USDT","")} ${stats.best_ready}%</b></div>`
+      : `<div><span>ближе всех</span> <b class="mut">никто</b></div>`)+
+    `<div><span class="dot ${alive?"on":"warn"}"></span><span>свеча</span> <b>${stats.last_bar_age_s===null?"—":stats.last_bar_age_s+"с назад"}</b></div>`+
+    `<div><span>15м</span> <b>${stats.ws15}</b> <span>1м</span> <b>${stats.ws1m}</b></div>`;
+}
+
+function renderSignals(signals){
+  const el = document.getElementById("siglist");
+  const badge = document.getElementById("sigbadge");
+  if(signals.length){ badge.style.display=""; badge.textContent=signals.length; } else badge.style.display="none";
+  if(!signals.length){
+    el.innerHTML = `<div class="empty">Сигналов пока нет.<br>Сканер ждёт, пока на тихой полке взорвётся объём.</div>`;
+    return;
+  }
+  el.innerHTML = signals.map(s=>{
+    const stop = Math.max(s.shelf_lo*0.997, s.price*0.91);
+    const burst = s.burst ? `<div class="meta">набор объёма: ${s.burst.shape} (1-я мин ${(s.burst.frac1*100).toFixed(0)}%,
+        первые 3 мин ${(s.burst.frac3*100).toFixed(0)}% от объёма бара; для информации, в score не входит)</div>` : "";
+    return `<div class="sig">
+      <div class="top">
+        <span class="name">${s.sym}</span>
+        <span class="scorecell ${scoreClass(s.score)}">score ${(s.score*100).toFixed(0)}</span>
+      </div>
+      <div class="meta">${hhmm(s.ts)}${s.intrabar?" · внутри бара":""} · вход ${fmtPx(s.price)} ·
+        оборот ${fmtUsd(s.qv24)}$ · полка ${(s.sw*100).toFixed(1)}% ·
+        потолок ${fmtPx(s.shelf_hi)} · инвалидация ${fmtPx(stop)}</div>
+      <div class="why">${escapeHtml(s.why.join(" · "))}</div>
+      ${burst}
+      <div class="meta">исторически при таком score: +10% за 2ч — <b class="hot">${(s.p.p10*100).toFixed(1)}%</b>
+        (×${(s.p.p10/BASE.p10).toFixed(1)} к базе) · +20% — ${(s.p.p20*100).toFixed(1)}% ·
+        +40% — ${(s.p.p40*100).toFixed(2)}%</div>
+    </div>`;
+  }).join("");
+}
+
+function renderLog(lines){
+  const el = document.getElementById("cfg-log");
+  if(!el) return;
+  el.innerHTML = lines.map(l=>`<div class="${l.level}">${hhmm(l.t)} ${escapeHtml(l.msg)}</div>`).join("");
+}
+
+const FIELDS = [
+  ["maxPairs","пар в вотчлисте, макс","number","600 покрывает полосу оборота целиком. Изменение требует перезапуска python app.py."],
+  ["minQv24","оборот за 24ч, от ($)","number","Полоса, на которой обучалась модель: 1–300 млн. Изменение требует перезапуска."],
+  ["maxQv24","оборот за 24ч, до ($)","number",""],
+  ["minScore","минимальный score (0–1)","number","0.05 ≈ 46 сигналов/сутки. 0.10 ≈ 13/сутки, P(+10%)=20.8%, ловит все ранние внутрибарные детекты. 0.30 ≈ 1/сутки, но теряет раннее предупреждение."],
+  ["maxWidth","ширина полки, макс","number","Доля: 0.15 = 15% между потолком и дном за 12 часов."],
+  ["maxSatr","ATR полки, макс","number","0.018 = средний размах бара на полке не больше 1.8%."],
+  ["minRvol","объём бара / медиана полки","number","Минимум 40 — так обучена модель."],
+  ["minRexp","размах бара / ATR полки","number",""],
+  ["minBrk","пробой от (доля)","number","-0.04 = ловим ещё на подходе к потолку."],
+  ["maxChase","пробой до (доля)","number","0.25 — выше уже погоня, качество почти не растёт, но и не падает."],
+  ["cooldownMin","пауза по паре, мин","number",""],
+  ["muteHours","глушить часы UTC","text","По умолчанию пусто — проверено, что эффект часа на финальном шлюзе исчез."],
+];
+
+function renderCfg(){
+  const el = document.getElementById("pane-cfg");
+  el.innerHTML = `
+  <div class="banner" id="restart-banner">Изменения оборота/потолка пар вступят в силу после перезапуска <code>python app.py</code>.</div>
+  <div class="card"><h3>TELEGRAM</h3>
+    <div class="row"><label>бот-токен<span class="hint">создайте бота у @BotFather и вставьте токен</span></label></div>
+    <input class="wide" type="password" id="f-tgToken" value="${escapeHtml(CFG.tgToken||"")}" placeholder="123456:AA...">
+    <div class="row" style="margin-top:8px"><label>chat id<span class="hint">свой id узнать у @userinfobot; для канала — с минусом</span></label></div>
+    <input class="wide" type="text" id="f-tgChat" value="${escapeHtml(CFG.tgChat||"")}" placeholder="123456789">
+    <div class="row"><label>отправлять сигналы в Telegram</label>
+      <input type="checkbox" id="f-tgOn" ${CFG.tgOn?"checked":""} style="width:auto;transform:scale(1.4)"></div>
+    <div class="btnrow"><button class="btn sec" id="btn-tg2">отправить тестовое</button></div>
+  </div>
+
+  <div class="card"><h3>ФИЛЬТРЫ</h3>
+    ${FIELDS.map(([k,l,t,h])=>`
+      <div class="row">
+        <label>${l}${h?`<span class="hint">${h}</span>`:""}</label>
+        <input type="${t}" id="f-${k}" value="${escapeHtml(String(CFG[k]))}" step="any">
+      </div>`).join("")}
+    <div class="row"><label>оценивать незакрытый 15м бар<span class="hint">форминг-бар обновляется Binance ежесекундно; ловит вынос за минуты до закрытия свечи</span></label>
+      <input type="checkbox" id="f-intrabar" ${CFG.intrabar?"checked":""} style="width:auto;transform:scale(1.4)"></div>
+    <div class="btnrow">
+      <button class="btn" id="btn-save">сохранить</button>
+      <button class="btn sec" id="btn-reset">вернуть исследованные</button>
+    </div>
+  </div>
+
+  <div class="card"><h3>ДИАГНОСТИКА</h3><div class="doc" id="cfg-diag"></div></div>
+  <div class="card"><h3>ЖУРНАЛ</h3><div class="log" id="cfg-log"></div></div>`;
+
+  document.getElementById("btn-save").onclick = saveCfg;
+  document.getElementById("btn-reset").onclick = resetCfg;
+  document.getElementById("btn-tg2").onclick = testTg;
+}
+
+function renderDiag(diag){
+  const el = document.getElementById("cfg-diag");
+  if(!el) return;
+  el.innerHTML = `
+    <b>Живость</b><br>
+    работает ${diag.uptime_min} мин · закрытых 15м свечей получено <b>${diag.bars}</b> ·
+    оценок сделано ${diag.evals.toLocaleString("ru")}<br>
+    Свечи приходят пачкой раз в 15 минут — задержка до 15 минут нормальна.<br><br>
+    <b>Насколько рынок близок к сигналу</b><br>
+    максимальный RVOL за сессию: <b>×${diag.max_rvol}</b> ${diag.max_rvol_sym?"("+diag.max_rvol_sym.replace("USDT","")+")":""}
+    при пороге ×${CFG.minRvol}<br>
+    доходило до половины порога: ${diag.near_miss} раз<br><br>
+    <b>Сколько ждать при пороге score ${CFG.minScore}</b><br>
+    ожидаемо <b>${diag.expected_per_day} сигналов в сутки</b>, в среднем раз в ${diag.expected_gap_h} ч.<br>
+    Вероятность полной тишины: ${diag.p_quiet_2h}% за 2ч · ${diag.p_quiet_4h}% за 4ч ·
+    ${diag.p_quiet_8h}% за 8ч · ${diag.p_quiet_12h}% за 12ч.<br>
+    <span class="mut">Тишина в 2-4 часа — обычное дело. Если молчит дольше 12ч при живом потоке — проверьте настройки.</span>`;
+}
+
+async function saveCfg(){
+  const body = {};
+  for(const [k,,t] of FIELDS){
+    const el = document.getElementById("f-"+k);
+    if(!el) continue;
+    body[k] = t==="number" ? parseFloat(el.value) : el.value;
+  }
+  body.tgToken = document.getElementById("f-tgToken").value.trim();
+  body.tgChat  = document.getElementById("f-tgChat").value.trim();
+  body.tgOn    = document.getElementById("f-tgOn").checked;
+  body.intrabar= document.getElementById("f-intrabar").checked;
+  const res = await api("/api/config", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)});
+  Object.assign(CFG, body);
+  if(res.needs_restart){
+    document.getElementById("restart-banner").style.display="block";
+  }
+  poll();
+}
+async function resetCfg(){
+  const DEFAULTS = {maxPairs:600,minQv24:1e6,maxQv24:3e8,minScore:0.10,maxWidth:0.15,maxSatr:0.018,
+    minRvol:40,minRexp:1.5,minBrk:-0.04,maxDrift:0.25,maxChase:0.25,intrabar:true,cooldownMin:90,muteHours:""};
+  const res = await api("/api/config", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(DEFAULTS)});
+  Object.assign(CFG, DEFAULTS);
+  renderCfg();
+  if(res.needs_restart) document.getElementById("restart-banner").style.display="block";
+}
+async function testTg(){
+  const body = {tgToken: document.getElementById("f-tgToken").value.trim(),
+                tgChat: document.getElementById("f-tgChat").value.trim()};
+  const res = await api("/api/test_telegram", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)});
+  alert(res.ok ? "Отправлено! Проверьте Telegram." : "Ошибка: "+(res.error||"неизвестно"));
+}
+
+function renderDoc(){
+  document.getElementById("pane-doc").innerHTML = `
+  <div class="card"><h3>PYTHON-ВЕРСИЯ: ЧЕМ ОТЛИЧАЕТСЯ ОТ HTML</h3><div class="doc">
+    Модель и пороги идентичны shelf-scanner.html — тот же <code>model4.json</code>,
+    счёт сверен с оригиналом исследования до 3.4×10⁻⁵.<br><br>
+    Отличия:
+    <ul>
+      <li>Работает как отдельный процесс, не зависит от открытой вкладки браузера —
+          можно закрыть окно, свернуть, поставить на автозапуск как фоновую службу.</li>
+      <li>Подписывается на НАСТОЯЩИЙ поток закрытых минутных свечей (<code>kline_1m</code>),
+          не только на форминг-снимки 15-минутного бара. Используется как диагностика
+          «как набирался объём внутри бара» в карточке сигнала и в Telegram.</li>
+      <li>Настройки и история сигналов лежат в файлах <code>pyscanner/data/*.json</code>,
+          не в IndexedDB браузера — переживают переустановку браузера.</li>
+    </ul>
+  </div></div>
+
+  <div class="card"><h3>ЧЕСТНО ПРО 1-МИНУТНУЮ СТРУКТУРУ ОБЪЁМА</h3><div class="doc">
+    Проверено на 1551 сигнале с реальными минутками: доля объёма первой минуты
+    бара, доля первых трёх минут, "рывок vs накопление" — если добавить эти
+    признаки в модель, AUC out-of-time падает с 0.849 до 0.815 (переобучение
+    на добавленных степенях свободы при небольшой выборке).<br><br>
+    Поэтому минутная структура показывается на карточке сигнала и в Telegram
+    как <b>информация для человека</b> ("объём набирался рывком" / "накоплением"),
+    но не участвует в расчёте score. Это тот же принцип, что и во всём проекте:
+    не добавлять непроверенное туда, где оно может выглядеть как улучшение,
+    а на деле быть шумом.
+  </div></div>
+
+  <div class="card"><h3>КАЛИБРОВКА · что значит score</h3><div class="doc">
+    <table style="width:100%;font-size:10px;margin:8px 0">
+      <tr><th style="text-align:left">score</th><th>сигн./сутки</th><th>+10%</th><th>+20%</th><th>+40%</th></tr>
+      ${CALIB.map(c=>`<tr><td style="text-align:left">≥ ${c.t.toFixed(2)}</td><td>${c.day}</td>
+        <td class="hot">${(c.p10*100).toFixed(1)}%</td><td>${(c.p20*100).toFixed(1)}%</td>
+        <td>${(c.p40*100).toFixed(2)}%</td></tr>`).join("")}
+    </table>
+    Полная методика, разбор границ применимости (1240 проверенных конфигураций
+    входа/выхода, ни одна не дала устойчивого плюса) и полный анализ —
+    в <code>RESEARCH.md</code> в корне репозитория.
+  </div></div>`;
+}
+
+function applyState(st){
+  if(!booted){
+    booted = true;
+    document.getElementById("boot").style.display = "none";
+    document.getElementById("radar").style.display = "";
+  }
+  CFG = st.cfg;
+  renderStats(st.stats);
+  renderRadar(st.radar);
+  renderSignals(st.signals);
+  renderLog(st.log);
+  const diagEl = document.getElementById("cfg-diag");
+  if(diagEl) renderDiag(st.diag);
+  const boot = document.getElementById("boot");
+  if(!st.stats.ready){
+    boot.style.display = "";
+    document.getElementById("radar").style.display = "none";
+    boot.innerHTML = `<span class="big">${st.stats.history_total? Math.round(100*st.stats.history_done/st.stats.history_total)+"%":"…"}</span>`+
+      `гружу историю · ${st.stats.history_done} / ${st.stats.history_total||"?"}`;
+    booted = false;
+  }
+}
+
+async function poll(){
+  try{
+    const st = await api("/api/state");
+    applyState(st);
+  }catch(e){
+    const boot = document.getElementById("boot");
+    if(boot){ boot.style.display=""; boot.innerHTML = `<span class="big" style="color:#ff6b6b">✕</span>Бэкенд недоступен.<br>Убедитесь, что запущен <code>python app.py</code>.`; }
+    document.getElementById("radar").style.display = "none";
+    booted = false;
+  }
+}
+
+document.querySelectorAll(".tabs button").forEach(b=>{
+  b.onclick = ()=>{
+    document.querySelectorAll(".tabs button").forEach(x=>x.classList.remove("on"));
+    document.querySelectorAll(".pane").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on");
+    document.getElementById("pane-"+b.dataset.tab).classList.add("on");
+    if(b.dataset.tab==="cfg") renderCfg();
+    if(b.dataset.tab==="doc") renderDoc();
+  };
+});
+document.getElementById("btn-clear-sig").onclick = async ()=>{ await api("/api/clear_signals",{method:"POST"}); poll(); };
+document.getElementById("btn-test-tg").onclick = async ()=>{
+  const res = await api("/api/test_telegram", {method:"POST", headers:{"Content-Type":"application/json"}, body:"{}"});
+  alert(res.ok ? "Отправлено! Проверьте Telegram." : "Ошибка: "+(res.error||"заполните токен в Настройках"));
+};
+
+poll();
+setInterval(poll, 2000);
+</script>
+</body>
+</html>

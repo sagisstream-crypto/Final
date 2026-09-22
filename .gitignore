@@ -1,0 +1,6 @@
+pyscanner/data/*.json
+pyscanner/data/*.log
+!pyscanner/data/.gitkeep
+pyscanner/__pycache__/
+__pycache__/
+*.pyc
