@@ -695,7 +695,13 @@ function tgText(s){
   ].join("\n");
 }
 async function sendTelegram(s){
-  if(!CFG.tgOn || !CFG.tgToken || !CFG.tgChat) return;
+  if(!CFG.tgOn || !CFG.tgToken || !CFG.tgChat){
+    // молча пропускать нельзя — иначе пользователь видит сигнал в списке,
+    // но не понимает, почему Telegram молчит (обычно причина: настройки не
+    // сохранены заново после переоткрытия файла — они привязаны к источнику)
+    log("сигнал не отправлен в Telegram: заполните и включите Telegram в «Настройках»", "warn");
+    return;
+  }
   try{
     const r = await fetch(`https://api.telegram.org/bot${CFG.tgToken}/sendMessage`,{
       method:"POST", headers:{"Content-Type":"application/json"},

@@ -417,6 +417,9 @@ def load_signals():
 # --------------------------------------------------------------------------- Telegram
 async def send_telegram(sig: dict):
     if not CFG.get("tgOn") or not CFG.get("tgToken") or not CFG.get("tgChat"):
+        # молча пропускать нельзя — сигнал уже виден в списке, но без этой
+        # строки в журнале непонятно, почему Telegram молчит
+        push_log("сигнал не отправлен в Telegram: заполните и включите Telegram в «Настройках»", "warn")
         return
     text = telegram_text(sig)
     try:
