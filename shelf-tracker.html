@@ -598,9 +598,12 @@ async function shelfGetJson(path){
   return r.json();
 }
 
-async function buildShelfWatchlist(){
+async function buildShelfWatchlist(silent){
   const statusEl = document.getElementById("status-line");
-  const say = (t)=>{ if(statusEl) statusEl.textContent = t; };
+  // при периодическом обновлении (silent=true) не перетираем строку статуса —
+  // там уже идёт нормальный "USDT-M:OK MSG:..." живого потока, дёргать его
+  // на 10-30с посреди работы только сбивало бы с толку
+  const say = (t)=>{ if(statusEl && !silent) statusEl.textContent = t; };
   try{
     say("строю список полки: беру пары…");
     const info = await shelfGetJson("/fapi/v1/exchangeInfo");
@@ -640,6 +643,20 @@ async function buildShelfWatchlist(){
     say("не удалось построить список полки: "+e.message);
     SHELF_SET = new Set();          // пусто, но не null — не блокируем страницу навсегда
   }
+}
+
+// сама полка живая: пара может стать "armed" уже после того, как эта страница
+// загрузилась (или наоборот — уйти в вынос и перестать быть "на полке"), а
+// SHELF_SET иначе остался бы замороженным снимком на момент открытия страницы.
+// Раз в 15 минут — ровно цикл закрытия 15м свечи, чаще нет смысла: геометрия
+// полки не меняется быстрее этого.
+const SHELF_REFRESH_MS = 15*60000;
+async function refreshShelfWatchlist(){
+  await buildShelfWatchlist(true);
+  Object.keys(rows).forEach(key => {
+    if (isExcluded(rows[key].symbol)) purgeKey(key);
+  });
+  render();
 }
 
 // !ticker@arr pushes 24hr ticker stats for changed symbols ~once/sec — no polling needed
@@ -2983,6 +3000,7 @@ const restored = false; // real restore is async below
   }
 
   MARKETS.forEach(m => startFeed(m));
+  setInterval(refreshShelfWatchlist, SHELF_REFRESH_MS);
 })();
 function pauseForBackground() {
   appHidden = true;
