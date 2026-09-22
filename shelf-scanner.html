@@ -80,6 +80,10 @@
   .doc table{font-size:10px;margin:8px 0}
   .doc td,.doc th{padding:4px 5px}
   .bar{height:3px;background:#131a13;border-radius:2px;overflow:hidden;margin-top:3px}
+  /* вспышка строки при любом изменении данных — как в VolScan, чтобы движение
+     было видно глазом, а не только по числу в углу */
+  tr.row-flash{animation:rowFlash 1.1s ease-out}
+  @keyframes rowFlash{0%{background:#1c2e14}100%{background:transparent}}
   .bar i{display:block;height:100%;background:#5eff8f}
   .progress{padding:24px 14px;text-align:center;color:#54664f;font-size:11px;line-height:1.9}
   .progress .big{font-size:22px;color:#5eff8f;display:block;margin-bottom:6px}
@@ -876,6 +880,7 @@ function stateCell(st){
   if(st.state==="quiet") return '<span class="pill">тихо</span>';
   return '<span class="mut">—</span>';
 }
+const rowFingerprint = {};   // sym -> строка последнего отрисованного состояния строки
 function renderRadar(){
   const rows = Object.values(S).filter(s=>s.feats && s.sym!=="BTCUSDT");
   const rank = {fired:4, gate:3, armed:2, quiet:1, "—":0};
@@ -892,17 +897,28 @@ function renderRadar(){
     const rvol = st.liveRvol!=null ? st.liveRvol : f.rvol;
     const brk = st.liveBrk!=null ? st.liveBrk : f.brk;
     const ready = st.liveReady!=null ? st.liveReady : st.ready;
-    return `<tr class="${st.state}">
+    const priceTxt = fmtPx(st.price||f.price);
+    const rvolTxt = Number.isFinite(rvol)?"×"+rvol.toFixed(rvol>=10?0:1):"—";
+    const readyTxt = ready>0?Math.round(ready*100)+"%":"·";
+    const brkTxt = pct(brk);
+    const qvTxt = fmtUsd(st.qv24);
+    // вспышка строки — ровно тогда, когда хоть что-то из ВИДИМОГО текста
+    // строки реально изменилось с прошлой отрисовки. Так движение видно
+    // глазом сразу, как в VolScan, а не только по абстрактному счётчику.
+    const fp = priceTxt+"|"+rvolTxt+"|"+readyTxt+"|"+brkTxt+"|"+qvTxt+"|"+st.state+"|"+(st.score>0?(st.score*100).toFixed(0):"");
+    const flash = rowFingerprint[st.sym]!==undefined && rowFingerprint[st.sym]!==fp;
+    rowFingerprint[st.sym] = fp;
+    return `<tr class="${st.state}${flash?" row-flash":""}">
       <td><span class="sym">${st.sym.replace("USDT","")}</span>
           <span class="sub">${f.age>=12 ? f.age+" баров тихо" : "&nbsp;"}</span></td>
       <td class="scorecell ${scoreClass(st.score)}">${st.score>0?(st.score*100).toFixed(0):"·"}</td>
-      <td>${fmtPx(st.price||f.price)}</td>
+      <td>${priceTxt}</td>
       <td class="${f.sw<=0.06?"up":""}">${(f.sw*100).toFixed(1)}%</td>
-      <td class="${rvol>=10?"hot":""}">${Number.isFinite(rvol)?"×"+rvol.toFixed(rvol>=10?0:1):"—"}</td>
-      <td class="${ready>=0.5?"hot":(ready>0?"":"mut")}">${ready>0?Math.round(ready*100)+"%":"·"}
+      <td class="${rvol>=10?"hot":""}">${rvolTxt}</td>
+      <td class="${ready>=0.5?"hot":(ready>0?"":"mut")}">${readyTxt}
         <div class="bar"><i style="width:${Math.round((ready||0)*100)}%"></i></div></td>
-      <td class="${brk>=0?"up":"mut"}">${pct(brk)}</td>
-      <td class="mut">${fmtUsd(st.qv24)}</td>
+      <td class="${brk>=0?"up":"mut"}">${brkTxt}</td>
+      <td class="mut">${qvTxt}</td>
       <td>${stateCell(st)}</td>
     </tr>`;
   }).join("") || `<tr><td colspan="9" class="empty">жду данные…</td></tr>`;
@@ -1334,7 +1350,7 @@ document.getElementById("btn-test-tg").onclick = testTg;
   renderBadge();
   if(navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(()=>{});
   boot();
-  setInterval(()=>{ if(!document.hidden) renderAll(); }, 2000);
+  setInterval(()=>{ if(!document.hidden) renderAll(); }, 700);   // как в VolScan — движение видно сразу
   setInterval(()=>{
     if(!ready) return;
     const best=Object.values(S).reduce((a,b)=>(b.ready||0)>(a.ready||0)?b:a,{ready:0});
