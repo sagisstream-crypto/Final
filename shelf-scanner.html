@@ -329,6 +329,8 @@ const S = {};            // symbol -> state
 let BTC15 = [];          // 15м свечи BTCUSDT для режима рынка
 let ready = false;
 let wsTicker = null, wsKlines = [], wsFails = 0;
+let watchList = [];      // текущий список пар потоков — нужен сторожу, чтобы переоткрыть их
+let lastWatchdogKick = 0;
 let lastEval = 0, scanned = 0, gatePass = 0;
 // диагностика: видно, что сканер жив, даже когда сигналов нет
 const DIAG = { bars:0, evals:0, maxRvol:0, maxRvolSym:"", lastBarTs:0, started:Date.now(),
@@ -765,12 +767,15 @@ async function boot(){
     }
     BTC15 = S["BTCUSDT"] ? S["BTCUSDT"].bars : [];
     const live = Object.keys(S);
+    watchList = live;
     log(`история загружена по ${live.length} парам`);
 
     say("4/4","поднимаю потоки");
     openTicker();
     openKlineStreams(live);
     ready = true;
+    lastWatchdogKick = Date.now();
+    setInterval(wsWatchdogTick, 5000);
     bootEl.style.display = "none";
     document.getElementById("radar").style.display = "";
     // первичная оценка по закрытым барам
@@ -827,6 +832,25 @@ function reopenChunk(chunk){
   ws.onclose = ()=>{ if(ready) setTimeout(()=>reopenChunk(chunk), 5000); };
   ws.onerror = ()=>{ try{ ws.close(); }catch(e){} };
   wsKlines.push(ws);
+}
+
+// сторож потоков: сокет иногда остаётся «открытым» (readyState===1), но
+// данные по нему больше не идут — сеть/файрвол пропускает рукопожатие, но
+// тихо режет последующие кадры. onerror/onclose в этом случае НЕ срабатывают,
+// поэтому обычный реконнект по close никогда не запускается, и радар стоит
+// «как картинка», хотя счётчик потоков показывает «6/6». Ловим это отдельно:
+// если давно нет вообще ни одного сообщения — жмём переоткрытие сами.
+function wsWatchdogTick(){
+  if(!ready || watchList.length===0) return;
+  const now = Date.now();
+  const sinceMsg = DIAG.lastMsgTs ? (now - DIAG.lastMsgTs) : (now - DIAG.started);
+  const STALE = 25000;
+  if(sinceMsg < STALE) return;
+  if(now - lastWatchdogKick < STALE) return; // не долбим переподключениями чаще одного раза за STALE
+  lastWatchdogKick = now;
+  const openCount = wsKlines.filter(w=>w.readyState===1).length;
+  log(`сторож потоков: ${Math.round(sinceMsg/1000)}с без единого сообщения (сокетов открыто ${openCount}/${wsKlines.length}) — переоткрываю принудительно`, "warn");
+  openKlineStreams(watchList);
 }
 
 function onKline(ev){
