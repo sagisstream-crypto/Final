@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0a0e0a">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<title>VolScan 1m · FAST + CONFIRMED</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0a0e0a; color: #c8d6c8;
+    font-family: 'SF Mono', 'Consolas', 'Menlo', monospace; font-size: 12px;
+    display: flex; flex-direction: column; min-height: 100vh;
+    padding-top: env(safe-area-inset-top);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .header { border-bottom: 1px solid #1e2b1e; background: #0d120d; padding: 12px 14px; position: sticky; top: 0; z-index: 20; }
+  .brand { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .brand-icon { width: 30px; height: 30px; border-radius: 2px; background: #0e2530; border: 1px solid #1e4a5a;
+    display: flex; align-items: center; justify-content: center; color: #55efc4; font-size: 15px; }
+  .brand-title { font-size: 13px; letter-spacing: 0.16em; color: #55efc4; font-weight: 600; }
+  .brand-sub { font-size: 9px; color: #4a6a6a; margin-top: 2px; letter-spacing: 0.03em; }
+  .status-row { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px; font-size: 10px; align-items: center; }
+  .stat-label { color: #4a6a6a; }
+  .stat-val { color: #c8d6c8; }
+  .stat-val.ok { color: #55efc4; }
+  .stat-val.warn { color: #ffd85e; }
+  .stat-val.err { color: #ff6b6b; }
+  .btn { font-family: inherit; font-size: 10px; cursor: pointer; border-radius: 2px; padding: 8px 11px; min-height: 34px;
+    background: #0e2530; border: 1px solid #1e4a5a; color: #55efc4; letter-spacing: 0.03em; touch-action: manipulation; }
+  .btn:hover { background: #12303d; }
+  .btn.off { color: #5a6b5a; border-color: #1e2b1e; background: #0a0e0a; }
+  .btn.danger { color: #ff6b6b; border-color: #4a1e1e; background: #1e1010; }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; align-items: center; }
+  .panel { border: 1px solid #1e2b1e; background: #0d120d; border-radius: 4px; margin: 10px 14px; padding: 10px 12px; }
+  .panel-title { font-size: 10px; color: #55efc4; letter-spacing: 0.06em; margin-bottom: 8px; font-weight: 700; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
+  .field { display: flex; align-items: center; gap: 6px; background: #0a0e0a; border: 1px solid #1e2b1e; border-radius: 2px; padding: 5px 8px; }
+  .field label { color: #4a6a6a; font-size: 10px; white-space: nowrap; }
+  .field input { background: transparent; border: none; outline: none; color: #c8d6c8;
+    font-family: inherit; font-size: 16px; width: 100%; min-width: 40px; }
+  .field input::placeholder { color: #3f4f3f; }
+  .note { font-size: 9px; color: #4a6a6a; line-height: 1.6; margin-top: 8px; }
+  .note b { color: #7f9a9a; }
+  .tier-note { display: flex; gap: 14px; flex-wrap: wrap; font-size: 9px; color: #4a6a6a; margin-bottom: 8px; }
+  table { width: 100%; border-collapse: collapse; }
+  thead { background: #0d120d; }
+  th { text-align: right; padding: 7px 6px; font-weight: 400; font-size: 9px; color: #4a6a6a; letter-spacing: 0.04em; white-space: nowrap; }
+  th:first-child, th:nth-child(2) { text-align: left; }
+  td { padding: 7px 6px; border-bottom: 1px solid #141a14; text-align: right; white-space: nowrap; font-size: 11px; }
+  td:first-child, td:nth-child(2) { text-align: left; }
+  tr.tier-CONFIRMED { background: #14200f; }
+  tr.tier-CONFIRMED:hover { background: #1a2a12; }
+  tr:hover { background: #0f150f; }
+  .sym { color: #e4ece4; font-weight: 600; text-decoration: none; }
+  .sym:hover { color: #55efc4; }
+  .tag { font-size: 8px; font-weight: 700; padding: 2px 5px; border-radius: 2px; letter-spacing: 0.03em; }
+  .tag.FAST { color: #55efc4; background: #0e2530; border: 1px solid #1e4a5a; }
+  .tag.CONFIRMED { color: #0a0e0a; background: #5eff8f; }
+  .pos { color: #5eff8f; }
+  .dim { color: #4a5a4a; }
+  .hot { color: #ffd85e; font-weight: 600; }
+  .empty { text-align: center; padding: 26px; color: #3f4f3f; font-size: 11px; }
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .shelf-chip { display: inline-flex; gap: 6px; align-items: center; background: #0d1f26; border: 1px solid #1e4a5a;
+    border-radius: 3px; padding: 4px 8px; margin: 0 5px 5px 0; font-size: 10px; }
+  .shelf-chip .s { color: #dfe6e9; font-weight: 600; }
+  .shelf-chip .d { color: #ffd85e; }
+  .footer { margin-top: auto; border-top: 1px solid #1e2b1e; background: #0d120d; padding: 8px 14px 18px;
+    font-size: 9px; color: #3f4f3f; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: #0a0e0a; }
+  ::-webkit-scrollbar-thumb { background: #2f4a2f; border-radius: 4px; }
+  @media (max-width: 720px) {
+    .panel { margin: 8px 10px; }
+    .header { padding: 10px; }
+    td, th { padding: 7px 4px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="brand">
+    <div class="brand-icon">⚡</div>
+    <div>
+      <div class="brand-title">VOLSCAN 1M · FAST + CONFIRMED</div>
+      <div class="brand-sub">Binance USDT-M · минутные свечи · параметры из бэктеста на 12 мес</div>
+    </div>
+  </div>
+  <div class="status-row">
+    <span class="stat-label">ПОТОК <span class="stat-val" id="st-feed">—</span></span>
+    <span class="stat-label">ПАР <span class="stat-val" id="st-universe">0</span></span>
+    <span class="stat-label">ЗАГРУЗКА <span class="stat-val" id="st-seed">—</span></span>
+    <span class="stat-label">НА ПОЛКЕ <span class="stat-val" id="st-shelf">0</span></span>
+    <span class="stat-label">СИГНАЛОВ <span class="stat-val ok" id="st-signals">0</span></span>
+    <span class="stat-label" id="st-clock">—</span>
+  </div>
+  <div class="btn-row">
+    <button class="btn off" id="btn-run">▶ ЗАПУСТИТЬ</button>
+    <button class="btn off" id="btn-sound">🔇 ЗВУК: ВЫКЛ</button>
+    <button class="btn" id="btn-notif">🔔 УВЕДОМЛЕНИЯ</button>
+    <button class="btn" id="btn-settings">⚙ НАСТРОЙКИ</button>
+    <button class="btn" id="btn-csv">💾 CSV</button>
+    <button class="btn danger" id="btn-clear">↺ ОЧИСТИТЬ</button>
+  </div>
+</div>
+
+<div class="panel" id="settings-panel" style="display:none">
+  <div class="panel-title">⚙ ПАРАМЕТРЫ</div>
+
+  <div class="tier-note">
+    <span><b style="color:#55efc4">FAST</b> · полка 30 мин · диапазон ≤4% · пробой ≥0.3% · объём ≥2× · подтверждение 2-м баром</span>
+    <span><b style="color:#5eff8f">CONFIRMED</b> · полка 3 ч · диапазон ≤2.5% · пробой ≥1% одной минутой · объём ≥2×</span>
+  </div>
+
+  <div class="grid">
+    <div class="field"><label>оборот 24ч от, $</label><input id="f-volmin" value="5000000"></div>
+    <div class="field"><label>до, $</label><input id="f-volmax" value="1000000000"></div>
+    <div class="field"><label>макс. пар</label><input id="f-maxsym" value="250"></div>
+  </div>
+
+  <div class="panel-title" style="margin-top:12px">FAST</div>
+  <div class="grid">
+    <div class="field"><label>полка, мин</label><input id="f-fw" value="30"></div>
+    <div class="field"><label>диапазон ≤ %</label><input id="f-frange" value="4.0"></div>
+    <div class="field"><label>пробой ≥ %</label><input id="f-fbreak" value="0.3"></div>
+    <div class="field"><label>объём ≥ ×</label><input id="f-fvol" value="2"></div>
+  </div>
+  <div class="btn-row"><button class="btn" id="btn-confirm2">✓ ПОДТВЕРЖДЕНИЕ 2 БАРА: ВКЛ</button></div>
+
+  <div class="panel-title" style="margin-top:12px">CONFIRMED</div>
+  <div class="grid">
+    <div class="field"><label>полка, мин</label><input id="f-cw" value="180"></div>
+    <div class="field"><label>диапазон ≤ %</label><input id="f-crange" value="2.5"></div>
+    <div class="field"><label>пробой ≥ %</label><input id="f-cbreak" value="1.0"></div>
+    <div class="field"><label>объём ≥ ×</label><input id="f-cvol" value="2"></div>
+  </div>
+
+  <div class="panel-title" style="margin-top:12px">TELEGRAM</div>
+  <div class="grid">
+    <div class="field"><label>токен</label><input id="f-tgtoken" type="password" placeholder="bot token"></div>
+    <div class="field"><label>chat id</label><input id="f-tgchat" placeholder="chat id"></div>
+  </div>
+  <div class="btn-row">
+    <button class="btn off" id="btn-tg">TELEGRAM: ВЫКЛ</button>
+    <button class="btn" id="btn-tg-tier">СЛАТЬ: ВСЁ</button>
+    <button class="btn" id="btn-tg-test">ТЕСТ</button>
+    <span class="stat-val" id="tg-status" style="font-size:10px"></span>
+  </div>
+
+  <div class="btn-row"><button class="btn" id="btn-apply">ПРИМЕНИТЬ И ПЕРЕЗАПУСТИТЬ</button></div>
+
+  <div class="note">
+    Проверено на истории Binance (data.binance.vision), минутные свечи, 12 месяцев, 97 ликвидных пар + 182 свежих листинга.
+    «Успех» — за 3 часа после сигнала цена уходит вверх на ≥1.5% и это движение минимум в 1.5 раза больше просадки за то же время.
+    Случайный бар даёт такой исход в <b>20%</b> случаев — это шумовой пол.<br>
+    <b>FAST с подтверждением 2 бара</b>: точность <b>33.4%</b> (×1.66 к шуму), средний ход +2.15%, средняя просадка −1.94%.
+    Без подтверждения было 32.2% при вдвое большем числе сигналов — второй бар режет половину входов и добавляет ~1 п.п. точности.<br>
+    <b>CONFIRMED</b>: точность <b>38.7%</b> (×1.93 к шуму), средний ход +2.33%, просадка −1.87%.
+    Здесь подтверждение 2-м баром проверялось и <b>ухудшает</b> результат (38.7% → 35.6%), поэтому тир остаётся однобаровым.<br>
+    Фильтр по обороту $5M–$1B — не украшение: ниже $1M точность падает до ~20–25% (уровень случайности), выше $5B — до ~24%.
+    Множитель объёма на минутных данных почти не влияет на точность, он оставлен как отсечка совсем мёртвых баров.<br>
+    Сканер ищет только пробои <b>вверх</b> (лонг) — именно они проверялись на истории. Не финансовая рекомендация.
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-title">🎯 НА ПОЛКЕ СЕЙЧАС · <span style="color:#4a6a6a;font-weight:400">пары в сжатии, ждут пробоя (уровень = максимум полки)</span></div>
+  <div id="shelf-list"><div class="empty">Пока пусто — запустите сканер.</div></div>
+</div>
+
+<div class="panel" style="flex:1">
+  <div class="panel-title">🔔 СИГНАЛЫ</div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>ВРЕМЯ</th><th>ПАРА</th><th>ТИР</th><th>ЦЕНА</th><th>ПРОБОЙ</th>
+          <th>ПОЛКА</th><th>ОБЪЁМ</th><th>ОБОРОТ 24Ч</th><th>SCORE</th>
+        </tr>
+      </thead>
+      <tbody id="signals-body">
+        <tr><td colspan="9" class="empty">Сигналов пока нет.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="footer">
+  <span>Поток: WebSocket kline_1m + REST-подгрузка истории · расчёт в браузере</span>
+  <span>Не является финансовой рекомендацией</span>
+</div>
+
+<script>
+"use strict";
+
+// ==========================================================================
+// Параметры по умолчанию — из бэктеста на 12 месяцах минутных свечей.
+//
+//   FAST      полка 30 мин, диапазон ≤4%, пробой ≥0.3%, объём ≥2×,
+//             плюс подтверждение вторым баром (закрытие выше первого):
+//             точность 33.4% против шумового пола 20.1% (×1.66).
+//   CONFIRMED полка 3 ч, диапазон ≤2.5%, пробой ≥1% ОДНОЙ минутной свечой,
+//             объём ≥2×: точность 38.7% (×1.93). Подтверждение вторым баром
+//             тут проверялось и ухудшает результат, поэтому тир однобаровый.
+//   Оборот    $5M–$1B: ниже $1M точность падает до уровня случайности,
+//             выше $5B — тоже (на мегакапах такого выноса просто не бывает).
+// ==========================================================================
+const DEFAULTS = {
+  volMin: 5e6, volMax: 1e9, maxSymbols: 250,
+  fast: { W: 30,  range: 4.0, brk: 0.3, volX: 2, confirm2: true },
+  conf: { W: 180, range: 2.5, brk: 1.0, volX: 2 },
+  tg: { on: false, token: "", chat: "", onlyConfirmed: false },
+  sound: false,
+};
+const CFG_KEY = "volscan_1m_cfg_v1";
+const REST = "https://fapi.binance.com";
+const WS_BASE = "wss://fstream.binance.com/stream?streams=";
+const STREAMS_PER_SOCKET = 100;
+const SEED_LIMIT = 200;            // хватает на полку 180 + пара баров запаса
+const SEED_DELAY_MS = 120;         // пауза между REST-запросами при загрузке истории
+const BUF_MAX = 260;
+const SIGNALS_MAX = 200;
+const UNIVERSE_REFRESH_MS = 15 * 60 * 1000;
+
+let cfg = JSON.parse(JSON.stringify(DEFAULTS));
+let running = false;
+let universe = [];                 // [{symbol, vol24}]
+let vol24 = {};                    // symbol -> оборот за 24ч, $
+let bars = {};                     // symbol -> [{t,o,h,l,c,q}] только закрытые свечи
+let sockets = [];
+let lastSignalAt = {};             // "SYM:TIER" -> ts
+let signals = [];
+let seeded = 0, seedTotal = 0, seeding = false;
+let wsAlive = 0, wsTotal = 0;
+let universeTimer = null, shelfTimer = null, clockTimer = null;
+
+// ---------- конфиг ----------
+function loadCfg() {
+  try {
+    const raw = localStorage.getItem(CFG_KEY);
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    cfg = {
+      ...DEFAULTS, ...saved,
+      fast: { ...DEFAULTS.fast, ...(saved.fast || {}) },
+      conf: { ...DEFAULTS.conf, ...(saved.conf || {}) },
+      tg: { ...DEFAULTS.tg, ...(saved.tg || {}) },
+    };
+  } catch (e) {}
+}
+function saveCfg() {
+  try { localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); } catch (e) {}
+}
+function num(id, fallback) {
+  const v = parseFloat(String(document.getElementById(id).value).replace(/[\s,_]/g, ""));
+  return isNaN(v) ? fallback : v;
+}
+function cfgFromForm() {
+  cfg.volMin = num("f-volmin", DEFAULTS.volMin);
+  cfg.volMax = num("f-volmax", DEFAULTS.volMax);
+  cfg.maxSymbols = Math.max(1, Math.min(400, num("f-maxsym", DEFAULTS.maxSymbols)));
+  cfg.fast.W = Math.max(5, num("f-fw", DEFAULTS.fast.W));
+  cfg.fast.range = num("f-frange", DEFAULTS.fast.range);
+  cfg.fast.brk = num("f-fbreak", DEFAULTS.fast.brk);
+  cfg.fast.volX = num("f-fvol", DEFAULTS.fast.volX);
+  cfg.conf.W = Math.max(5, Math.min(BUF_MAX - 5, num("f-cw", DEFAULTS.conf.W)));
+  cfg.conf.range = num("f-crange", DEFAULTS.conf.range);
+  cfg.conf.brk = num("f-cbreak", DEFAULTS.conf.brk);
+  cfg.conf.volX = num("f-cvol", DEFAULTS.conf.volX);
+  cfg.tg.token = document.getElementById("f-tgtoken").value.trim();
+  cfg.tg.chat = document.getElementById("f-tgchat").value.trim();
+  saveCfg();
+}
+function cfgToForm() {
+  document.getElementById("f-volmin").value = String(cfg.volMin);
+  document.getElementById("f-volmax").value = String(cfg.volMax);
+  document.getElementById("f-maxsym").value = String(cfg.maxSymbols);
+  document.getElementById("f-fw").value = String(cfg.fast.W);
+  document.getElementById("f-frange").value = String(cfg.fast.range);
+  document.getElementById("f-fbreak").value = String(cfg.fast.brk);
+  document.getElementById("f-fvol").value = String(cfg.fast.volX);
+  document.getElementById("f-cw").value = String(cfg.conf.W);
+  document.getElementById("f-crange").value = String(cfg.conf.range);
+  document.getElementById("f-cbreak").value = String(cfg.conf.brk);
+  document.getElementById("f-cvol").value = String(cfg.conf.volX);
+  document.getElementById("f-tgtoken").value = cfg.tg.token;
+  document.getElementById("f-tgchat").value = cfg.tg.chat;
+  setToggle("btn-confirm2", cfg.fast.confirm2, "✓ ПОДТВЕРЖДЕНИЕ 2 БАРА: ВКЛ", "✓ ПОДТВЕРЖДЕНИЕ 2 БАРА: ВЫКЛ");
+  setToggle("btn-tg", cfg.tg.on, "TELEGRAM: ВКЛ", "TELEGRAM: ВЫКЛ");
+  setToggle("btn-sound", cfg.sound, "🔊 ЗВУК: ВКЛ", "🔇 ЗВУК: ВЫКЛ");
+  document.getElementById("btn-tg-tier").textContent = cfg.tg.onlyConfirmed ? "СЛАТЬ: ТОЛЬКО CONFIRMED" : "СЛАТЬ: ВСЁ";
+}
+function setToggle(id, on, onText, offText) {
+  const b = document.getElementById(id);
+  b.textContent = on ? onText : offText;
+  b.classList.toggle("off", !on);
+}
+
+// ---------- утилиты ----------
+function fmtMoney(n) {
+  if (n === null || n === undefined || isNaN(n)) return "—";
+  const a = Math.abs(n);
+  if (a >= 1e9) return (n / 1e9).toFixed(2) + "B";
+  if (a >= 1e6) return (n / 1e6).toFixed(1) + "M";
+  if (a >= 1e3) return (n / 1e3).toFixed(0) + "K";
+  return n.toFixed(0);
+}
+function fmtPrice(n) {
+  if (!isFinite(n)) return "—";
+  return n >= 1 ? n.toFixed(4) : n.toPrecision(4);
+}
+function fmtTime(ts) { return new Date(ts).toLocaleTimeString(); }
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function setStat(id, text, cls) {
+  const el = document.getElementById(id);
+  el.textContent = text;
+  el.className = "stat-val" + (cls ? " " + cls : "");
+}
+
+// ---------- звук / уведомления ----------
+let audioCtx = null;
+function beep(freq, ms) {
+  if (!cfg.sound) return;
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.frequency.value = freq; osc.type = "sine";
+    gain.gain.setValueAtTime(0.001, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.25, audioCtx.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + ms / 1000);
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.start(); osc.stop(audioCtx.currentTime + ms / 1000 + 0.02);
+  } catch (e) {}
+}
+function signalBeep(tier) {
+  beep(1046, 90);
+  setTimeout(() => beep(tier === "CONFIRMED" ? 1568 : 1318, 110), 100);
+  if (tier === "CONFIRMED") setTimeout(() => beep(2093, 150), 210);
+}
+function notify(title, body) {
+  if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+  try {
+    new Notification(title, { body, tag: title });
+    if (navigator.vibrate) navigator.vibrate([180, 90, 180]);
+  } catch (e) {}
+}
+
+// ---------- Telegram ----------
+async function tgSend(text) {
+  if (!cfg.tg.token || !cfg.tg.chat) return { ok: false, error: "нет токена или chat id" };
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${cfg.tg.token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: cfg.tg.chat, text, parse_mode: "HTML", disable_web_page_preview: true }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) return { ok: false, error: (data && data.description) || ("HTTP " + res.status) };
+    return { ok: true };
+  } catch (e) { return { ok: false, error: String(e) }; }
+}
+
+// ---------- вселенная пар ----------
+async function loadUniverse() {
+  const res = await fetch(REST + "/fapi/v1/ticker/24hr", { cache: "no-store" });
+  if (!res.ok) throw new Error("ticker HTTP " + res.status);
+  const arr = await res.json();
+  const list = [];
+  for (const t of arr) {
+    const s = t.symbol;
+    if (!s.endsWith("USDT")) continue;
+    const v = parseFloat(t.quoteVolume);
+    if (!isFinite(v)) continue;
+    vol24[s] = v;
+    if (v < cfg.volMin || v > cfg.volMax) continue;
+    list.push({ symbol: s, vol24: v });
+  }
+  list.sort((a, b) => b.vol24 - a.vol24);
+  return list.slice(0, cfg.maxSymbols);
+}
+
+// ---------- история ----------
+async function seedSymbol(symbol) {
+  const url = `${REST}/fapi/v1/klines?symbol=${symbol}&interval=1m&limit=${SEED_LIMIT}`;
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error("klines HTTP " + res.status);
+  const arr = await res.json();
+  const now = Date.now();
+  bars[symbol] = arr
+    .filter(k => k[6] <= now)     // только закрытые свечи
+    .map(k => ({ t: k[0], o: +k[1], h: +k[2], l: +k[3], c: +k[4], q: +k[7] }));
+}
+async function seedAll(list) {
+  seeding = true; seeded = 0; seedTotal = list.length;
+  for (const item of list) {
+    if (!running) break;
+    try { await seedSymbol(item.symbol); } catch (e) { /* пара догрузится при первом же разрыве */ }
+    seeded++;
+    if (seeded % 5 === 0 || seeded === seedTotal) {
+      setStat("st-seed", `${seeded}/${seedTotal}`, seeded === seedTotal ? "ok" : "warn");
+    }
+    await sleep(SEED_DELAY_MS);
+  }
+  seeding = false;
+  setStat("st-seed", `${seeded}/${seedTotal}`, "ok");
+}
+
+// ---------- WebSocket ----------
+function chunk(arr, size) {
+  const out = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+function closeSockets() {
+  for (const ws of sockets) {
+    try { ws.onclose = null; ws.close(); } catch (e) {}
+  }
+  sockets = []; wsAlive = 0; wsTotal = 0;
+  updateFeedStatus();
+}
+function updateFeedStatus() {
+  if (!running) { setStat("st-feed", "остановлен", "dim"); return; }
+  if (wsAlive === 0) setStat("st-feed", "подключение…", "warn");
+  else setStat("st-feed", `WS ${wsAlive}/${wsTotal}`, wsAlive === wsTotal ? "ok" : "warn");
+}
+function openSockets(list) {
+  closeSockets();
+  const groups = chunk(list.map(x => x.symbol.toLowerCase() + "@kline_1m"), STREAMS_PER_SOCKET);
+  wsTotal = groups.length;
+  groups.forEach((streams, i) => connectSocket(streams, i));
+}
+function connectSocket(streams, idx, delay) {
+  if (!running) return;
+  let ws;
+  try { ws = new WebSocket(WS_BASE + streams.join("/")); }
+  catch (e) { setTimeout(() => connectSocket(streams, idx, Math.min((delay || 1000) * 2, 30000)), delay || 1000); return; }
+  sockets[idx] = ws;
+  ws.onopen = () => { wsAlive++; updateFeedStatus(); };
+  ws.onmessage = (ev) => {
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch (e) { return; }
+    const k = msg && msg.data && msg.data.k;
+    if (!k || !k.x) return;         // работаем только по закрытым свечам
+    onBarClosed(k.s, { t: k.t, o: +k.o, h: +k.h, l: +k.l, c: +k.c, q: +k.q });
+  };
+  ws.onerror = () => {};
+  ws.onclose = () => {
+    if (sockets[idx] === ws) { wsAlive = Math.max(0, wsAlive - 1); updateFeedStatus(); }
+    if (!running) return;
+    const next = Math.min((delay || 1000) * 2, 30000);
+    setTimeout(() => connectSocket(streams, idx, next), delay || 1000);
+  };
+}
+
+// ---------- приём закрытой свечи ----------
+const reseedQueue = new Set();
+function onBarClosed(symbol, bar) {
+  const buf = bars[symbol];
+  if (!buf || !buf.length) { reseedQueue.add(symbol); return; }
+  const last = buf[buf.length - 1];
+  if (bar.t <= last.t) return;                       // дубль
+  if (bar.t !== last.t + 60000) {                    // пропуск свечей — история дырявая
+    reseedQueue.add(symbol);
+    buf.push(bar);
+    if (buf.length > BUF_MAX) buf.shift();
+    return;
+  }
+  buf.push(bar);
+  if (buf.length > BUF_MAX) buf.shift();
+  detect(symbol);
+}
+// Дырки в истории латаем фоном небольшими пачками. Пачка нужна, потому что после
+// возврата из фона протухают сразу все пары, и по одной очередь разгребалась бы минутами.
+let reseedBusy = false;
+const RESEED_BATCH = 4;
+async function reseedTick() {
+  if (!running || seeding || reseedBusy || reseedQueue.size === 0) return;
+  reseedBusy = true;
+  try {
+    const batch = [];
+    for (const s of reseedQueue) {
+      batch.push(s);
+      if (batch.length >= RESEED_BATCH) break;
+    }
+    for (const s of batch) reseedQueue.delete(s);
+    await Promise.all(batch.map(s => seedSymbol(s).catch(() => {})));
+    setStat("st-seed", reseedQueue.size ? `догрузка ${reseedQueue.size}` : `${seeded}/${seedTotal}`,
+            reseedQueue.size ? "warn" : "ok");
+  } finally {
+    reseedBusy = false;
+  }
+}
+
+// ---------- детектор ----------
+// Полка = W баров. Пробой = свеча, закрывшаяся выше максимума полки на brk%
+// при объёме ≥ volX от среднего по полке. FAST при включённом подтверждении
+// требует ещё один бар, закрывшийся выше пробойного — именно этот вариант
+// проверялся на истории (33.4% против 32.2% без подтверждения).
+function windowStats(buf, from, to) {
+  let hi = -Infinity, lo = Infinity, sumC = 0, sumQ = 0;
+  for (let i = from; i <= to; i++) {
+    const b = buf[i];
+    if (b.h > hi) hi = b.h;
+    if (b.l < lo) lo = b.l;
+    sumC += b.c; sumQ += b.q;
+  }
+  const n = to - from + 1;
+  const meanC = sumC / n;
+  return { hi, lo, rangePct: (hi - lo) / meanC * 100, volAvg: sumQ / n };
+}
+function evalTier(buf, W, maxRange, minBrk, minVolX, confirm2) {
+  const n = buf.length;
+  const need = W + (confirm2 ? 2 : 1);
+  if (n < need) return null;
+  const brkIdx = confirm2 ? n - 2 : n - 1;           // бар пробоя
+  const shelfTo = brkIdx - 1;
+  const shelfFrom = shelfTo - W + 1;
+  if (shelfFrom < 0) return null;
+  const st = windowStats(buf, shelfFrom, shelfTo);
+  if (!(st.volAvg > 0) || !isFinite(st.rangePct)) return null;
+  if (st.rangePct > maxRange) return null;
+  const brkBar = buf[brkIdx];
+  const brkPct = (brkBar.c - st.hi) / st.hi * 100;
+  if (brkPct < minBrk) return null;
+  const volX = brkBar.q / st.volAvg;
+  if (volX < minVolX) return null;
+  if (confirm2) {
+    const confBar = buf[n - 1];
+    if (!(confBar.c > brkBar.c)) return null;        // второй бар обязан закрыться выше первого
+  }
+  const entry = buf[n - 1];
+  return {
+    rangePct: st.rangePct, brkPct, volX, level: st.hi,
+    price: entry.c, barTime: entry.t,
+  };
+}
+function scoreOf(hit, tier, p) {
+  let s = tier === "CONFIRMED" ? 72 : 52;
+  s += Math.max(0, Math.min(12, (1 - hit.rangePct / p.range) * 12));
+  s += Math.max(0, Math.min(10, (hit.brkPct / p.brk - 1) * 6));
+  s += Math.max(0, Math.min(6, (hit.volX / p.volX - 1) * 3));
+  return Math.round(Math.max(0, Math.min(100, s)));
+}
+function detect(symbol) {
+  const buf = bars[symbol];
+  if (!buf) return;
+  const v = vol24[symbol];
+  if (!(v >= cfg.volMin && v <= cfg.volMax)) return;
+
+  const c = evalTier(buf, cfg.conf.W, cfg.conf.range, cfg.conf.brk, cfg.conf.volX, false);
+  if (c) { fire(symbol, "CONFIRMED", c, cfg.conf); return; }   // старший тир перебивает младший
+
+  const f = evalTier(buf, cfg.fast.W, cfg.fast.range, cfg.fast.brk, cfg.fast.volX, cfg.fast.confirm2);
+  if (f) fire(symbol, "FAST", f, cfg.fast);
+}
+
+// ---------- сигнал ----------
+function fire(symbol, tier, hit, params) {
+  const key = symbol + ":" + tier;
+  const cooldownMs = params.W * 60000;               // как в бэктесте: не чаще раза в длину полки
+  if (Date.now() - (lastSignalAt[key] || 0) < cooldownMs) return;
+  lastSignalAt[key] = Date.now();
+
+  const entry = {
+    time: Date.now(), symbol, tier, price: hit.price, brkPct: hit.brkPct,
+    rangePct: hit.rangePct, volX: hit.volX, level: hit.level,
+    vol24: vol24[symbol] || 0, score: scoreOf(hit, tier, params),
+  };
+  signals.unshift(entry);
+  if (signals.length > SIGNALS_MAX) signals.pop();
+  renderSignals();
+  signalBeep(tier);
+  notify(`⚡ ${tier} · ${symbol}`,
+    `пробой +${hit.brkPct.toFixed(2)}% · полка ${hit.rangePct.toFixed(2)}% · объём ×${hit.volX.toFixed(1)}`);
+
+  if (cfg.tg.on && (!cfg.tg.onlyConfirmed || tier === "CONFIRMED")) {
+    const stats = tier === "CONFIRMED"
+      ? "точность на истории ~38.7% (×1.93 к случайности), средний ход +2.33%, просадка −1.87%"
+      : "точность на истории ~33.4% (×1.66 к случайности), средний ход +2.15%, просадка −1.94%";
+    const text =
+      `⚡ <b>${tier}</b> · <b>${symbol}</b> · USDT-M\n` +
+      `Пробой вверх: +${hit.brkPct.toFixed(2)}% над уровнем ${fmtPrice(hit.level)}\n` +
+      `Полка: ${params.W} мин, диапазон ${hit.rangePct.toFixed(2)}%\n` +
+      `Объём: ×${hit.volX.toFixed(1)} к средней по полке\n` +
+      `Цена: ${fmtPrice(hit.price)} · оборот 24ч: $${fmtMoney(entry.vol24)}\n` +
+      `Score: ${entry.score}/100\n` +
+      (tier === "FAST" && cfg.fast.confirm2 ? `Подтверждено вторым баром\n` : ``) +
+      `<i>${stats}. Не финсовет.</i>`;
+    tgSend(text).then(r => {
+      if (!r.ok) document.getElementById("tg-status").textContent = "Telegram: " + r.error;
+    });
+  }
+}
+
+// ---------- рендер ----------
+function renderSignals() {
+  setStat("st-signals", String(signals.length), "ok");
+  const body = document.getElementById("signals-body");
+  if (!signals.length) {
+    body.innerHTML = `<tr><td colspan="9" class="empty">Сигналов пока нет.</td></tr>`;
+    return;
+  }
+  body.innerHTML = signals.map(s => `
+    <tr class="tier-${s.tier}">
+      <td class="dim">${fmtTime(s.time)}</td>
+      <td><a class="sym" href="https://www.binance.com/ru/futures/${s.symbol}" target="_blank" rel="noopener">${s.symbol}</a></td>
+      <td><span class="tag ${s.tier}">${s.tier}</span></td>
+      <td>${fmtPrice(s.price)}</td>
+      <td class="pos">+${s.brkPct.toFixed(2)}%</td>
+      <td class="dim">${s.rangePct.toFixed(2)}%</td>
+      <td class="${s.volX >= 5 ? "hot" : ""}">×${s.volX.toFixed(1)}</td>
+      <td class="dim">$${fmtMoney(s.vol24)}</td>
+      <td class="${s.score >= 80 ? "hot" : ""}">${s.score}</td>
+    </tr>
+  `).join("");
+}
+function renderShelf() {
+  const el = document.getElementById("shelf-list");
+  const out = [];
+  for (const item of universe) {
+    const buf = bars[item.symbol];
+    if (!buf || buf.length < cfg.conf.W + 2) continue;
+    const to = buf.length - 1, from = to - cfg.conf.W + 1;
+    if (from < 0) continue;
+    const st = windowStats(buf, from, to);
+    if (!isFinite(st.rangePct) || st.rangePct > cfg.conf.range) continue;
+    const price = buf[to].c;
+    const toLevel = (st.hi - price) / price * 100;
+    out.push({ symbol: item.symbol, rangePct: st.rangePct, toLevel, level: st.hi });
+  }
+  out.sort((a, b) => a.toLevel - b.toLevel);
+  setStat("st-shelf", String(out.length));
+  if (!out.length) {
+    el.innerHTML = `<div class="empty">${running ? "Сейчас никто не стоит в сжатии по параметрам CONFIRMED." : "Пока пусто — запустите сканер."}</div>`;
+    return;
+  }
+  el.innerHTML = out.slice(0, 30).map(x => `
+    <span class="shelf-chip">
+      <span class="s">${x.symbol}</span>
+      <span class="dim">${x.rangePct.toFixed(2)}%</span>
+      <span class="d">до пробоя ${x.toLevel >= 0 ? "+" + x.toLevel.toFixed(2) : x.toLevel.toFixed(2)}%</span>
+    </span>
+  `).join("");
+}
+
+// ---------- запуск / остановка ----------
+async function start() {
+  if (running) return;
+  running = true;
+  setToggle("btn-run", true, "⏸ ОСТАНОВИТЬ", "▶ ЗАПУСТИТЬ");
+  document.getElementById("btn-run").classList.remove("off");
+  updateFeedStatus();
+  try {
+    universe = await loadUniverse();
+  } catch (e) {
+    setStat("st-feed", "ошибка загрузки списка пар", "err");
+    running = false;
+    setToggle("btn-run", false, "⏸ ОСТАНОВИТЬ", "▶ ЗАПУСТИТЬ");
+    return;
+  }
+  setStat("st-universe", String(universe.length), "ok");
+  openSockets(universe);            // сокеты поднимаем сразу, историю догружаем параллельно
+  await seedAll(universe);
+  renderShelf();
+}
+function stop() {
+  running = false;
+  closeSockets();
+  setToggle("btn-run", false, "⏸ ОСТАНОВИТЬ", "▶ ЗАПУСТИТЬ");
+  document.getElementById("btn-run").classList.add("off");
+  setStat("st-feed", "остановлен", "dim");
+}
+async function restart() {
+  stop();
+  bars = {}; universe = []; seeded = 0; seedTotal = 0;
+  setStat("st-seed", "—");
+  await sleep(300);
+  start();
+}
+
+// ---------- обработчики ----------
+document.getElementById("btn-run").addEventListener("click", () => { running ? stop() : start(); });
+document.getElementById("btn-settings").addEventListener("click", () => {
+  const p = document.getElementById("settings-panel");
+  p.style.display = p.style.display === "none" ? "block" : "none";
+});
+document.getElementById("btn-apply").addEventListener("click", () => { cfgFromForm(); restart(); });
+document.getElementById("btn-confirm2").addEventListener("click", () => {
+  cfg.fast.confirm2 = !cfg.fast.confirm2;
+  setToggle("btn-confirm2", cfg.fast.confirm2, "✓ ПОДТВЕРЖДЕНИЕ 2 БАРА: ВКЛ", "✓ ПОДТВЕРЖДЕНИЕ 2 БАРА: ВЫКЛ");
+  saveCfg();
+});
+document.getElementById("btn-sound").addEventListener("click", () => {
+  cfg.sound = !cfg.sound;
+  setToggle("btn-sound", cfg.sound, "🔊 ЗВУК: ВКЛ", "🔇 ЗВУК: ВЫКЛ");
+  saveCfg();
+  if (cfg.sound) beep(880, 120);
+});
+document.getElementById("btn-notif").addEventListener("click", () => {
+  if (typeof Notification === "undefined") return;
+  Notification.requestPermission().then(p => {
+    if (p === "granted") notify("VolScan 1m", "Уведомления включены");
+  });
+});
+document.getElementById("btn-tg").addEventListener("click", () => {
+  cfgFromForm();
+  cfg.tg.on = !cfg.tg.on;
+  setToggle("btn-tg", cfg.tg.on, "TELEGRAM: ВКЛ", "TELEGRAM: ВЫКЛ");
+  saveCfg();
+});
+document.getElementById("btn-tg-tier").addEventListener("click", () => {
+  cfg.tg.onlyConfirmed = !cfg.tg.onlyConfirmed;
+  document.getElementById("btn-tg-tier").textContent = cfg.tg.onlyConfirmed ? "СЛАТЬ: ТОЛЬКО CONFIRMED" : "СЛАТЬ: ВСЁ";
+  saveCfg();
+});
+document.getElementById("btn-tg-test").addEventListener("click", async () => {
+  cfgFromForm();
+  document.getElementById("tg-status").textContent = "отправка…";
+  const r = await tgSend("⚡ VolScan 1m: тестовое сообщение. Если видите это — Telegram настроен верно.");
+  document.getElementById("tg-status").textContent = r.ok ? "Telegram: доставлено ✓" : "Telegram: " + r.error;
+});
+document.getElementById("btn-clear").addEventListener("click", () => {
+  signals = []; lastSignalAt = {};
+  renderSignals();
+});
+document.getElementById("btn-csv").addEventListener("click", () => {
+  if (!signals.length) { alert("Сигналов пока нет."); return; }
+  const head = ["time_iso","symbol","tier","price","breakout_pct","shelf_range_pct","vol_x","level","vol24_usd","score"];
+  const lines = [head.join(",")];
+  for (const s of signals) {
+    lines.push([
+      new Date(s.time).toISOString(), s.symbol, s.tier, s.price,
+      s.brkPct.toFixed(4), s.rangePct.toFixed(4), s.volX.toFixed(3),
+      s.level, Math.round(s.vol24), s.score,
+    ].join(","));
+  }
+  const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "volscan_1m_" + new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-") + ".csv";
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+});
+
+// мобильный фон: сокеты всё равно умрут, поэтому закрываем сами и поднимаем при возврате
+document.addEventListener("visibilitychange", () => {
+  if (!running) return;
+  if (document.visibilityState === "hidden") {
+    closeSockets();
+  } else {
+    openSockets(universe);
+    for (const item of universe) reseedQueue.add(item.symbol);  // история за время в фоне протухла
+  }
+});
+
+// ---------- старт ----------
+loadCfg();
+cfgToForm();
+renderSignals();
+renderShelf();
+setStat("st-feed", "остановлен", "dim");
+shelfTimer = setInterval(() => { if (running) renderShelf(); }, 15000);
+setInterval(reseedTick, 1500);
+clockTimer = setInterval(() => {
+  const d = new Date();
+  document.getElementById("st-clock").textContent = d.toLocaleTimeString() +
+    " · до закрытия свечи " + (59 - d.getSeconds()) + "с";
+}, 1000);
+universeTimer = setInterval(async () => {
+  if (!running || seeding) return;
+  try {
+    const next = await loadUniverse();
+    const oldSet = new Set(universe.map(x => x.symbol));
+    const newSet = new Set(next.map(x => x.symbol));
+    let diff = 0;
+    for (const s of newSet) if (!oldSet.has(s)) diff++;
+    for (const s of oldSet) if (!newSet.has(s)) diff++;
+    universe = next;
+    setStat("st-universe", String(universe.length), "ok");
+    if (diff > 0) {
+      openSockets(universe);
+      for (const item of next) if (!bars[item.symbol]) reseedQueue.add(item.symbol);
+    }
+  } catch (e) {}
+}, UNIVERSE_REFRESH_MS);
+</script>
+</body>
+</html>
