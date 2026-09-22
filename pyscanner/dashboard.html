@@ -82,7 +82,7 @@
 
 <div class="hdr">
   <div class="hdr-row">
-    <div class="brand">SHELFSCAN · PYTHON<small>тихая полка → вынос · настоящие 1м свечи в диагностике</small></div>
+    <div class="brand">SHELFSCAN · PYTHON<small id="build-label">тихая полка → вынос · настоящие 1м свечи в диагностике</small></div>
     <div class="stats" id="stats"></div>
   </div>
 </div>
@@ -383,7 +383,18 @@ function renderDoc(){
   </div></div>`;
 }
 
+let lastBuild = null;
 function applyState(st){
+  if(st.diag && st.diag.build){
+    const el = document.getElementById("build-label");
+    if(el) el.textContent = "тихая полка → вынос · сборка " + st.diag.build;
+    if(lastBuild && lastBuild !== st.diag.build){
+      // бэкенд перезапустился новой версией прямо во время сессии — не страшно,
+      // просто заметно, чтобы не путать со старой сборкой
+      console.info("ShelfScan: сборка бэкенда сменилась", lastBuild, "->", st.diag.build);
+    }
+    lastBuild = st.diag.build;
+  }
   if(!booted){
     booted = true;
     document.getElementById("boot").style.display = "none";

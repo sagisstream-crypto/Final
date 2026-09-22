@@ -84,6 +84,11 @@ log = logging.getLogger("shelfscan")
 API = "https://fapi.binance.com"
 WS_BASE = "wss://fstream.binance.com"
 HTTP_PORT = 8765
+# Метка версии кода. Python-процесс не перечитывает файлы на лету — если
+# после обновления app.py эта строка на дашборде («Диагностика») не
+# совпадает с тем, что вы ожидаете увидеть, значит запущен СТАРЫЙ процесс:
+# закройте окно консоли (или Ctrl+C) и запустите run_windows.bat заново.
+BUILD = "2026-09-22.2-live-rvol-fix"
 BARS_KEEP = 260          # закрытых 15м баров в кольцевом буфере на пару
 M1_KEEP = 20             # закрытых 1м баров в буфере на пару (только для диагностики)
 DAILY_LIMIT = 31
@@ -680,6 +685,7 @@ def build_state_snapshot() -> dict:
         ready=DIAG["ready"],
     )
     diag = dict(
+        build=BUILD,
         uptime_min=round((now_ms() - DIAG["started"]) / 60000),
         bars=DIAG["bars"], evals=DIAG["evals"],
         max_rvol=round(DIAG["max_rvol"], 1), max_rvol_sym=DIAG["max_rvol_sym"],
@@ -816,7 +822,7 @@ def main():
     if not _TRUSTSTORE_OK:
         push_log("truststore не подключён — если Telegram/Binance падают с ошибкой сертификата, "
                  "см. README_PYTHON.md", "warn")
-    push_log(f"ShelfScan (Python) стартует — открой http://localhost:{HTTP_PORT} в браузере")
+    push_log(f"ShelfScan (Python) build {BUILD} стартует — открой http://localhost:{HTTP_PORT} в браузере")
     web.run_app(app, host="127.0.0.1", port=HTTP_PORT, print=None)
 
 
