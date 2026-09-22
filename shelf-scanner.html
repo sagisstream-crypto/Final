@@ -106,7 +106,7 @@
     <div id="boot" class="progress"><span class="big">…</span>подключаюсь к Binance</div>
     <table id="radar" style="display:none">
       <thead><tr>
-        <th>пара</th><th>score</th><th>цена</th><th>полка</th><th>RVOL</th><th>пробой</th><th>24ч $</th><th>статус</th>
+        <th>пара</th><th>score</th><th>цена</th><th>полка</th><th>RVOL</th><th>готов</th><th>пробой</th><th>24ч $</th><th>статус</th>
       </tr></thead>
       <tbody id="radar-body"></tbody>
     </table>
@@ -326,10 +326,13 @@ let BTC15 = [];          // 15м свечи BTCUSDT для режима рынк
 let ready = false;
 let wsTicker = null, wsKlines = [], wsFails = 0;
 let lastEval = 0, scanned = 0, gatePass = 0;
+// диагностика: видно, что сканер жив, даже когда сигналов нет
+const DIAG = { bars:0, evals:0, maxRvol:0, maxRvolSym:"", lastBarTs:0, started:Date.now(),
+               nearMiss:0, sessionBest:0, sessionBestSym:"" };
 
 function newSym(sym, onboard){
   return { sym, onboard: onboard||0, qv24: 0, price: 0, bars: [], daily: [],
-           score: 0, state: "—", feats: null, cache: null, lastSig: 0, lastEval: 0, live: null };
+           score: 0, ready: 0, state: "—", feats: null, cache: null, lastSig: 0, lastEval: 0, live: null };
 }
 
 /* ---- свечи -------------------------------------------------------------- */
@@ -565,6 +568,16 @@ function evaluate(sym, intrabar){
   const gate = passesGate(f, st.qv24);
   st.score = gate ? scoreOf(f, st.qv24) : 0;
 
+  // насколько пара близка к сигналу: всё кроме объёма выполнено -> доля от порога RVOL
+  const shapeOk = f.sw<=CFG.maxWidth && f.satr<=CFG.maxSatr && f.rexp>=CFG.minRexp
+                && f.brk>=CFG.minBrk && f.brk<=CFG.maxChase && Math.abs(f.sdrift)<=CFG.maxDrift
+                && f.ret>0 && st.qv24>=CFG.minQv24 && st.qv24<=CFG.maxQv24;
+  st.ready = shapeOk && Number.isFinite(f.rvol) ? Math.min(1, f.rvol/CFG.minRvol) : 0;
+  DIAG.evals++;
+  if(Number.isFinite(f.rvol) && f.rvol>DIAG.maxRvol){ DIAG.maxRvol=f.rvol; DIAG.maxRvolSym=st.sym; }
+  if(st.ready>DIAG.sessionBest){ DIAG.sessionBest=st.ready; DIAG.sessionBestSym=st.sym; }
+  if(st.ready>=0.5) DIAG.nearMiss++;
+
   // состояние для радара
   if(gate){ gatePass++; st.state = st.score>=CFG.minScore ? "fired" : "gate"; }
   else if(f.sw<=CFG.maxWidth && f.satr<=CFG.maxSatr && f.age>=12) st.state = "armed";
@@ -789,6 +802,7 @@ function onKline(ev){
     if(!last || bar.t > last.t){ st.bars.push(bar); if(st.bars.length>260) st.bars.shift(); }
     else if(bar.t === last.t) st.bars[st.bars.length-1] = bar;
     st.live = null;
+    DIAG.bars++; DIAG.lastBarTs = Date.now();
     if(sym==="BTCUSDT") BTC15 = st.bars;
     evaluate(sym, false);
   }else{
@@ -827,7 +841,9 @@ function stateCell(st){
 function renderRadar(){
   const rows = Object.values(S).filter(s=>s.feats && s.sym!=="BTCUSDT");
   const rank = {fired:4, gate:3, armed:2, quiet:1, "—":0};
-  rows.sort((a,b)=> (b.score-a.score) || (rank[b.state]-rank[a.state]) || (b.qv24-a.qv24));
+  // сначала сработавшие, потом — кто ближе всего к сигналу по объёму, и лишь затем по обороту
+  rows.sort((a,b)=> (b.score-a.score) || (rank[b.state]-rank[a.state])
+                 || ((b.ready||0)-(a.ready||0)) || (b.qv24-a.qv24));
   const top = rows.slice(0,70);
   document.getElementById("radar-body").innerHTML = top.map(st=>{
     const f = st.feats;
@@ -838,20 +854,29 @@ function renderRadar(){
       <td>${fmtPx(st.price||f.price)}</td>
       <td class="${f.sw<=0.06?"up":""}">${(f.sw*100).toFixed(1)}%</td>
       <td class="${f.rvol>=10?"hot":""}">${Number.isFinite(f.rvol)?"×"+f.rvol.toFixed(f.rvol>=10?0:1):"—"}</td>
+      <td class="${st.ready>=0.5?"hot":(st.ready>0?"":"mut")}">${st.ready>0?Math.round(st.ready*100)+"%":"·"}
+        <div class="bar"><i style="width:${Math.round((st.ready||0)*100)}%"></i></div></td>
       <td class="${f.brk>=0?"up":"mut"}">${pct(f.brk)}</td>
       <td class="mut">${fmtUsd(st.qv24)}</td>
       <td>${stateCell(st)}</td>
     </tr>`;
-  }).join("") || `<tr><td colspan="8" class="empty">жду данные…</td></tr>`;
+  }).join("") || `<tr><td colspan="9" class="empty">жду данные…</td></tr>`;
 }
 function renderStats(){
   const n = Object.keys(S).length;
   const armed = Object.values(S).filter(s=>s.state==="armed").length;
   const wsOk = wsKlines.filter(w=>w.readyState===1).length;
+  const best = Object.values(S).reduce((a,b)=> (b.ready||0)>(a.ready||0) ? b : a, {ready:0});
+  const age = DIAG.lastBarTs ? Math.round((Date.now()-DIAG.lastBarTs)/1000) : null;
+  const alive = age!==null && age<90;
   document.getElementById("stats").innerHTML =
     `<div><span class="dot ${ready&&wsOk?"on":"warn"}"></span><b>${n}</b> <span>пар</span></div>`+
     `<div><b>${armed}</b> <span>на полке</span></div>`+
     `<div><b>${SIGNALS.length}</b> <span>сигналов</span></div>`+
+    (best.ready>0
+      ? `<div><span>ближе всех</span> <b class="${best.ready>=0.5?"hot":""}">${best.sym.replace("USDT","")} ${Math.round(best.ready*100)}%</b></div>`
+      : `<div><span>ближе всех</span> <b class="mut">никто</b></div>`)+
+    `<div><span class="dot ${alive?"on":"warn"}"></span><span>свеча</span> <b>${age===null?"—":age+"с назад"}</b></div>`+
     `<div><span>поток</span> <b>${wsOk}/${wsKlines.length}</b></div>`;
 }
 function renderBadge(){
@@ -931,13 +956,56 @@ function renderCfg(){
     </div>
   </div>
 
+  <div class="card"><h3>ДИАГНОСТИКА</h3><div class="doc" id="cfg-diag"></div>
+    <div class="btnrow"><button class="btn sec" id="btn-diag">обновить</button></div></div>
+
   <div class="card"><h3>ЖУРНАЛ</h3><div class="log" id="cfg-log"></div></div>`;
 
   renderLog(document.getElementById("cfg-log"));
+  renderDiag();
+  const bd=document.getElementById("btn-diag"); if(bd) bd.onclick=renderDiag;
   document.getElementById("btn-save").onclick = saveCfg;
   document.getElementById("btn-reset").onclick = ()=>{ CFG = Object.assign({},DEFAULTS,{tgToken:CFG.tgToken,tgChat:CFG.tgChat,tgOn:CFG.tgOn}); kvSet("cfg",CFG); renderCfg(); log("пороги возвращены к исследованным"); };
   document.getElementById("btn-reboot").onclick = ()=> location.reload();
   document.getElementById("btn-tg2").onclick = testTg;
+}
+function renderDiag(){
+  const el=document.getElementById("cfg-diag"); if(!el) return;
+  const up=Math.round((Date.now()-DIAG.started)/60000);
+  const age=DIAG.lastBarTs? Math.round((Date.now()-DIAG.lastBarTs)/1000) : null;
+  const n=Object.keys(S).length;
+  const best=Object.values(S).reduce((a,b)=>(b.ready||0)>(a.ready||0)?b:a,{ready:0});
+  // ожидаемая частота берётся из той же калибровочной таблицы, что и вкладка «Модель»
+  let rate=CALIB[CALIB.length-1].day;
+  if(CFG.minScore<=CALIB[0].t) rate=CALIB[0].day;
+  else for(let k=0;k<CALIB.length-1;k++){
+    const a=CALIB[k], b=CALIB[k+1];
+    if(CFG.minScore>=a.t && CFG.minScore<=b.t){
+      rate=a.day+(b.day-a.day)*(CFG.minScore-a.t)/(b.t-a.t); break;
+    }
+  }
+  rate=rate*Math.min(1,n/507);          // поправка на размер вотчлиста
+  const perGap=24/Math.max(rate,0.01);
+  const pQuiet=h=>Math.exp(-rate*h/24)*100;
+  el.innerHTML=`
+    <b>Живость</b><br>
+    работает ${up} мин · закрытых свечей получено <b>${DIAG.bars}</b> ·
+    последняя <b>${age===null?"ещё не было":age+" сек назад"}</b><br>
+    оценок сделано: ${DIAG.evals.toLocaleString("ru")} · пар в вотчлисте: ${n}<br>
+    Свечи приходят каждые 15 минут пачкой, поэтому «последняя» до 15 минут — норма.
+    Больше 20 минут — поток отвалился, перезагрузите страницу.<br><br>
+    <b>Насколько рынок близок к сигналу</b><br>
+    максимальный RVOL за сессию: <b>×${DIAG.maxRvol.toFixed(1)}</b>
+    ${DIAG.maxRvolSym?"("+DIAG.maxRvolSym.replace("USDT","")+")":""} при пороге ×${CFG.minRvol}<br>
+    ближе всех сейчас: <b>${best.ready>0? best.sym.replace("USDT","")+" — "+Math.round(best.ready*100)+"% до срабатывания" : "никто"}</b><br>
+    доходило до половины порога: ${DIAG.nearMiss} раз<br><br>
+    <b>Сколько ждать при пороге score ${CFG.minScore}</b><br>
+    ожидаемо <b>${rate.toFixed(1)} сигналов в сутки</b>, в среднем один раз в ${perGap.toFixed(1)} ч.<br>
+    Вероятность полной тишины: ${pQuiet(2).toFixed(0)}% за 2ч · ${pQuiet(4).toFixed(0)}% за 4ч ·
+    ${pQuiet(8).toFixed(0)}% за 8ч · ${pQuiet(12).toFixed(1)}% за 12ч.<br>
+    <span class="mut">По годовой статистике пауза в 2 часа случалась 799 раз, в 4 часа — 376,
+    в 8 часов — 118. Тишина полсмены — обычное дело. Если молчит дольше 12 часов
+    при живом потоке, проверьте пороги.</span>`;
 }
 function saveCfg(){
   for(const [k,,t] of FIELDS){
@@ -1199,6 +1267,13 @@ document.getElementById("btn-test-tg").onclick = testTg;
   if(navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(()=>{});
   boot();
   setInterval(()=>{ if(!document.hidden) renderAll(); }, 2000);
+  setInterval(()=>{
+    if(!ready) return;
+    const best=Object.values(S).reduce((a,b)=>(b.ready||0)>(a.ready||0)?b:a,{ready:0});
+    log(`пульс: свечей ${DIAG.bars}, макс RVOL за сессию ×${DIAG.maxRvol.toFixed(1)}`+
+        (best.ready>0?`, ближе всех ${best.sym.replace("USDT","")} ${Math.round(best.ready*100)}%`:", близких нет"));
+    const d=document.getElementById("cfg-diag"); if(d) renderDiag();
+  }, 15*60000);
   document.addEventListener("visibilitychange", ()=>{ if(!document.hidden) renderAll(); });
 })();
 </script>
