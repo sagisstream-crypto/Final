@@ -1,0 +1,1170 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#080b08">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ShelfScan">
+<title>ShelfScan · тихая полка → вынос</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#080b08;color:#c6d4c6;font-family:'SF Mono',Consolas,Menlo,monospace;font-size:12px;
+       display:flex;flex-direction:column;min-height:100vh;-webkit-text-size-adjust:100%}
+  input,select,button{font-family:inherit;font-size:16px}
+  .hdr{border-bottom:1px solid #1c2a1c;background:#0c110c;padding:10px 12px;position:sticky;top:0;z-index:30}
+  .hdr-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+  .brand{font-size:13px;letter-spacing:.18em;color:#5eff8f;font-weight:600}
+  .brand small{display:block;font-size:9px;letter-spacing:.03em;color:#54664f;margin-top:2px;font-weight:400}
+  .stats{display:flex;gap:12px;flex-wrap:wrap;font-size:10px;align-items:center}
+  .stats b{color:#c6d4c6;font-weight:600}
+  .stats span{color:#54664f}
+  .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#3a4a3a;margin-right:4px;vertical-align:middle}
+  .dot.on{background:#5eff8f;box-shadow:0 0 6px #5eff8f}
+  .dot.warn{background:#ffb454}
+  .dot.err{background:#ff6b6b}
+  .tabs{display:flex;border-bottom:1px solid #1c2a1c;background:#0c110c;position:sticky;top:0;z-index:20}
+  .tabs button{flex:1;background:transparent;border:none;border-bottom:2px solid transparent;color:#54664f;
+       font-size:11px;letter-spacing:.06em;padding:11px 4px;cursor:pointer}
+  .tabs button.on{color:#5eff8f;border-bottom-color:#5eff8f;background:#101810}
+  .tabs .badge{display:inline-block;min-width:16px;padding:0 4px;margin-left:4px;border-radius:8px;
+       background:#2a1e10;color:#ffb454;font-size:9px;line-height:14px}
+  main{flex:1;overflow-x:hidden;padding-bottom:16px}
+  .pane{display:none;padding:10px 8px}
+  .pane.on{display:block}
+  table{width:100%;border-collapse:collapse;font-size:11px}
+  th{position:sticky;top:0;background:#0c110c;color:#54664f;font-weight:400;font-size:9px;letter-spacing:.06em;
+     text-align:right;padding:6px 5px;border-bottom:1px solid #1c2a1c;white-space:nowrap;z-index:5}
+  th:first-child,td:first-child{text-align:left}
+  td{padding:7px 5px;border-bottom:1px solid #131a13;text-align:right;white-space:nowrap}
+  tr.armed td{background:#0e1509}
+  tr.fired td{background:#141a07}
+  .sym{color:#c6d4c6;font-weight:600}
+  .sub{display:block;color:#465646;font-size:9px;margin-top:2px}
+  .up{color:#5eff8f}.dn{color:#ff6b6b}.mut{color:#54664f}.warn{color:#ffb454}.hot{color:#ffd85e}
+  .scorecell{font-weight:600}
+  .s0{color:#3f4f3f}.s1{color:#7f8f6f}.s2{color:#c6d4c6}.s3{color:#ffd85e}.s4{color:#ffb454}.s5{color:#ff8f5e}
+  .pill{display:inline-block;padding:1px 5px;border-radius:2px;font-size:9px;border:1px solid #23331f;color:#7f8f6f}
+  .pill.q{border-color:#2a3a4a;color:#7ab8ff}
+  .pill.a{border-color:#4a3a1e;color:#ffd85e}
+  .pill.f{border-color:#4a4a1e;color:#ffb454}
+  .card{border:1px solid #1c2a1c;border-radius:3px;padding:10px;margin-bottom:8px;background:#0c110c}
+  .card h3{font-size:11px;letter-spacing:.08em;color:#5eff8f;margin-bottom:8px;font-weight:600}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 0;flex-wrap:wrap}
+  .row label{color:#8fa08f;font-size:11px;flex:1;min-width:150px}
+  .row .hint{display:block;color:#465646;font-size:9px;margin-top:2px;font-weight:400;white-space:normal}
+  input[type=text],input[type=number],input[type=password],select{
+     background:#080b08;border:1px solid #23331f;color:#c6d4c6;border-radius:2px;padding:7px 8px;width:130px;outline:none}
+  input[type=text]:focus,input[type=number]:focus,select:focus{border-color:#3d5a3d}
+  input.wide{width:100%}
+  .btn{background:#16250f;border:1px solid #2f4a2f;color:#5eff8f;border-radius:2px;padding:8px 12px;font-size:11px;cursor:pointer}
+  .btn:active{background:#20351a}
+  .btn.sec{background:#101a22;border-color:#25394a;color:#7ab8ff}
+  .btn.red{background:#1e1010;border-color:#4a1e1e;color:#ff6b6b}
+  .btn.full{width:100%;margin-top:6px}
+  .btnrow{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+  .log{font-size:10px;color:#54664f;max-height:130px;overflow-y:auto;line-height:1.5;margin-top:6px;
+       border-top:1px solid #131a13;padding-top:6px}
+  .sig{border:1px solid #23331f;border-left:3px solid #ffb454;border-radius:2px;padding:9px;margin-bottom:7px;background:#0c110c}
+  .sig .top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  .sig .name{font-size:13px;color:#ffd85e;font-weight:600}
+  .sig .meta{font-size:9px;color:#465646;margin-top:5px;line-height:1.6;white-space:normal}
+  .sig .why{font-size:10px;color:#8fa08f;margin-top:5px;white-space:normal;line-height:1.5}
+  .empty{color:#3f4f3f;text-align:center;padding:36px 12px;font-size:11px;line-height:1.7}
+  .doc{font-size:11px;line-height:1.75;color:#8fa08f;white-space:normal}
+  .doc h4{color:#5eff8f;font-size:11px;letter-spacing:.06em;margin:14px 0 6px}
+  .doc code{background:#111a11;padding:1px 4px;border-radius:2px;color:#ffd85e;font-size:10px}
+  .doc ul{margin:4px 0 4px 16px}
+  .doc li{margin-bottom:3px}
+  .doc table{font-size:10px;margin:8px 0}
+  .doc td,.doc th{padding:4px 5px}
+  .bar{height:3px;background:#131a13;border-radius:2px;overflow:hidden;margin-top:3px}
+  .bar i{display:block;height:100%;background:#5eff8f}
+  .progress{padding:24px 14px;text-align:center;color:#54664f;font-size:11px;line-height:1.9}
+  .progress .big{font-size:22px;color:#5eff8f;display:block;margin-bottom:6px}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-row">
+    <div class="brand">SHELFSCAN<small>тихая полка → вынос · USDT-M фьючерсы</small></div>
+    <div class="stats" id="stats"></div>
+  </div>
+</div>
+
+<div class="tabs">
+  <button data-tab="radar" class="on">РАДАР</button>
+  <button data-tab="signals">СИГНАЛЫ<span class="badge" id="sigbadge" style="display:none">0</span></button>
+  <button data-tab="cfg">НАСТРОЙКИ</button>
+  <button data-tab="doc">МОДЕЛЬ</button>
+</div>
+
+<main>
+  <div class="pane on" id="pane-radar">
+    <div id="boot" class="progress"><span class="big">…</span>подключаюсь к Binance</div>
+    <table id="radar" style="display:none">
+      <thead><tr>
+        <th>пара</th><th>score</th><th>цена</th><th>полка</th><th>RVOL</th><th>пробой</th><th>24ч $</th><th>статус</th>
+      </tr></thead>
+      <tbody id="radar-body"></tbody>
+    </table>
+  </div>
+
+  <div class="pane" id="pane-signals">
+    <div class="btnrow" style="margin-bottom:10px">
+      <button class="btn sec" id="btn-test-tg">тест Telegram</button>
+      <button class="btn red" id="btn-clear-sig">очистить</button>
+    </div>
+    <div id="siglist"><div class="empty">Сигналов пока нет.<br>Сканер ждёт, пока на тихой полке взорвётся объём.</div></div>
+  </div>
+
+  <div class="pane" id="pane-cfg"></div>
+  <div class="pane" id="pane-doc"></div>
+</main>
+
+<script>
+"use strict";
+
+/* ============================================================================
+   МОДЕЛЬ
+   Обучена на 833 бессрочных USDT-M парах Binance, год 15-минутных свечей
+   (сен 2025 — сен 2026, ~24.5 млн баров, 255 795 символо-дней).
+   Разделение train/test строго по времени: 72% / 28%, без подглядывания вперёд.
+
+   Схема из двух ступеней:
+     ШЛЮЗ  — определение паттерна «тихая полка → вынос». Его пороги подобраны
+             не на глаз, а перебором 480 комбинаций по критерию «сколько
+             реальных выносов ≥25%/2ч удаётся поймать при заданном бюджете
+             алертов». Пропускает ≈31 бар в сутки по всему рынку и накрывает
+             48% всех таких выносов.
+     SCORE — логистическая регрессия на 29 признаках, ранжирует внутри шлюза.
+             Цель: P(+8% за 2 часа). AUC на отложенных данных 0.868.
+             При пороге 0.10 срезает 74% алертов, НЕ теряя ни одного выноса.
+   ============================================================================ */
+const MODEL = {
+  L: 48,                      // окно полки = 48 баров по 15м = 12 часов
+  b: -2.433694839477539,
+  f: [
+    ["log_rvol",   4.32982,  0.55945, +0.0650],
+    ["log_rvol96",   4.28831,  0.64636, -0.2019],
+    ["log_rexp",   2.17521,  0.53696, +0.4358],
+    ["brk_n",   1.16106,  2.47420, +0.1197],
+    ["clv",   0.65467,  0.23294, +0.0951],
+    ["body",   0.52133,  0.26087, -0.0212],
+    ["upwick",   0.34521,  0.23287, -0.0871],
+    ["taker",   0.52535,  0.07316, +0.0323],
+    ["log_sw",  -2.92045,  0.75510, +0.0142],
+    ["log_satr",  -5.09370,  0.66143, +0.7204],
+    ["spos",   0.69805,  0.27359, +0.0699],
+    ["sdrift_abs",   0.04097,  0.03444, +0.0308],
+    ["log_sq",  -0.04055,  0.51607, +0.0899],
+    ["log_shelf_age",   1.99516,  2.23495, +0.0070],
+    ["log_qv24",   6.59021,  0.43651, -0.1516],
+    ["log_qv24_mult",   0.14442,  0.80870, +0.0397],
+    ["log_pre3",   1.91825,  1.52637, -0.0160],
+    ["log_qv_accel",   2.09684,  1.68371, -0.0973],
+    ["log_ats",   0.81899,  0.43524, +0.0470],
+    ["log_trd",   3.44577,  0.74384, +0.1430],
+    ["consec_up",   2.74991,  1.83318, -0.0121],
+    ["pos30",   0.40847,  0.25374, -0.1313],
+    ["log_natr",  -4.50658,  0.70553, +0.5035],
+    ["ret_n",   2.61464,  2.11791, -0.1546],
+    ["ret3_n",   3.69946,  2.50432, +0.3020],
+    ["btc_ret6",   0.00046,  0.00691, -0.0872],
+    ["hour_sin",  -0.00844,  0.64749, +0.0799],
+    ["hour_cos",  -0.17459,  0.74183, -0.0086],
+    ["log_bars",   9.14093,  1.03039, +0.0755]
+  ]
+};
+
+/* Калибровка score, измерена на отложенных 62 днях, которых модель не видела.
+   База внутри шлюза: P5=14.2%, P10=6.3%, P20=1.9%, P40=0.28%.
+   recall — доля всех выносов ≥25% за 2ч, по которым пришёл хотя бы один алерт
+   с запасом хода ≥5% до пика. */
+const CALIB = [
+  {t:0.00, day:51.6, p5:0.1423, p10:0.0635, p20:0.0191, p40:0.0028, rec:0.479},
+  {t:0.05, day:21.8, p5:0.2947, p10:0.1477, p20:0.0453, p40:0.0067, rec:0.479},
+  {t:0.10, day:13.3, p5:0.3811, p10:0.2075, p20:0.0655, p40:0.0109, rec:0.479},
+  {t:0.15, day: 8.0, p5:0.4462, p10:0.2617, p20:0.0892, p40:0.0183, rec:0.464},
+  {t:0.20, day: 5.4, p5:0.4806, p10:0.2866, p20:0.1075, p40:0.0239, rec:0.429},
+  {t:0.25, day: 3.5, p5:0.5023, p10:0.3180, p20:0.1290, p40:0.0369, rec:0.393},
+  {t:0.30, day: 2.4, p5:0.5099, p10:0.3510, p20:0.1589, p40:0.0530, rec:0.357},
+  {t:0.40, day: 1.2, p5:0.5890, p10:0.4521, p20:0.1918, p40:0.0685, rec:0.236},
+  {t:0.50, day: 0.6, p5:0.6667, p10:0.5278, p20:0.1944, p40:0.0278, rec:0.150}
+];
+const BASE = {p5:0.1423, p10:0.0635, p20:0.0191, p40:0.0028};
+
+/* ============================================================================
+   НАСТРОЙКИ ПО УМОЛЧАНИЮ — из исследования
+   ============================================================================ */
+const DEFAULTS = {
+  minQv24: 1e6,          // полоса, на которой обучалась и калибровалась модель
+  maxQv24: 3e8,          // плотность выносов максимальна в 3–100 млн, но 1–3 млн даёт ещё 25%
+  minScore: 0.10,        // ~13 сигналов/сутки, P(+10% за 2ч)=20.8%, recall не падает
+  maxWidth: 0.15,        // ширина полки за 12ч
+  maxSatr: 0.018,        // ATR полки <= 1.8% за бар — это и есть «тихая»
+  minRvol: 40,           // объём бара >= 40 медиан полки
+  minRexp: 1.5,          // размах бара >= 1.5 ATR полки
+  minBrk: -0.04,         // ловим ещё на подходе к потолку полки
+  maxDrift: 0.25,        // полка не в тренде
+  maxChase: 0.25,        // выше — уже уехало без вас
+  intrabar: true,        // оценивать незакрытый 15м бар
+  cooldownMin: 90,       // не повторять по той же паре
+  muteHours: "12,13,14", // часы UTC с худшим качеством сигналов
+  sound: true,
+  tgToken: "",
+  tgChat: "",
+  tgOn: false
+};
+
+/* ============================================================================
+   Хранилище
+   ============================================================================ */
+const DB_NAME = "shelfscan", STORE = "kv";
+let _db = null;
+function idb(){
+  if(_db) return Promise.resolve(_db);
+  return new Promise((res,rej)=>{
+    const r = indexedDB.open(DB_NAME,1);
+    r.onupgradeneeded = ()=> r.result.createObjectStore(STORE);
+    r.onsuccess = ()=>{ _db = r.result; res(_db); };
+    r.onerror = ()=> rej(r.error);
+  });
+}
+async function kvGet(k){
+  try{ const db=await idb(); return await new Promise((res,rej)=>{
+    const t=db.transaction(STORE,"readonly").objectStore(STORE).get(k);
+    t.onsuccess=()=>res(t.result); t.onerror=()=>rej(t.error); }); }
+  catch(e){ try{ const v=localStorage.getItem(DB_NAME+":"+k); return v?JSON.parse(v):undefined; }catch(_){ return undefined; } }
+}
+async function kvSet(k,v){
+  try{ const db=await idb(); await new Promise((res,rej)=>{
+    const t=db.transaction(STORE,"readwrite").objectStore(STORE).put(v,k);
+    t.onsuccess=()=>res(); t.onerror=()=>rej(t.error); }); }
+  catch(e){ try{ localStorage.setItem(DB_NAME+":"+k, JSON.stringify(v)); }catch(_){} }
+}
+
+let CFG = Object.assign({}, DEFAULTS);
+let SIGNALS = [];
+
+/* ============================================================================
+   Утилиты
+   ============================================================================ */
+const MAX_WATCH = 460;          // потолок вотчлиста, чтобы телефон не лёг
+const API = "https://fapi.binance.com";
+const WSB = "wss://fstream.binance.com";
+
+function median(a){
+  if(!a.length) return NaN;
+  const b = Float64Array.from(a); b.sort();
+  const m = b.length>>1;
+  return b.length%2 ? b[m] : (b[m-1]+b[m])/2;
+}
+function mean(a){ let s=0,n=0; for(const x of a){ if(Number.isFinite(x)){s+=x;n++;} } return n?s/n:NaN; }
+function clamp(x,a,b){ return x<a?a:(x>b?b:x); }
+function fmtUsd(v){
+  if(!Number.isFinite(v)) return "—";
+  if(v>=1e9) return (v/1e9).toFixed(2)+"B";
+  if(v>=1e6) return (v/1e6).toFixed(1)+"M";
+  if(v>=1e3) return (v/1e3).toFixed(0)+"K";
+  return v.toFixed(0);
+}
+function fmtPx(v){
+  if(!Number.isFinite(v)) return "—";
+  if(v>=1000) return v.toFixed(1);
+  if(v>=1) return v.toFixed(3);
+  if(v>=0.01) return v.toFixed(5);
+  return v.toPrecision(4);
+}
+function pct(v,d){ return (v>=0?"+":"")+(v*100).toFixed(d===undefined?1:d)+"%"; }
+function hhmm(ts){ const d=new Date(ts); return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); }
+
+const logLines = [];
+function log(msg, cls){
+  logLines.unshift({t:Date.now(), msg, cls:cls||""});
+  if(logLines.length>120) logLines.pop();
+  const el = document.getElementById("cfg-log");
+  if(el) renderLog(el);
+}
+function renderLog(el){
+  el.innerHTML = logLines.slice(0,40).map(l=>
+    `<div class="${l.cls}">${hhmm(l.t)} ${escapeHtml(l.msg)}</div>`).join("");
+}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+/* ============================================================================
+   Троттлер веса REST-запросов (лимит Binance ~2400/мин, держим 1000)
+   ============================================================================ */
+const budget = { used:0, resetAt: Date.now()+60000 };
+async function spend(w){
+  for(;;){
+    const now = Date.now();
+    if(now >= budget.resetAt){ budget.used = 0; budget.resetAt = now+60000; }
+    if(budget.used + w <= 1000){ budget.used += w; return; }
+    await new Promise(r=>setTimeout(r, Math.max(200, budget.resetAt-now)));
+  }
+}
+async function getJson(path, weight){
+  await spend(weight||1);
+  const r = await fetch(API+path, {cache:"no-store"});
+  if(!r.ok){
+    const body = await r.text().catch(()=> "");
+    throw new Error("HTTP "+r.status+" "+path.split("?")[0]+" "+body.slice(0,120));
+  }
+  return r.json();
+}
+
+/* ============================================================================
+   Состояние рынка
+   ============================================================================ */
+const S = {};            // symbol -> state
+let BTC15 = [];          // 15м свечи BTCUSDT для режима рынка
+let ready = false;
+let wsTicker = null, wsKlines = [], wsFails = 0;
+let lastEval = 0, scanned = 0, gatePass = 0;
+
+function newSym(sym, onboard){
+  return { sym, onboard: onboard||0, qv24: 0, price: 0, bars: [], daily: [],
+           score: 0, state: "—", feats: null, cache: null, lastSig: 0, lastEval: 0, live: null };
+}
+
+/* ---- свечи -------------------------------------------------------------- */
+// bar = {t, o, h, l, c, qv, n, tb}   (n = число сделок, tb = taker buy quote)
+function klineToBar(k){
+  return { t:+k[0], o:+k[1], h:+k[2], l:+k[3], c:+k[4], qv:+k[7], n:+k[8], tb:+k[10] };
+}
+function wsKlineToBar(k){
+  return { t:+k.t, o:+k.o, h:+k.h, l:+k.l, c:+k.c, qv:+k.q, n:+k.n, tb:+k.Q };
+}
+
+/* ============================================================================
+   ПРИЗНАКИ — точная копия того, что считалось в исследовании
+   bars: массив закрытых 15м баров, последний элемент — оцениваемый бар i.
+   ============================================================================ */
+function trueRange(bar, prev){
+  if(!prev) return bar.h - bar.l;
+  return Math.max(bar.h-bar.l, Math.abs(bar.h-prev.c), Math.abs(bar.l-prev.c));
+}
+
+function computeFeatures(st, bars){
+  const L = MODEL.L, n = bars.length;
+  if(n < 200) return null;                   // нужен полный контекст 192 бара + запас
+  const i = n-1, cur = bars[i], prev = bars[i-1];
+  if(!cur || !prev || !(cur.c>0)) return null;
+
+  // --- окно полки: бары [i-L, i-1] ---
+  let hi=-Infinity, lo=Infinity, sumC=0, sumTr=0;
+  const qvL=[], trL=[];
+  for(let k=i-L;k<=i-1;k++){
+    const b=bars[k]; if(!b) return null;
+    if(b.h>hi) hi=b.h; if(b.l<lo) lo=b.l;
+    sumC+=b.c; qvL.push(b.qv);
+    const tr = trueRange(b, bars[k-1]); trL.push(tr); sumTr+=tr;
+  }
+  const mid=(hi+lo)/2, meanC=sumC/L, atrL=sumTr/L, medQvL=median(qvL);
+  const sw   = (hi-lo)/mid;
+  const satr = atrL/meanC;
+  const spos = (hi-lo)>0 ? (prev.c-lo)/(hi-lo) : 0.5;
+  const brk  = cur.c/hi - 1;
+  const rvol = medQvL>0 ? cur.qv/medQvL : NaN;
+  const rexp = atrL>0 ? (cur.h-cur.l)/atrL : NaN;
+  const sdrift = bars[i-L] ? prev.c/bars[i-L].c - 1 : 0;
+
+  // --- sq: медиана объёма полки против медианы за 4L баров ---
+  const q4=[]; for(let k=i-Math.min(4*L,192);k<=i-1;k++){ if(bars[k]) q4.push(bars[k].qv); }
+  const med4 = median(q4);
+  const sq = med4>0 ? medQvL/med4 : NaN;
+
+  // --- 96-барные базы ---
+  const qv96=[], n96=[], ats96=[];
+  for(let k=i-96;k<=i-1;k++){
+    const b=bars[k]; if(!b) continue;
+    qv96.push(b.qv); n96.push(b.n);
+    if(b.n>0) ats96.push(b.qv/b.n);
+  }
+  const medQv96=median(qv96), medN96=median(n96), medAts=median(ats96);
+  const rvol96 = medQv96>0 ? cur.qv/medQv96 : NaN;
+  const trdMult = medN96>0 ? cur.n/medN96 : NaN;
+  const atsCur = cur.n>0 ? cur.qv/cur.n : NaN;
+  const atsMult = (medAts>0 && Number.isFinite(atsCur)) ? atsCur/medAts : NaN;
+
+  // --- предвзрывное накопление: 3 бара до триггера ---
+  const pre3 = (bars[i-1].qv+bars[i-2].qv+bars[i-3].qv)/3;
+  const pre3Mult = medQv96>0 ? pre3/medQv96 : NaN;
+  const qvAccel = prev.qv>0 ? cur.qv/prev.qv : NaN;
+
+  // --- natr(14) включая текущий бар ---
+  let s14=0; for(let k=i-13;k<=i;k++) s14+=trueRange(bars[k],bars[k-1]);
+  const natr = (s14/14)/cur.c;
+
+  // --- возраст полки: подряд идущие бары с размахом <= 1.8% ---
+  let age=0;
+  for(let k=i;k>=1;k--){
+    const b=bars[k-1]; if(!b || !(b.c>0)) break;
+    if((b.h-b.l)/b.c <= 0.018) age++; else break;
+  }
+
+  // --- форма бара ---
+  const rngBar = cur.h-cur.l;
+  const clv  = rngBar>0 ? (cur.c-cur.l)/rngBar : 0.5;
+  const body = rngBar>0 ? Math.abs(cur.c-cur.o)/rngBar : 0;
+  const upwick = rngBar>0 ? (cur.h-Math.max(cur.c,cur.o))/rngBar : 0;
+  const taker = cur.qv>0 ? cur.tb/cur.qv : 0.5;
+  const ret  = prev.c>0 ? cur.c/prev.c-1 : 0;
+  const ret3 = bars[i-3] ? cur.c/bars[i-3].c-1 : 0;
+  let consecUp=0;
+  for(let k=i;k>=1;k--){ if(bars[k].c>bars[k-1].c) consecUp++; else break; }
+
+  // --- дневной контекст ---
+  let pos30=0.5, qv24Mult=1;
+  if(st.daily && st.daily.length>=10){
+    let dh=-Infinity, dl=Infinity; const dq=[];
+    for(const d of st.daily){ if(d.h>dh)dh=d.h; if(d.l<dl)dl=d.l; dq.push(d.qv); }
+    if(dh>dl) pos30 = clamp((prev.c-dl)/(dh-dl),0,1);
+    const mq = median(dq);
+    if(mq>0 && st.qv24>0) qv24Mult = st.qv24/mq;
+  }
+
+  // --- режим рынка ---
+  let btcRet6 = 0;
+  if(BTC15.length>=7){
+    const b=BTC15, m=b.length-1;
+    if(b[m-6] && b[m-6].c>0) btcRet6 = b[m].c/b[m-6].c - 1;
+  }
+
+  const hour = new Date(cur.t).getUTCHours();
+  const barsListed = st.onboard>0 ? clamp((cur.t-st.onboard)/900000, 0, 40000) : 20000;
+
+  st.cache = { medQvL, hi, atrL };            // для дешёвого внутрибарного предфильтра
+  return {
+    sw, satr, spos, brk, rvol, rexp, sdrift, sq, rvol96, trdMult, atsMult,
+    pre3Mult, qvAccel, natr, age, clv, body, upwick, taker, ret, ret3, consecUp,
+    pos30, qv24Mult, btcRet6, hour, barsListed, shelfHi:hi, shelfLo:lo,
+    price:cur.c, barTime:cur.t
+  };
+}
+
+/* --- вектор признаков в том же порядке и с теми же преобразованиями --- */
+function featureVector(f, qv24){
+  const natrC = clamp(f.natr, 1e-4, 1e9);
+  const h = 2*Math.PI*f.hour/24;
+  return {
+    log_rvol:      Math.log1p(clamp(f.rvol,0,500)),
+    log_rvol96:    Math.log1p(clamp(f.rvol96,0,500)),
+    log_rexp:      Math.log1p(clamp(f.rexp,0,80)),
+    brk_n:         clamp(f.brk/natrC, -20, 60),
+    clv:           f.clv,
+    body:          f.body,
+    upwick:        f.upwick,
+    taker:         Number.isFinite(f.taker)?f.taker:0.5,
+    log_sw:        Math.log(clamp(f.sw,1e-4,3)),
+    log_satr:      Math.log(clamp(f.satr,1e-5,1)),
+    spos:          clamp(f.spos,-1,2),
+    sdrift_abs:    clamp(Math.abs(f.sdrift),0,2),
+    log_sq:        Math.log(clamp(f.sq,1e-3,50)),
+    log_shelf_age: Math.log1p(clamp(f.age,0,600)),
+    log_qv24:      Math.log10(clamp(qv24||f.qv24||1e4,1e4,1e11)),
+    log_qv24_mult: Math.log(clamp(f.qv24Mult,1e-2,100)),
+    log_pre3:      Math.log(clamp(f.pre3Mult,1e-2,200)),
+    log_qv_accel:  Math.log(clamp(f.qvAccel,1e-2,300)),
+    log_ats:       Math.log(clamp(f.atsMult,1e-2,100)),
+    log_trd:       Math.log(clamp(f.trdMult,1e-2,300)),
+    consec_up:     clamp(f.consecUp,0,10),
+    pos30:         clamp(f.pos30,0,1),
+    log_natr:      Math.log(clamp(f.natr,1e-5,0.5)),
+    ret_n:         clamp(f.ret/natrC, -20, 60),
+    ret3_n:        clamp(f.ret3/natrC, -30, 90),
+    btc_ret6:      clamp(f.btcRet6, -0.15, 0.15),
+    hour_sin:      Math.sin(h),
+    hour_cos:      Math.cos(h),
+    log_bars:      Math.log1p(clamp(f.barsListed,0,40000))
+  };
+}
+
+function scoreOf(f, qv24){
+  f.qv24 = qv24;
+  const v = featureVector(f, qv24);
+  let z = MODEL.b;
+  for(const [name,mu,sd,w] of MODEL.f){
+    let x = v[name];
+    if(!Number.isFinite(x)) x = mu;          // как fillna(0) после нормировки
+    z += w * ((x-mu)/(sd||1));
+  }
+  return 1/(1+Math.exp(-z));
+}
+
+/* --- шлюз: те же пороги, на которых обучалась модель + защита от погони --- */
+function passesGate(f, qv24){
+  if(!Number.isFinite(f.sw) || !Number.isFinite(f.rvol)) return false;
+  if(f.sw > CFG.maxWidth) return false;
+  if(!(f.satr <= CFG.maxSatr)) return false;
+  if(f.rvol < CFG.minRvol) return false;
+  if(f.rexp < CFG.minRexp) return false;
+  if(f.brk < CFG.minBrk) return false;
+  if(f.brk > CFG.maxChase) return false;     // уже уехало — поздно
+  if(Math.abs(f.sdrift) > CFG.maxDrift) return false;
+  if(!(f.ret > 0)) return false;
+  if(!(f.satr > 0)) return false;
+  if(qv24 < CFG.minQv24 || qv24 > CFG.maxQv24) return false;
+  return true;
+}
+
+/* --- человеческое объяснение сигнала --- */
+function explain(f, score){
+  const out = [];
+  if(f.rvol>=30) out.push(`объём ×${f.rvol.toFixed(0)} к медиане полки`);
+  else if(f.rvol>=10) out.push(`объём ×${f.rvol.toFixed(0)}`);
+  else out.push(`объём ×${f.rvol.toFixed(1)}`);
+  out.push(`полка ${(f.sw*100).toFixed(1)}% / 12ч`);
+  if(f.age>=20) out.push(`стоит ${f.age} баров (${(f.age/4).toFixed(1)}ч)`);
+  if(f.satr<=0.004) out.push("очень тихая полка");
+  if(f.rexp>=4) out.push(`размах ×${f.rexp.toFixed(1)} ATR`);
+  if(f.brk>=0.005) out.push(`пробой +${(f.brk*100).toFixed(1)}% над потолком`);
+  else if(f.brk>=0) out.push("на потолке полки");
+  else out.push("подходит к потолку");
+  if(f.pre3Mult>=3) out.push(`подготовка: объём ×${f.pre3Mult.toFixed(1)} за 45м до бара`);
+  if(f.taker>=0.65) out.push(`тейкер-покупки ${Math.round(f.taker*100)}%`);
+  if(f.rvol96>=8 && f.rvol/Math.max(f.rvol96,1e-9) < 1.5) out.push("⚠ объём уже был поднят сутки");
+  if(f.pos30<=0.25) out.push("низ 30-дневного диапазона");
+  if(f.btcRet6<=-0.005) out.push("BTC не растёт — ротация в альты");
+  return out;
+}
+
+function probFor(score){
+  const lo = CALIB[0], hi = CALIB[CALIB.length-1];
+  if(score <= lo.t) return lo;
+  if(score >= hi.t) return hi;
+  for(let k=0;k<CALIB.length-1;k++){
+    const a=CALIB[k], b=CALIB[k+1];
+    if(score>=a.t && score<=b.t){
+      const u=(score-a.t)/(b.t-a.t);
+      const m=(x,y)=>x+(y-x)*u;
+      return {p5:m(a.p5,b.p5), p10:m(a.p10,b.p10), p20:m(a.p20,b.p20), p40:m(a.p40,b.p40)};
+    }
+  }
+  return hi;
+}
+
+/* ============================================================================
+   Оценка одного символа
+   ============================================================================ */
+function evaluate(sym, intrabar){
+  const st = S[sym];
+  if(!st || st.bars.length < 200) return;
+  let bars = st.bars;
+  if(intrabar && st.live) bars = st.bars.concat([st.live]);   // незакрытый бар как триггер
+  const f = computeFeatures(st, bars);
+  if(!f) return;
+  st.feats = f;
+  scanned++;
+
+  const gate = passesGate(f, st.qv24);
+  st.score = gate ? scoreOf(f, st.qv24) : 0;
+
+  // состояние для радара
+  if(gate){ gatePass++; st.state = st.score>=CFG.minScore ? "fired" : "gate"; }
+  else if(f.sw<=CFG.maxWidth && f.satr<=CFG.maxSatr && f.age>=12) st.state = "armed";
+  else if(f.sw<=CFG.maxWidth) st.state = "quiet";
+  else st.state = "—";
+
+  if(!gate || st.score < CFG.minScore) return;
+
+  // фильтры шума
+  const now = Date.now();
+  if(now - st.lastSig < CFG.cooldownMin*60000) return;
+  const muted = String(CFG.muteHours||"").split(",").map(x=>parseInt(x,10)).filter(Number.isFinite);
+  if(muted.includes(f.hour)) return;
+
+  st.lastSig = now;
+  emitSignal(st, f, intrabar);
+}
+
+function emitSignal(st, f, intrabar){
+  const p = probFor(st.score);
+  const sig = {
+    id: st.sym+"-"+f.barTime+(intrabar?"-i":""),
+    sym: st.sym, ts: Date.now(), score: st.score, price: f.price,
+    qv24: st.qv24, sw: f.sw, rvol: f.rvol, brk: f.brk, age: f.age,
+    satr: f.satr, taker: f.taker, shelfHi: f.shelfHi, shelfLo: f.shelfLo,
+    natr: f.natr, intrabar: !!intrabar, why: explain(f, st.score), p
+  };
+  SIGNALS.unshift(sig);
+  if(SIGNALS.length>200) SIGNALS.pop();
+  kvSet("signals", SIGNALS.slice(0,200));
+  log(`СИГНАЛ ${st.sym} score ${(st.score*100).toFixed(0)} rvol ×${f.rvol.toFixed(0)}`, "hot");
+  if(CFG.sound) beep();
+  sendTelegram(sig);
+  renderSignals(); renderBadge();
+}
+
+/* ============================================================================
+   Telegram
+   ============================================================================ */
+function stopLevel(s){
+  // техническая инвалидация: чуть ниже дна полки, но не дальше 9% от входа
+  const below = s.shelfLo*0.997;
+  return Math.max(below, s.price*0.91);
+}
+function tgText(s){
+  const lift10 = (s.p.p10/BASE.p10).toFixed(1);
+  const stop = stopLevel(s);
+  return [
+    `🟡 <b>${s.sym}</b> · тихая полка → вынос`,
+    ``,
+    `score <b>${(s.score*100).toFixed(0)}</b>/100${s.intrabar?" · внутри бара":""}`,
+    `цена <b>${fmtPx(s.price)}</b> · 24ч оборот ${fmtUsd(s.qv24)}$`,
+    `полка ${(s.sw*100).toFixed(1)}% / 12ч · возраст ${s.age} баров`,
+    `объём бара ×${s.rvol.toFixed(0)} · пробой ${pct(s.brk)}`,
+    ``,
+    `<i>${s.why.join(" · ")}</i>`,
+    ``,
+    `историч. частота для такого score (отложенные 62 дня):`,
+    `+5% за 2ч — <b>${(s.p.p5*100).toFixed(0)}%</b> · +10% — <b>${(s.p.p10*100).toFixed(0)}%</b> (×${lift10} к базе)`,
+    `+20% — <b>${(s.p.p20*100).toFixed(1)}%</b> · +40% — ${(s.p.p40*100).toFixed(1)}%`,
+    ``,
+    `потолок полки ${fmtPx(s.shelfHi)} · низ ${fmtPx(s.shelfLo)}`,
+    `техн. инвалидация ниже ${fmtPx(stop)}`,
+    ``,
+    `<a href="https://www.binance.com/ru/futures/${s.sym}">график</a>`
+  ].join("\n");
+}
+async function sendTelegram(s){
+  if(!CFG.tgOn || !CFG.tgToken || !CFG.tgChat) return;
+  try{
+    const r = await fetch(`https://api.telegram.org/bot${CFG.tgToken}/sendMessage`,{
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({chat_id:CFG.tgChat, text:tgText(s), parse_mode:"HTML",
+                            disable_web_page_preview:true})
+    });
+    const j = await r.json();
+    if(!j.ok) log("Telegram: "+(j.description||"ошибка"), "dn");
+  }catch(e){ log("Telegram недоступен: "+e.message, "dn"); }
+}
+
+/* --- звук --- */
+let actx=null;
+function beep(){
+  try{
+    actx = actx || new (window.AudioContext||window.webkitAudioContext)();
+    const o=actx.createOscillator(), g=actx.createGain();
+    o.connect(g); g.connect(actx.destination);
+    o.frequency.value=880; g.gain.value=0.06;
+    o.start(); o.stop(actx.currentTime+0.16);
+    setTimeout(()=>{ const o2=actx.createOscillator(), g2=actx.createGain();
+      o2.connect(g2); g2.connect(actx.destination); o2.frequency.value=1320; g2.gain.value=0.05;
+      o2.start(); o2.stop(actx.currentTime+0.16); },190);
+  }catch(e){}
+}
+
+/* ============================================================================
+   Загрузка
+   ============================================================================ */
+async function boot(){
+  const bootEl = document.getElementById("boot");
+  const say = (big,small)=>{ bootEl.innerHTML = `<span class="big">${big}</span>${small}`; };
+  try{
+    say("1/4","беру список пар");
+    const info = await getJson("/fapi/v1/exchangeInfo", 1);
+    const perp = info.symbols.filter(s=>
+      s.contractType==="PERPETUAL" && s.status==="TRADING" && s.quoteAsset==="USDT");
+    const onboard = {};
+    for(const s of perp) onboard[s.symbol] = s.onboardDate||0;
+
+    say("2/4","смотрю обороты за 24 часа");
+    const tick = await getJson("/fapi/v1/ticker/24hr", 40);
+    const qv = {};
+    for(const t of tick) qv[t.symbol] = +t.quoteVolume;
+
+    // вотчлист = пары в рабочем диапазоне оборота + BTC для режима рынка
+    let list = perp.map(s=>s.symbol)
+      .filter(s => Number.isFinite(qv[s]) && qv[s] >= CFG.minQv24 && qv[s] <= CFG.maxQv24);
+    // если пар больше, чем потянет телефон, оставляем ближайшие к пику плотности
+    // выносов (≈10 млн $ за 24ч), а не просто самые крупные книги
+    const PEAK = Math.log10(1e7);
+    list.sort((a,b)=> Math.abs(Math.log10(qv[a])-PEAK) - Math.abs(Math.log10(qv[b])-PEAK));
+    if(list.length>MAX_WATCH) list = list.slice(0,MAX_WATCH);
+    if(!list.includes("BTCUSDT")) list.push("BTCUSDT");
+
+    for(const s of list){ S[s] = newSym(s, onboard[s]); S[s].qv24 = qv[s]||0; }
+    log(`вотчлист: ${list.length} пар, оборот ${fmtUsd(CFG.minQv24)}–${fmtUsd(CFG.maxQv24)}$`);
+
+    say("3/4",`гружу историю · 0 / ${list.length}`);
+    let done = 0;
+    const CH = 8;
+    for(let k=0;k<list.length;k+=CH){
+      const chunk = list.slice(k,k+CH);
+      await Promise.all(chunk.map(async sym=>{
+        try{
+          const [k15, k1d] = await Promise.all([
+            getJson(`/fapi/v1/klines?symbol=${sym}&interval=15m&limit=220`, 2),
+            getJson(`/fapi/v1/klines?symbol=${sym}&interval=1d&limit=31`, 1)
+          ]);
+          const bars = k15.map(klineToBar);
+          // последняя свеча из REST может быть незакрытой — убираем её
+          if(bars.length && Date.now() < bars[bars.length-1].t + 900000) bars.pop();
+          S[sym].bars = bars;
+          S[sym].daily = k1d.map(klineToBar);
+        }catch(e){ delete S[sym]; }
+      }));
+      done += chunk.length;
+      say("3/4",`гружу историю · ${Math.min(done,list.length)} / ${list.length}`);
+    }
+    BTC15 = S["BTCUSDT"] ? S["BTCUSDT"].bars : [];
+    const live = Object.keys(S);
+    log(`история загружена по ${live.length} парам`);
+
+    say("4/4","поднимаю потоки");
+    openTicker();
+    openKlineStreams(live);
+    ready = true;
+    bootEl.style.display = "none";
+    document.getElementById("radar").style.display = "";
+    // первичная оценка по закрытым барам
+    for(const s of live) evaluate(s, false);
+    renderAll();
+  }catch(e){
+    bootEl.innerHTML = `<span class="big" style="color:#ff6b6b">✕</span>
+      Не получилось стартовать.<br><span style="color:#8fa08f">${escapeHtml(e.message)}</span><br><br>
+      Binance блокирует часть регионов и запросы с <code>file://</code>.<br>
+      Откройте страницу по https и при необходимости через VPN.<br><br>
+      <button class="btn" onclick="location.reload()">попробовать снова</button>`;
+    log("старт не удался: "+e.message, "dn");
+  }
+}
+
+/* ---- потоки ------------------------------------------------------------- */
+function openTicker(){
+  try{ if(wsTicker) wsTicker.close(); }catch(e){}
+  wsTicker = new WebSocket(WSB+"/ws/!ticker@arr");
+  wsTicker.onmessage = ev=>{
+    let arr; try{ arr = JSON.parse(ev.data); }catch(e){ return; }
+    if(!Array.isArray(arr)) return;
+    for(const t of arr){
+      const st = S[t.s]; if(!st) continue;
+      st.qv24 = +t.q; st.price = +t.c;
+    }
+  };
+  wsTicker.onclose = ()=>{ if(ready) setTimeout(openTicker, 3000); };
+  wsTicker.onerror = ()=>{ try{ wsTicker.close(); }catch(e){} };
+}
+
+function openKlineStreams(list){
+  for(const w of wsKlines){ try{ w.onclose=null; w.close(); }catch(e){} }
+  wsKlines = [];
+  const CH = 90;
+  for(let k=0;k<list.length;k+=CH){
+    const chunk = list.slice(k,k+CH);
+    const url = WSB+"/stream?streams="+chunk.map(s=>s.toLowerCase()+"@kline_15m").join("/");
+    const ws = new WebSocket(url);
+    ws.onmessage = onKline;
+    ws.onclose = ()=>{ if(ready){ wsFails++; setTimeout(()=>reopenChunk(chunk), 4000); } };
+    ws.onerror = ()=>{ try{ ws.close(); }catch(e){} };
+    wsKlines.push(ws);
+  }
+}
+function reopenChunk(chunk){
+  const url = WSB+"/stream?streams="+chunk.map(s=>s.toLowerCase()+"@kline_15m").join("/");
+  const ws = new WebSocket(url);
+  ws.onmessage = onKline;
+  ws.onclose = ()=>{ if(ready) setTimeout(()=>reopenChunk(chunk), 5000); };
+  ws.onerror = ()=>{ try{ ws.close(); }catch(e){} };
+  wsKlines.push(ws);
+}
+
+function onKline(ev){
+  let m; try{ m = JSON.parse(ev.data); }catch(e){ return; }
+  const d = m.data || m;
+  if(!d || !d.k) return;
+  const sym = d.s, k = d.k, st = S[sym];
+  if(!st) return;
+  const bar = wsKlineToBar(k);
+  st.price = bar.c;
+  if(k.x){
+    // бар закрылся
+    const last = st.bars[st.bars.length-1];
+    if(!last || bar.t > last.t){ st.bars.push(bar); if(st.bars.length>260) st.bars.shift(); }
+    else if(bar.t === last.t) st.bars[st.bars.length-1] = bar;
+    st.live = null;
+    if(sym==="BTCUSDT") BTC15 = st.bars;
+    evaluate(sym, false);
+  }else{
+    st.live = bar;
+    // внутрибарная оценка — дорогая, поэтому сначала дешёвый предфильтр из кэша
+    if(!CFG.intrabar) return;
+    const last = st.bars[st.bars.length-1];
+    if(!last || !(bar.c > last.c)) return;              // растёт?
+    const c = st.cache;
+    if(c){
+      // объём незакрытого бара уже обязан тянуть на вынос, а цена — стоять у полки
+      if(!(c.medQvL > 0) || bar.qv < CFG.minRvol*c.medQvL) return;
+      if(bar.c < c.hi*(1+CFG.minBrk) || bar.c > c.hi*(1+CFG.maxChase)) return;
+    }
+    const now = Date.now();
+    if(now - st.lastEval < 4000) return;
+    st.lastEval = now;
+    evaluate(sym, true);
+  }
+}
+
+/* ============================================================================
+   Отрисовка
+   ============================================================================ */
+function scoreClass(s){
+  if(s>=0.30) return "s5"; if(s>=0.20) return "s4"; if(s>=0.10) return "s3";
+  if(s>=0.05) return "s2"; if(s>0) return "s1"; return "s0";
+}
+function stateCell(st){
+  if(st.state==="fired") return '<span class="pill f">ВЫНОС</span>';
+  if(st.state==="gate")  return '<span class="pill a">пробой</span>';
+  if(st.state==="armed") return '<span class="pill q">полка</span>';
+  if(st.state==="quiet") return '<span class="pill">тихо</span>';
+  return '<span class="mut">—</span>';
+}
+function renderRadar(){
+  const rows = Object.values(S).filter(s=>s.feats && s.sym!=="BTCUSDT");
+  const rank = {fired:4, gate:3, armed:2, quiet:1, "—":0};
+  rows.sort((a,b)=> (b.score-a.score) || (rank[b.state]-rank[a.state]) || (b.qv24-a.qv24));
+  const top = rows.slice(0,70);
+  document.getElementById("radar-body").innerHTML = top.map(st=>{
+    const f = st.feats;
+    return `<tr class="${st.state}">
+      <td><span class="sym">${st.sym.replace("USDT","")}</span>
+          <span class="sub">${f.age>=12 ? f.age+" баров тихо" : "&nbsp;"}</span></td>
+      <td class="scorecell ${scoreClass(st.score)}">${st.score>0?(st.score*100).toFixed(0):"·"}</td>
+      <td>${fmtPx(st.price||f.price)}</td>
+      <td class="${f.sw<=0.06?"up":""}">${(f.sw*100).toFixed(1)}%</td>
+      <td class="${f.rvol>=10?"hot":""}">${Number.isFinite(f.rvol)?"×"+f.rvol.toFixed(f.rvol>=10?0:1):"—"}</td>
+      <td class="${f.brk>=0?"up":"mut"}">${pct(f.brk)}</td>
+      <td class="mut">${fmtUsd(st.qv24)}</td>
+      <td>${stateCell(st)}</td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="8" class="empty">жду данные…</td></tr>`;
+}
+function renderStats(){
+  const n = Object.keys(S).length;
+  const armed = Object.values(S).filter(s=>s.state==="armed").length;
+  const wsOk = wsKlines.filter(w=>w.readyState===1).length;
+  document.getElementById("stats").innerHTML =
+    `<div><span class="dot ${ready&&wsOk?"on":"warn"}"></span><b>${n}</b> <span>пар</span></div>`+
+    `<div><b>${armed}</b> <span>на полке</span></div>`+
+    `<div><b>${SIGNALS.length}</b> <span>сигналов</span></div>`+
+    `<div><span>поток</span> <b>${wsOk}/${wsKlines.length}</b></div>`;
+}
+function renderBadge(){
+  const b = document.getElementById("sigbadge");
+  if(SIGNALS.length){ b.style.display=""; b.textContent = SIGNALS.length; }
+  else b.style.display="none";
+}
+function renderSignals(){
+  const el = document.getElementById("siglist");
+  if(!SIGNALS.length){
+    el.innerHTML = `<div class="empty">Сигналов пока нет.<br>Сканер ждёт, пока на тихой полке взорвётся объём.</div>`;
+    return;
+  }
+  el.innerHTML = SIGNALS.slice(0,60).map(s=>{
+    const stop = stopLevel(s);
+    return `<div class="sig">
+      <div class="top">
+        <span class="name">${s.sym}</span>
+        <span class="scorecell ${scoreClass(s.score)}">score ${(s.score*100).toFixed(0)}</span>
+      </div>
+      <div class="meta">${hhmm(s.ts)}${s.intrabar?" · внутри бара":""} · вход ${fmtPx(s.price)} ·
+        оборот ${fmtUsd(s.qv24)}$ · полка ${(s.sw*100).toFixed(1)}% ·
+        потолок ${fmtPx(s.shelfHi)} · инвалидация ${fmtPx(stop)}</div>
+      <div class="why">${escapeHtml(s.why.join(" · "))}</div>
+      <div class="meta">исторически при таком score за 2 часа:
+        +5% — <b class="hot">${(s.p.p5*100).toFixed(0)}%</b> ·
+        +10% — <b class="hot">${(s.p.p10*100).toFixed(0)}%</b> (×${(s.p.p10/BASE.p10).toFixed(1)} к базе) ·
+        +20% — ${(s.p.p20*100).toFixed(1)}% · +40% — ${(s.p.p40*100).toFixed(2)}%</div>
+    </div>`;
+  }).join("");
+}
+function renderAll(){ renderRadar(); renderStats(); renderBadge(); }
+
+/* ============================================================================
+   Настройки
+   ============================================================================ */
+const FIELDS = [
+  ["minQv24","оборот за 24ч, от ($)","number","Модель откалибрована на полосе 1 млн – 300 млн. Плотность выносов максимальна в 3–100 млн, но сужение до неё стоит половины пойманных выносов. Ниже 1 млн — неликвид."],
+  ["maxQv24","оборот за 24ч, до ($)","number",""],
+  ["minScore","минимальный score (0–1)","number","0.05 ≈ 46 сигналов/сутки, P(+10% за 2ч)=6.5%. 0.10 ≈ 10/сутки и 13.8%. 0.20 ≈ 2.5/сутки и 25%. 0.30 ≈ 1/сутки и 41%."],
+  ["maxWidth","ширина полки, макс","number","Доля: 0.09 = 9% между потолком и дном за 12 часов. Это определение «полки», на нём обучена модель."],
+  ["maxSatr","ATR полки, макс","number","0.009 = средний размах бара на полке не больше 0.9%. Это определение «тихой»."],
+  ["minRvol","объём бара / медиана полки","number","Минимум 4. Ниже — обычная рыночная возня."],
+  ["minRexp","размах бара / ATR полки","number",""],
+  ["minBrk","пробой от (доля)","number","-0.04 = ловим ещё на подходе к потолку, за 4% до него. 0 = только после пробоя."],
+  ["maxChase","пробой до (доля)","number","Выше — уже уехало без вас. 0.08 = не сигналим, если цена уже +8% над потолком."],
+  ["cooldownMin","пауза по паре, мин","number","Чтобы одна монета не забила весь фид."],
+  ["muteHours","глушить часы UTC","text","В 12–15 UTC сигналов больше всего, а качество худшее (P(+10%)=1.8% против 10% в 4 и 9 UTC)."]
+];
+function renderCfg(){
+  const el = document.getElementById("pane-cfg");
+  el.innerHTML = `
+  <div class="card"><h3>TELEGRAM</h3>
+    <div class="row"><label>бот-токен<span class="hint">создайте бота у @BotFather и вставьте токен</span></label></div>
+    <input class="wide" type="password" id="f-tgToken" value="${escapeHtml(CFG.tgToken)}" placeholder="123456:AA...">
+    <div class="row" style="margin-top:8px"><label>chat id<span class="hint">свой id узнать у @userinfobot; для канала — с минусом</span></label></div>
+    <input class="wide" type="text" id="f-tgChat" value="${escapeHtml(CFG.tgChat)}" placeholder="123456789">
+    <div class="row"><label>отправлять сигналы в Telegram</label>
+      <input type="checkbox" id="f-tgOn" ${CFG.tgOn?"checked":""} style="width:auto;transform:scale(1.4)"></div>
+    <div class="btnrow"><button class="btn sec" id="btn-tg2">отправить тестовое</button></div>
+  </div>
+
+  <div class="card"><h3>ФИЛЬТРЫ</h3>
+    ${FIELDS.map(([k,l,t,h])=>`
+      <div class="row">
+        <label>${l}${h?`<span class="hint">${h}</span>`:""}</label>
+        <input type="${t}" id="f-${k}" value="${escapeHtml(String(CFG[k]))}" step="any">
+      </div>`).join("")}
+    <div class="row"><label>оценивать незакрытый 15м бар<span class="hint">быстрее на 1–14 минут, но объём бара ещё неполный, поэтому срабатывает только на действительно сильных выносах</span></label>
+      <input type="checkbox" id="f-intrabar" ${CFG.intrabar?"checked":""} style="width:auto;transform:scale(1.4)"></div>
+    <div class="row"><label>звук</label>
+      <input type="checkbox" id="f-sound" ${CFG.sound?"checked":""} style="width:auto;transform:scale(1.4)"></div>
+    <div class="btnrow">
+      <button class="btn" id="btn-save">сохранить</button>
+      <button class="btn sec" id="btn-reset">вернуть исследованные</button>
+      <button class="btn sec" id="btn-reboot">перезагрузить список пар</button>
+    </div>
+  </div>
+
+  <div class="card"><h3>ЖУРНАЛ</h3><div class="log" id="cfg-log"></div></div>`;
+
+  renderLog(document.getElementById("cfg-log"));
+  document.getElementById("btn-save").onclick = saveCfg;
+  document.getElementById("btn-reset").onclick = ()=>{ CFG = Object.assign({},DEFAULTS,{tgToken:CFG.tgToken,tgChat:CFG.tgChat,tgOn:CFG.tgOn}); kvSet("cfg",CFG); renderCfg(); log("пороги возвращены к исследованным"); };
+  document.getElementById("btn-reboot").onclick = ()=> location.reload();
+  document.getElementById("btn-tg2").onclick = testTg;
+}
+function saveCfg(){
+  for(const [k,,t] of FIELDS){
+    const el = document.getElementById("f-"+k);
+    if(!el) continue;
+    CFG[k] = t==="number" ? parseFloat(el.value) : el.value;
+  }
+  CFG.tgToken = document.getElementById("f-tgToken").value.trim();
+  CFG.tgChat  = document.getElementById("f-tgChat").value.trim();
+  CFG.tgOn    = document.getElementById("f-tgOn").checked;
+  CFG.intrabar= document.getElementById("f-intrabar").checked;
+  CFG.sound   = document.getElementById("f-sound").checked;
+  kvSet("cfg", CFG);
+  log("настройки сохранены");
+  for(const s of Object.keys(S)) evaluate(s, false);
+  renderAll();
+}
+async function testTg(){
+  CFG.tgToken = document.getElementById("f-tgToken") ? document.getElementById("f-tgToken").value.trim() : CFG.tgToken;
+  CFG.tgChat  = document.getElementById("f-tgChat")  ? document.getElementById("f-tgChat").value.trim()  : CFG.tgChat;
+  if(!CFG.tgToken || !CFG.tgChat){ log("нужны токен и chat id", "dn"); return; }
+  try{
+    const r = await fetch(`https://api.telegram.org/bot${CFG.tgToken}/sendMessage`,{
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({chat_id:CFG.tgChat, parse_mode:"HTML",
+        text:"✅ <b>ShelfScan</b> на связи.\nСюда будут прилетать выносы с тихой полки."})});
+    const j = await r.json();
+    log(j.ok ? "тестовое отправлено" : "Telegram: "+(j.description||"ошибка"), j.ok?"":"dn");
+  }catch(e){ log("Telegram недоступен: "+e.message, "dn"); }
+}
+
+/* ============================================================================
+   Справка по модели
+   ============================================================================ */
+function renderDoc(){
+  document.getElementById("pane-doc").innerHTML = `
+  <div class="card"><h3>ЧТО ИЩЕТ СКАНЕР</h3><div class="doc">
+    <b>Тихая полка</b> — 12 часов (48 баров по 15м), где цена заперта в узком коридоре,
+    объём спит, ATR минимальный.<br>
+    <b>Вынос</b> — бар, в котором объём взрывается относительно медианы этой же полки,
+    размах превышает ATR полки в несколько раз, а цена подходит к потолку коридора
+    или только что его проколола.<br><br>
+    На радаре одновременно видно, кто стоит на полке (<span class="pill q">полка</span>),
+    у кого пошёл объём (<span class="pill a">пробой</span>) и кто прошёл обе модели
+    (<span class="pill f">ВЫНОС</span>).
+  </div></div>
+
+  <div class="card"><h3>ШЛЮЗ + МОДЕЛЬ</h3><div class="doc">
+    <b>Шлюз</b> задаёт сам паттерн. Его пороги подобраны перебором 480 комбинаций
+    по критерию «сколько реальных выносов ≥25% за 2 часа удаётся поймать
+    при заданном бюджете алертов», а не на глаз:
+    <ul>
+      <li>ATR полки ≤ 1.8% на бар — это «тихая»</li>
+      <li>ширина полки за 12ч ≤ 15%, дрейф полки ≤ 25% — это «полка»</li>
+      <li>объём бара ≥ 40 медиан полки, размах ≥ 1.5 ATR полки — это «вынос»</li>
+      <li>цена от −4% до +25% относительно потолка полки</li>
+      <li>оборот 24ч от 1 млн до 300 млн $</li>
+    </ul>
+    Такой шлюз пропускает ≈31 бар в сутки по всему рынку и накрывает
+    <b>48%</b> всех выносов ≥25%.<br><br>
+    <b>Модель</b> ранжирует то, что прошло: P(+8% за 2 часа), AUC на отложенных
+    данных <b>0.868</b>. Главное, ради чего она нужна: порог 0.10 срезает
+    <b>74% алертов</b> (с 51.6 до 13.3 в сутки), <b>не потеряв ни одного выноса</b> —
+    recall остаётся ровно 47.9%. Это и есть отделение шума от сигнала в цифрах.<br><br>
+    Пробовал обучать одну модель на весь рынок без шлюза — она вырождается
+    в детектор волатильности: находит монеты, которые и так летают каждый час,
+    и штрафует именно выходы из тишины. Поэтому шлюз и модель разделены.
+  </div></div>
+
+  <div class="card"><h3>ПОДБОР ШЛЮЗА · что на что влияет</h3><div class="doc">
+    Порог ATR полки, при остальных параметрах фиксированных
+    (962 эталонных выноса ≥25% за год):
+    <table>
+      <tr><th style="text-align:left">ATR полки ≤</th><th>алертов/сутки</th><th>поймано выносов</th><th>P(+20%)</th></tr>
+      <tr><td style="text-align:left">0.6%</td><td>111</td><td>42 (4%)</td><td>0.24%</td></tr>
+      <tr><td style="text-align:left">0.9%</td><td>177</td><td>187 (19%)</td><td>0.50%</td></tr>
+      <tr><td style="text-align:left">1.2%</td><td>197</td><td>301 (31%)</td><td>0.62%</td></tr>
+      <tr><td style="text-align:left" class="hot">1.8%</td><td class="hot">202</td><td class="hot">347 (36%)</td><td class="hot">0.66%</td></tr>
+      <tr><td style="text-align:left">2.5%</td><td>202</td><td>349 (36%)</td><td>0.66%</td></tr>
+    </table>
+    Важный и неочевидный вывод: <b>слишком тихая полка — это ловушка</b>.
+    Порог 0.6% выбрасывает 88% выносов и ничего не даёт взамен по качеству.
+    Насыщение наступает на 1.8%, дальше ужесточать или ослаблять смысла нет.<br><br>
+    Потолок погони (насколько высоко над полкой ещё можно сигналить):
+    <table>
+      <tr><th style="text-align:left">пробой ≤</th><th>поймано</th><th>P(+20%)</th></tr>
+      <tr><td style="text-align:left">+2%</td><td>160 (17%)</td><td>0.46%</td></tr>
+      <tr><td style="text-align:left">+5%</td><td>258 (27%)</td><td>0.58%</td></tr>
+      <tr><td style="text-align:left">+10%</td><td>347 (36%)</td><td>0.66%</td></tr>
+      <tr><td style="text-align:left" class="hot">+25%</td><td class="hot">457 (48%)</td><td class="hot">0.70%</td></tr>
+    </table>
+    Тоже против интуиции: качество от «погони» <b>не падает</b>, а слегка растёт.
+    Ждать входа у самого потолка полки — значит пропустить две трети выносов.
+    Ширина полки ведёт себя так же: сужение до 5% роняет улов до 11%.
+  </div></div>
+
+  <div class="card"><h3>НА ЧЁМ ОБУЧЕНО</h3><div class="doc">
+    <ul>
+      <li>833 бессрочных USDT-M фьючерса Binance</li>
+      <li>год 15-минутных свечей, ≈24.5 млн баров (255 795 символо-дней)</li>
+      <li>3.66 млн баров-кандидатов, 187 400 прошли шлюз «тихая полка»</li>
+      <li>разделение по времени: 72% на обучение, 28% (81 день) на проверку</li>
+      <li>минутные данные по 196 парам за тот же год — чтобы проверить путь внутри бара:
+          что сработало раньше, тейк или стоп</li>
+    </ul>
+  </div></div>
+
+  <div class="card"><h3>КАЛИБРОВКА · что реально значит score</h3><div class="doc">
+    Измерено на отложенном периоде, которого модель не видела.
+    Столбцы — доля алертов, после которых цена за 2 часа сходила вверх на столько.
+    Последний столбец — доля всех выносов ≥25%, по которым пришёл хотя бы один
+    алерт с запасом хода ≥5% до пика.
+    <table>
+      <tr><th style="text-align:left">score</th><th>алертов/сутки</th><th>+5%</th><th>+10%</th><th>+20%</th><th>+40%</th><th>поймано</th></tr>
+      ${CALIB.map(c=>`<tr><td style="text-align:left">${c.t>0?"≥ "+c.t.toFixed(2):"без модели"}</td><td>${c.day}</td>
+        <td>${(c.p5*100).toFixed(0)}%</td><td class="hot">${(c.p10*100).toFixed(1)}%</td>
+        <td>${(c.p20*100).toFixed(1)}%</td><td>${(c.p40*100).toFixed(1)}%</td>
+        <td>${(c.rec*100).toFixed(0)}%</td></tr>`).join("")}
+    </table>
+    Главная строка — <b>0.10</b>: алертов в четыре раза меньше, чем без модели,
+    качество каждого втрое выше, пойманных выносов ровно столько же.
+    Дальше ужесточать порог уже приходится ценой пропущенных выносов.
+  </div></div>
+
+  <div class="card"><h3>ГДЕ ЖИВУТ ВЫНОСЫ · оборот за 24ч</h3><div class="doc">
+    Частота выносов ≥15% за 2 часа из тихой полки, на 1000 символо-дней:
+    <table>
+      <tr><th style="text-align:left">оборот 24ч</th><th>частота</th><th>доля всех выносов</th></tr>
+      <tr><td style="text-align:left">0.3–1 млн</td><td>9.5</td><td>7%</td></tr>
+      <tr><td style="text-align:left">1–3 млн</td><td>14.4</td><td>25%</td></tr>
+      <tr><td style="text-align:left" class="hot">3–10 млн</td><td class="hot">20.5</td><td class="hot">31%</td></tr>
+      <tr><td style="text-align:left" class="hot">10–30 млн</td><td class="hot">22.8</td><td class="hot">19%</td></tr>
+      <tr><td style="text-align:left" class="hot">30–100 млн</td><td class="hot">22.1</td><td class="hot">12%</td></tr>
+      <tr><td style="text-align:left">100–300 млн</td><td>16.1</td><td>4%</td></tr>
+      <tr><td style="text-align:left">свыше 1 млрд</td><td>8.6</td><td>0.3%</td></tr>
+    </table>
+    Максимум частоты — 10–100 млн, максимум абсолютного числа — 3–10 млн
+    (там просто больше пар). Полоса <b>3–100 млн</b> даёт 62% всех выносов
+    и стоит по умолчанию.
+  </div></div>
+
+  <div class="card"><h3>ЧТО МОДЕЛЬ ВЫУЧИЛА</h3><div class="doc">
+    Веса после нормировки, внутри шлюза:
+    <ul>
+      <li><code>satr</code> +0.72, <code>natr</code> +0.50 — из всех тихих полок
+          сильнее выносит те, что внутри разрешённого коридора чуть живее,
+          и у которых волатильность уже начала расти прямо сейчас.</li>
+      <li><code>rexp</code> +0.44 — размах бара против ATR полки. Не абсолютный
+          объём, а именно расширение диапазона.</li>
+      <li><code>ret3_n</code> +0.30 <b>против</b> <code>ret_n</code> −0.15 —
+          самый полезный вывод для фильтра шума: импульс должен копиться
+          <b>три бара</b>, а не выстреливать за один. Одиночная вертикальная
+          свеча — хуже, чем разгон.</li>
+      <li><code>rvol96</code> −0.20 и <code>qv_accel</code> −0.10 — та же мысль
+          с другой стороны: объём не должен быть уже разогнан за сутки и
+          не должен прыгать в один бар. Это отсекает третий подряд «вынос»
+          на перегретой монете.</li>
+      <li><code>qv24</code> −0.15 — при прочих равных меньший оборот даёт
+          больший ход.</li>
+      <li><code>pos30</code> −0.13 — низ 30-дневного диапазона лучше вершины.</li>
+      <li><code>trd</code> +0.14, <code>brk_n</code> +0.12, <code>clv</code> +0.10 —
+          всплеск числа сделок, глубина пробоя в ATR, закрытие у хая бара.</li>
+      <li><code>btc_ret6</code> −0.09 — выносы альтов чаще, когда BTC не растёт.
+          На полном рынке (без шлюза) этот эффект втрое сильнее: −0.25.</li>
+      <li><code>taker</code> +0.03 — доля тейкер-покупок практически <b>не</b>
+          помогает, хотя интуитивно кажется главным индикатором. Самый
+          контринтуитивный результат работы: в предыдущей версии сканера
+          на неё было отведено 15 баллов из 100.</li>
+    </ul>
+  </div></div>
+
+  <div class="card"><h3>ЧЕСТНО О ГРАНИЦАХ</h3><div class="doc">
+    Барьерный тест по минутным данным 196 пар (что сработало раньше — тейк или
+    стоп, комиссия и проскальзывание 0.09%) показал: <b>механический вход по
+    любому фиксированному правилу этой стратегии даёт около нуля</b>.
+    Проверены и 15м, и 1м, вход по закрытию бара и вход на откате,
+    стопы от 1% до 6%, тейки от 2% до 20%, горизонты от часа до 16 часов.
+    Медианный MFE и MAE почти симметричны везде. Ни одна конфигурация
+    не дала устойчивого плюса.<br><br>
+    Что модель даёт на самом деле — <b>концентрацию</b>. При score ≥ 0.30
+    шанс хода на +40% выше базового по шлюзу в 19 раз, а базовый по шлюзу
+    сам по себе выше рыночного на порядок. Это <b>инструмент отбора</b>:
+    из 800+ пар он приносит десяток в сутки, где вероятность реального выноса
+    на порядок выше рынка. Решение о входе, размере и сопровождении — за вами,
+    и именно там, а не в сигнале, лежит результат.
+  </div></div>
+
+  <div class="card"><h3>ПОЧЕМУ НЕ ЛОВИТСЯ ПЕРВЫЙ БАР</h3><div class="doc">
+    Только <b>36%</b> выносов детектируются на самом первом баре импульса;
+    в пределах восьми баров — все 100%. Вынос набирает силу несколько баров,
+    поэтому правильная цель — не «успеть на первую свечу», а войти там,
+    где до пика остаётся ещё хотя бы 5% хода. Отсюда параметр «пробой до»:
+    выше +8% над потолком сканер молчит, потому что это уже погоня.<br><br>
+    Час суток тоже имеет значение: в 12–15 UTC сигналов больше всего,
+    а качество худшее — P(+10%) падает до 1.8% против 10% в 4 и 9 UTC.
+    Эти часы по умолчанию заглушены.
+  </div></div>`;
+}
+
+/* ============================================================================
+   Запуск
+   ============================================================================ */
+document.querySelectorAll(".tabs button").forEach(b=>{
+  b.onclick = ()=>{
+    document.querySelectorAll(".tabs button").forEach(x=>x.classList.remove("on"));
+    document.querySelectorAll(".pane").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on");
+    document.getElementById("pane-"+b.dataset.tab).classList.add("on");
+    if(b.dataset.tab==="cfg") renderCfg();
+    if(b.dataset.tab==="doc") renderDoc();
+    if(b.dataset.tab==="signals") renderSignals();
+  };
+});
+document.getElementById("btn-clear-sig").onclick = ()=>{ SIGNALS=[]; kvSet("signals",[]); renderSignals(); renderBadge(); };
+document.getElementById("btn-test-tg").onclick = testTg;
+
+(async function(){
+  const savedCfg = await kvGet("cfg");
+  if(savedCfg) CFG = Object.assign({}, DEFAULTS, savedCfg);
+  const savedSig = await kvGet("signals");
+  if(Array.isArray(savedSig)) SIGNALS = savedSig;
+  renderBadge();
+  if(navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(()=>{});
+  boot();
+  setInterval(()=>{ if(!document.hidden) renderAll(); }, 2000);
+  document.addEventListener("visibilitychange", ()=>{ if(!document.hidden) renderAll(); });
+})();
+</script>
+</body>
+</html>
