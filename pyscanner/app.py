@@ -41,6 +41,23 @@ from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
 
+# Некоторые антивирусы (Kaspersky, ESET и т.п.) и корпоративные прокси
+# подменяют TLS-сертификаты для проверки трафика («самоподписанный сертификат
+# в цепочке»). Браузер доверяет такому сертификату автоматически — он лежит
+# в системном хранилище Windows/macOS. Библиотеке aiohttp это хранилище
+# не известно по умолчанию, поэтому без этой строчки запросы к Binance и
+# Telegram падают с CERTIFICATE_VERIFY_FAILED, хотя тот же адрес прекрасно
+# открывается в браузере. truststore перенаправляет проверку сертификатов
+# в системное хранилище — ровно туда же, куда смотрит браузер.
+try:
+    import truststore
+    truststore.inject_into_ssl()
+    _TRUSTSTORE_OK = True
+except Exception as _e:  # пакет не поставился или Python < 3.10 — не роняем сканер
+    _TRUSTSTORE_OK = False
+    print(f"[shelfscan] truststore не подключился ({_e}); если Telegram/Binance "
+          f"падают с CERTIFICATE_VERIFY_FAILED — см. README_PYTHON.md", file=sys.stderr)
+
 import aiohttp
 from aiohttp import web
 
@@ -747,6 +764,9 @@ def main():
     app.router.add_static("/static", BASE_DIR, show_index=False)
     app.on_startup.append(on_startup)
     app.on_cleanup.append(on_cleanup)
+    if not _TRUSTSTORE_OK:
+        push_log("truststore не подключён — если Telegram/Binance падают с ошибкой сертификата, "
+                 "см. README_PYTHON.md", "warn")
     push_log(f"ShelfScan (Python) стартует — открой http://localhost:{HTTP_PORT} в браузере")
     web.run_app(app, host="127.0.0.1", port=HTTP_PORT, print=None)
 
