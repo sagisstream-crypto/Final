@@ -337,7 +337,7 @@ const DIAG = { bars:0, evals:0, maxRvol:0, maxRvolSym:"", lastBarTs:0, started:D
 function newSym(sym, onboard){
   return { sym, onboard: onboard||0, qv24: 0, price: 0, bars: [], daily: [],
            score: 0, ready: 0, state: "—", feats: null, cache: null,
-           liveRvol: null, liveBrk: null, liveReady: null,
+           liveRvol: null, liveBrk: null, liveReady: null, lastTickAt: 0,
            lastSig: 0, lastEval: 0, live: null };
 }
 
@@ -796,6 +796,10 @@ function openTicker(){
     for(const t of arr){
       const st = S[t.s]; if(!st) continue;
       st.qv24 = +t.q; st.price = +t.c;
+      // lastTickAt намеренно НЕ трогаем здесь: тикер шлёт разом снимок по
+      // всем ~500 парам, все получили бы одинаковую метку и сортировка по
+      // ней ничего бы не различала. Настоящий сигнал активности — реальная
+      // сделка по конкретной паре, это приходит через kline-поток (onKline).
     }
   };
   wsTicker.onclose = ()=>{ if(ready) setTimeout(openTicker, 3000); };
@@ -835,7 +839,7 @@ function onKline(ev){
   const sym = d.s, k = d.k, st = S[sym];
   if(!st) return;
   const bar = wsKlineToBar(k);
-  st.price = bar.c;
+  st.price = bar.c; st.lastTickAt = Date.now();
   if(k.x){
     // бар закрылся
     const last = st.bars[st.bars.length-1];
@@ -884,9 +888,13 @@ const rowFingerprint = {};   // sym -> строка последнего отр�
 function renderRadar(){
   const rows = Object.values(S).filter(s=>s.feats && s.sym!=="BTCUSDT");
   const rank = {fired:4, gate:3, armed:2, quiet:1, "—":0};
-  // сначала сработавшие, потом — кто ближе всего к сигналу по объёму, и лишь затем по обороту
+  // сначала сработавшие, потом — кто ближе всего к сигналу по объёму, затем
+  // у кого только что была реальная сделка (lastTickAt из kline-потока —
+  // честный признак активности прямо сейчас, а не просто крупный оборот),
+  // и лишь в конце — по обороту как последняя тихая сортировка
   rows.sort((a,b)=> (b.score-a.score) || (rank[b.state]-rank[a.state])
-                 || ((b.ready||0)-(a.ready||0)) || (b.qv24-a.qv24));
+                 || ((b.ready||0)-(a.ready||0)) || ((b.lastTickAt||0)-(a.lastTickAt||0))
+                 || (b.qv24-a.qv24));
   const top = rows.slice(0,70);
   document.getElementById("radar-body").innerHTML = top.map(st=>{
     const f = st.feats;
