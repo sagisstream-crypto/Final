@@ -87,6 +87,11 @@
   .bar i{display:block;height:100%;background:#5eff8f}
   .progress{padding:24px 14px;text-align:center;color:#54664f;font-size:11px;line-height:1.9}
   .progress .big{font-size:22px;color:#5eff8f;display:block;margin-bottom:6px}
+  .filewarn{display:none;background:#2a1206;border-bottom:1px solid #4a2a14;color:#ffb454;
+     font-size:11px;line-height:1.6;padding:9px 12px}
+  .filewarn b{color:#ffd85e}
+  .filewarn a{color:#7ab8ff}
+  .filewarn code{background:#1a0f06;padding:1px 4px;border-radius:2px;color:#ffd85e}
 </style>
 </head>
 <body>
@@ -96,6 +101,15 @@
     <div class="brand">SHELFSCAN<small>тихая полка → вынос · USDT-M фьючерсы</small></div>
     <div class="stats" id="stats"></div>
   </div>
+</div>
+<div class="filewarn" id="filewarn">
+  <b>⚠ страница открыта как локальный файл (file://)</b> — история и обороты грузятся
+  обычным запросом и потому работают, а вот живой поток котировок (WebSocket) Binance
+  для такого источника часто рвёт или вовсе не открывает соединение, и радар выглядит
+  застывшим, хотя данные один раз загрузились. Решение — разместить этот файл на https
+  (например, Cloudflare Pages, GitHub Pages) или запустить локальный сервер
+  (<code>python -m http.server</code> в папке с файлом и открыть <code>http://localhost:8000/...</code>)
+  и открывать страницу оттуда, а не двойным щелчком по файлу.
 </div>
 
 <div class="tabs">
@@ -1380,6 +1394,10 @@ document.getElementById("btn-test-tg").onclick = testTg;
   const savedSig = await kvGet("signals");
   if(Array.isArray(savedSig)) SIGNALS = savedSig;
   renderBadge();
+  if(location.protocol==="file:"){
+    document.getElementById("filewarn").style.display = "block";
+    log("страница открыта как file:// — WebSocket-поток Binance часто не открывается для такого источника, даже если история загрузилась", "warn");
+  }
   if(navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(()=>{});
   boot();
   setInterval(()=>{ if(!document.hidden) renderAll(); }, 700);   // как в VolScan — движение видно сразу
