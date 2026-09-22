@@ -88,7 +88,7 @@ HTTP_PORT = 8765
 # после обновления app.py эта строка на дашборде («Диагностика») не
 # совпадает с тем, что вы ожидаете увидеть, значит запущен СТАРЫЙ процесс:
 # закройте окно консоли (или Ctrl+C) и запустите run_windows.bat заново.
-BUILD = "2026-09-22.3-ascii-bat-fix"
+BUILD = "2026-09-22.4-visible-ws-errors"
 BARS_KEEP = 260          # закрытых 15м баров в кольцевом буфере на пару
 M1_KEEP = 20             # закрытых 1м баров в буфере на пару (только для диагностики)
 DAILY_LIMIT = 31
@@ -131,7 +131,8 @@ WATCHLIST: list[str] = []
 
 DIAG = dict(bars=0, evals=0, max_rvol=0.0, max_rvol_sym="", last_bar_ts=0,
             started=now_ms(), near_miss=0, ws_ok15=0, ws_total15=0,
-            ws_ok1m=0, ws_total1m=0, history_done=0, history_total=0, ready=False)
+            ws_ok1m=0, ws_total1m=0, history_done=0, history_total=0, ready=False,
+            ws_fail_streak=0, ws_last_error="", ws_last_error_ts=0, ws_ever_connected=False)
 
 
 def push_log(msg: str, level: str = ""):
@@ -591,7 +592,20 @@ async def ws_kline_loop(session: aiohttp.ClientSession, syms: list[str], interva
                         continue
                     handler(d.get("s"), k)
         except Exception as e:
-            log.debug("kline_%s поток (%d пар) оборвался: %s", interval, len(syms), e)
+            DIAG["ws_fail_streak"] += 1
+            DIAG["ws_last_error"] = f"{type(e).__name__}: {e}" if str(e) else type(e).__name__
+            DIAG["ws_last_error_ts"] = now_ms()
+            # первый отказ, потом раз в ~20 секунд — чтобы не спамить журнал,
+            # но и не спрятать проблему в log.debug, откуда её никто не увидит
+            if DIAG["ws_fail_streak"] in (1, 2) or DIAG["ws_fail_streak"] % 5 == 0:
+                push_log(f"поток kline_{interval} ({len(syms)} пар) не подключается: "
+                         f"{DIAG['ws_last_error']}", "warn" if DIAG["ws_fail_streak"] < 5 else "dn")
+        else:
+            if DIAG["ws_fail_streak"] > 0:
+                push_log(f"поток kline_{interval} ({len(syms)} пар) восстановлен после "
+                         f"{DIAG['ws_fail_streak']} неудачных попыток")
+            DIAG["ws_fail_streak"] = 0
+            DIAG["ws_ever_connected"] = True
         finally:
             if key == "15":
                 DIAG["ws_ok15"] = max(0, DIAG["ws_ok15"] - 1)
@@ -675,6 +689,9 @@ def build_state_snapshot() -> dict:
     def p_quiet(h):
         return math.exp(-rate * h / 24) * 100
 
+    # соединение считается мёртвым, если после загрузки истории нет ни одного
+    # живого потока И прошло больше времени, чем один цикл переподключения
+    ws_dead = (DIAG["ready"] and DIAG["ws_ok15"] == 0 and (now_ms() - DIAG["started"]) > 15000)
     stats = dict(
         pairs=n, armed=armed, signals=len(SIGNALS),
         ws15=f"{DIAG['ws_ok15']}/{DIAG['ws_total15']}", ws1m=f"{DIAG['ws_ok1m']}/{DIAG['ws_total1m']}",
@@ -682,7 +699,8 @@ def build_state_snapshot() -> dict:
         best_sym=(best["sym"] if best and best["ready"] else None),
         best_ready=(round((best["ready"] or 0) * 100) if best else 0),
         history_done=DIAG["history_done"], history_total=DIAG["history_total"],
-        ready=DIAG["ready"],
+        ready=DIAG["ready"], ws_dead=ws_dead,
+        ws_last_error=DIAG["ws_last_error"], ws_fail_streak=DIAG["ws_fail_streak"],
     )
     diag = dict(
         build=BUILD,

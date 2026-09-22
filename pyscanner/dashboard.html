@@ -76,6 +76,8 @@
   .progress .big{font-size:22px;color:#5eff8f;display:block;margin-bottom:6px}
   .banner{background:#1e1810;border:1px solid #4a3a1e;color:#ffd85e;padding:8px 10px;border-radius:2px;
           font-size:10px;margin-bottom:8px;display:none}
+  .banner-danger{background:#1e1010;border:1px solid #4a1e1e;color:#ff8f8f;padding:10px 12px;
+          border-radius:2px;font-size:11px;margin:8px;line-height:1.6;display:none}
 </style>
 </head>
 <body>
@@ -97,6 +99,7 @@
 <main>
   <div class="pane on" id="pane-radar">
     <div id="boot" class="progress"><span class="big">…</span>подключаюсь к Python-бэкенду</div>
+    <div id="ws-dead-banner" class="banner-danger"></div>
     <table id="radar" style="display:none">
       <thead><tr>
         <th>пара</th><th>score</th><th>цена</th><th>полка</th><th>RVOL</th><th>готов</th><th>пробой</th><th>24ч $</th><th>статус</th>
@@ -384,6 +387,22 @@ function renderDoc(){
 }
 
 let lastBuild = null;
+function renderWsBanner(stats){
+  const el = document.getElementById("ws-dead-banner");
+  if(!el) return;
+  if(stats.ws_dead){
+    el.style.display = "block";
+    el.innerHTML = `⚠ <b>Поток к Binance не подключается.</b> История загружена, но живых данных нет —
+      таблица не будет обновляться, пока соединение не восстановится.<br>
+      Неудачных попыток подряд: ${stats.ws_fail_streak||"?"}.
+      ${stats.ws_last_error?`Последняя ошибка: <code>${stats.ws_last_error.replace(/</g,"&lt;")}</code>`:""}<br>
+      <span class="mut">Чаще всего это антивирус/файрвол блокирует исходящие соединения python.exe —
+      проверьте его настройки сетевого экрана, или временно отключите проверку соединений и посмотрите,
+      пропадёт ли ошибка.</span>`;
+  } else {
+    el.style.display = "none";
+  }
+}
 function applyState(st){
   if(st.diag && st.diag.build){
     const el = document.getElementById("build-label");
@@ -402,6 +421,7 @@ function applyState(st){
   }
   CFG = st.cfg;
   renderStats(st.stats);
+  renderWsBanner(st.stats);
   renderRadar(st.radar);
   renderSignals(st.signals);
   renderLog(st.log);
