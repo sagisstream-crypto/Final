@@ -2425,20 +2425,31 @@ function sbDetect(bars) {
 }
 
 // ---------- Telegram ----------
-async function tgSend(text) {
-  if (!tgToken || !tgChatId) return { ok: false, error: "нет токена/chat id" };
+// Тело уходит как URLSearchParams, а не JSON. С Content-Type: application/json
+// браузер сначала шлёт preflight OPTIONS, а api.telegram.org отвечает на OPTIONS
+// кодом 501 — запрос до Telegram не доходит вообще. URL-encoded это
+// CORS-safelisted тип, preflight для него не нужен. Заголовок Content-Type
+// намеренно не выставляем руками: его ставит браузер.
+async function tgCall(method, params) {
+  if (!tgToken) return { ok: false, error: "нет токена" };
   try {
-    const res = await fetch(`https://api.telegram.org/bot${tgToken}/sendMessage`, {
+    const res = await fetch(`https://api.telegram.org/bot${tgToken}/${method}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: tgChatId, text, parse_mode: "HTML", disable_web_page_preview: true }),
+      body: new URLSearchParams(params || {}),
     });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.ok) return { ok: false, error: (data && data.description) || ("HTTP " + res.status) };
-    return { ok: true };
+    const data = await res.json().catch(() => null);
+    if (!data) return { ok: false, error: "HTTP " + res.status };
+    if (!data.ok) return { ok: false, error: `${data.description || "ошибка"} [${data.error_code}]` };
+    return { ok: true, result: data.result };
   } catch (e) {
-    return { ok: false, error: String(e) };
+    return { ok: false, error: "запрос не ушёл: " + (e && e.message ? e.message : String(e)) };
   }
+}
+async function tgSend(text) {
+  if (!tgChatId) return { ok: false, error: "нет chat id" };
+  return tgCall("sendMessage", {
+    chat_id: tgChatId, text, parse_mode: "HTML", disable_web_page_preview: "true",
+  });
 }
 function sbSetStatus(text) {
   const el = document.getElementById("sb-status");

@@ -96,6 +96,7 @@
     <span class="stat-label">ЗАГРУЗКА <span class="stat-val" id="st-seed">—</span></span>
     <span class="stat-label">НА ПОЛКЕ <span class="stat-val" id="st-shelf">0</span></span>
     <span class="stat-label">СИГНАЛОВ <span class="stat-val ok" id="st-signals">0</span></span>
+    <span class="stat-label">TG <span class="stat-val dim" id="st-tg">выкл</span></span>
     <span class="stat-label" id="st-clock">—</span>
   </div>
   <div class="btn-row">
@@ -148,7 +149,14 @@
     <button class="btn off" id="btn-tg">TELEGRAM: ВЫКЛ</button>
     <button class="btn" id="btn-tg-tier">СЛАТЬ: ВСЁ</button>
     <button class="btn" id="btn-tg-test">ТЕСТ</button>
-    <span class="stat-val" id="tg-status" style="font-size:10px"></span>
+    <button class="btn" id="btn-tg-chatid">ОПРЕДЕЛИТЬ CHAT ID</button>
+  </div>
+  <div class="note" id="tg-status" style="color:#ffd85e"></div>
+  <div class="note">
+    Порядок: создайте бота у <b>@BotFather</b> → вставьте его токен → напишите своему боту
+    в Telegram любое сообщение (иначе он не имеет права писать вам первым) →
+    нажмите <b>ОПРЕДЕЛИТЬ CHAT ID</b> → <b>ТЕСТ</b> → включите <b>TELEGRAM</b>.
+    Для группы добавьте бота в неё и тоже напишите там сообщение.
   </div>
 
   <div class="btn-row"><button class="btn" id="btn-apply">ПРИМЕНИТЬ И ПЕРЕЗАПУСТИТЬ</button></div>
@@ -350,18 +358,63 @@ function notify(title, body) {
 }
 
 // ---------- Telegram ----------
-async function tgSend(text) {
-  if (!cfg.tg.token || !cfg.tg.chat) return { ok: false, error: "нет токена или chat id" };
+// ВАЖНО про формат запроса. Отправлять JSON сюда нельзя: с заголовком
+// Content-Type: application/json браузер обязан сперва послать preflight
+// OPTIONS, а api.telegram.org отвечает на OPTIONS кодом 501, из-за чего
+// сам запрос до Telegram вообще не доходит и fetch падает с ошибкой CORS.
+// Поэтому тело уходит как URLSearchParams: это CORS-safelisted тип
+// (application/x-www-form-urlencoded), preflight для него не нужен.
+// Content-Type проставляет браузер — руками его задавать нельзя, иначе
+// вернётся ровно та же проблема.
+let tgSent = 0, tgFailed = 0, tgLastError = "";
+
+function tgCreds() {
+  // читаем прямо из полей, чтобы работало и без «ПРИМЕНИТЬ»
+  const el = id => (document.getElementById(id).value || "").trim();
+  return { token: el("f-tgtoken") || cfg.tg.token, chat: el("f-tgchat") || cfg.tg.chat };
+}
+async function tgCall(method, params) {
+  const { token } = tgCreds();
+  if (!token) return { ok: false, error: "не указан токен бота" };
   try {
-    const res = await fetch(`https://api.telegram.org/bot${cfg.tg.token}/sendMessage`, {
+    const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: cfg.tg.chat, text, parse_mode: "HTML", disable_web_page_preview: true }),
+      body: new URLSearchParams(params || {}),
     });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.ok) return { ok: false, error: (data && data.description) || ("HTTP " + res.status) };
-    return { ok: true };
-  } catch (e) { return { ok: false, error: String(e) }; }
+    const data = await res.json().catch(() => null);
+    if (!data) return { ok: false, error: "HTTP " + res.status + " (ответ не разобран)" };
+    if (!data.ok) return { ok: false, error: `${data.description || "ошибка"} [${data.error_code}]` };
+    return { ok: true, result: data.result };
+  } catch (e) {
+    return { ok: false, error: "запрос не ушёл: " + (e && e.message ? e.message : String(e)) };
+  }
+}
+async function tgSend(text) {
+  const { chat } = tgCreds();
+  if (!chat) { tgFailed++; tgLastError = "не указан chat id"; updateTgStatus(); return { ok: false, error: tgLastError }; }
+  const params = { chat_id: chat, text, parse_mode: "HTML", disable_web_page_preview: "true" };
+  let r = await tgCall("sendMessage", params);
+  if (!r.ok && /не ушёл|HTTP 5/.test(r.error)) {   // разовая сетевая осечка — пробуем ещё раз
+    await sleep(1500);
+    r = await tgCall("sendMessage", params);
+  }
+  if (r.ok) tgSent++; else { tgFailed++; tgLastError = r.error; }
+  updateTgStatus();
+  return r;
+}
+function updateTgStatus() {
+  const el = document.getElementById("st-tg");
+  const counts = (tgSent || tgFailed)
+    ? `${tgSent} ✓${tgFailed ? " / " + tgFailed + " ✗" : ""}`
+    : "";
+  if (!cfg.tg.on) {
+    // счётчики показываем и в выключенном состоянии, иначе после «ТЕСТ» кажется, что ничего не произошло
+    el.textContent = counts ? "выкл · " + counts : "выкл";
+    el.className = "stat-val dim";
+  } else {
+    el.textContent = counts || "вкл, сигналов ещё не было";
+    el.className = "stat-val " + (tgFailed ? "err" : "ok");
+  }
 }
 
 // ---------- вселенная пар ----------
@@ -590,9 +643,7 @@ function fire(symbol, tier, hit, params) {
       `Score: ${entry.score}/100\n` +
       (tier === "FAST" && cfg.fast.confirm2 ? `Подтверждено вторым баром\n` : ``) +
       `<i>${stats}. Не финсовет.</i>`;
-    tgSend(text).then(r => {
-      if (!r.ok) document.getElementById("tg-status").textContent = "Telegram: " + r.error;
-    });
+    tgSend(text);   // счётчики и текст ошибки обновит сам tgSend
   }
 }
 
@@ -711,6 +762,15 @@ document.getElementById("btn-tg").addEventListener("click", () => {
   cfg.tg.on = !cfg.tg.on;
   setToggle("btn-tg", cfg.tg.on, "TELEGRAM: ВКЛ", "TELEGRAM: ВЫКЛ");
   saveCfg();
+  updateTgStatus();
+});
+// сохраняем токен/chat id прямо по мере ввода, чтобы их не терять при перезагрузке
+["f-tgtoken", "f-tgchat"].forEach(id => {
+  document.getElementById(id).addEventListener("input", () => {
+    cfg.tg.token = document.getElementById("f-tgtoken").value.trim();
+    cfg.tg.chat = document.getElementById("f-tgchat").value.trim();
+    saveCfg();
+  });
 });
 document.getElementById("btn-tg-tier").addEventListener("click", () => {
   cfg.tg.onlyConfirmed = !cfg.tg.onlyConfirmed;
@@ -719,9 +779,38 @@ document.getElementById("btn-tg-tier").addEventListener("click", () => {
 });
 document.getElementById("btn-tg-test").addEventListener("click", async () => {
   cfgFromForm();
-  document.getElementById("tg-status").textContent = "отправка…";
+  const box = document.getElementById("tg-status");
+  box.textContent = "шаг 1/2: проверяю токен…";
+  const me = await tgCall("getMe");            // сперва токен — иначе непонятно, что именно не так
+  if (!me.ok) { box.textContent = "❌ токен не принят: " + me.error; return; }
+  box.textContent = `шаг 2/2: токен ок (@${me.result.username}), отправляю сообщение…`;
   const r = await tgSend("⚡ VolScan 1m: тестовое сообщение. Если видите это — Telegram настроен верно.");
-  document.getElementById("tg-status").textContent = r.ok ? "Telegram: доставлено ✓" : "Telegram: " + r.error;
+  box.textContent = r.ok
+    ? `✅ доставлено. Бот @${me.result.username}, chat id ${tgCreds().chat}`
+    : `❌ токен ок (@${me.result.username}), но сообщение не ушло: ${r.error}`;
+});
+document.getElementById("btn-tg-chatid").addEventListener("click", async () => {
+  cfgFromForm();
+  const box = document.getElementById("tg-status");
+  box.textContent = "ищу ваш chat id в последних сообщениях бота…";
+  const r = await tgCall("getUpdates", { limit: "20" });
+  if (!r.ok) { box.textContent = "❌ " + r.error; return; }
+  const chats = [];
+  for (const u of r.result || []) {
+    const m = u.message || u.channel_post || u.edited_message;
+    if (m && m.chat && !chats.some(c => c.id === m.chat.id)) {
+      chats.push({ id: m.chat.id, name: m.chat.title || [m.chat.first_name, m.chat.last_name].filter(Boolean).join(" ") || m.chat.username || m.chat.type });
+    }
+  }
+  if (!chats.length) {
+    box.textContent = "❌ бот не видит ни одного сообщения. Напишите ему что-нибудь в Telegram и нажмите ещё раз. "
+      + "(Если бот уже подключён к другому приложению через webhook, getUpdates будет пустым.)";
+    return;
+  }
+  document.getElementById("f-tgchat").value = String(chats[0].id);
+  cfgFromForm();
+  box.textContent = `✅ подставил chat id ${chats[0].id} (${chats[0].name})`
+    + (chats.length > 1 ? ` · найдены ещё: ${chats.slice(1).map(c => c.id + " (" + c.name + ")").join(", ")}` : "");
 });
 document.getElementById("btn-clear").addEventListener("click", () => {
   signals = []; lastSignalAt = {};
