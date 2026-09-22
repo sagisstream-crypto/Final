@@ -328,7 +328,7 @@ let wsTicker = null, wsKlines = [], wsFails = 0;
 let lastEval = 0, scanned = 0, gatePass = 0;
 // диагностика: видно, что сканер жив, даже когда сигналов нет
 const DIAG = { bars:0, evals:0, maxRvol:0, maxRvolSym:"", lastBarTs:0, started:Date.now(),
-               nearMiss:0, sessionBest:0, sessionBestSym:"" };
+               nearMiss:0, sessionBest:0, sessionBestSym:"", wsMsgs:0, lastMsgTs:0 };
 
 function newSym(sym, onboard){
   return { sym, onboard: onboard||0, qv24: 0, price: 0, bars: [], daily: [],
@@ -825,6 +825,9 @@ function onKline(ev){
   let m; try{ m = JSON.parse(ev.data); }catch(e){ return; }
   const d = m.data || m;
   if(!d || !d.k) return;
+  // счётчик КАЖДОГО сообщения потока — живое доказательство, что WS жив,
+  // независимо от того, изменились ли числа у конкретной пары прямо сейчас
+  DIAG.wsMsgs++; DIAG.lastMsgTs = Date.now();
   const sym = d.s, k = d.k, st = S[sym];
   if(!st) return;
   const bar = wsKlineToBar(k);
@@ -911,6 +914,8 @@ function renderStats(){
   const best = Object.values(S).reduce((a,b)=> (b.ready||0)>(a.ready||0) ? b : a, {ready:0});
   const age = DIAG.lastBarTs ? Math.round((Date.now()-DIAG.lastBarTs)/1000) : null;
   const alive = age!==null && age<90;
+  const msgAge = DIAG.lastMsgTs ? (Date.now()-DIAG.lastMsgTs)/1000 : null;
+  const msgAlive = msgAge!==null && msgAge<10;
   document.getElementById("stats").innerHTML =
     `<div><span class="dot ${ready&&wsOk?"on":"warn"}"></span><b>${n}</b> <span>пар</span></div>`+
     `<div><b>${armed}</b> <span>на полке</span></div>`+
@@ -919,7 +924,12 @@ function renderStats(){
       ? `<div><span>ближе всех</span> <b class="${best.ready>=0.5?"hot":""}">${best.sym.replace("USDT","")} ${Math.round(best.ready*100)}%</b></div>`
       : `<div><span>ближе всех</span> <b class="mut">никто</b></div>`)+
     `<div><span class="dot ${alive?"on":"warn"}"></span><span>свеча</span> <b>${age===null?"—":age+"с назад"}</b></div>`+
-    `<div><span>поток</span> <b>${wsOk}/${wsKlines.length}</b></div>`;
+    `<div><span>поток</span> <b>${wsOk}/${wsKlines.length}</b></div>`+
+    `<div title="каждое сообщение от Binance, растёт постоянно, если поток жив — так и должно быть, даже если числа в таблице у конкретной пары в эту секунду не поменялись">`+
+      `<span class="dot ${msgAlive?"on":"warn"}"></span><span>тиков</span> `+
+      `<b class="${msgAlive?"up":"warn"}">${DIAG.wsMsgs.toLocaleString("ru")}</b>`+
+      (msgAge!==null ? ` <span class="mut">(${msgAge<1?"сейчас":Math.round(msgAge)+"с назад"})</span>` : "")+
+    `</div>`;
 }
 function renderBadge(){
   const b = document.getElementById("sigbadge");
@@ -999,12 +1009,19 @@ function renderCfg(){
     </div>
   </div>
 
-  <div class="card"><h3>О КОЛОНКЕ «ГОТОВ»</h3><div class="doc">
+  <div class="card"><h3>О КОЛОНКЕ «ГОТОВ» И СЧЁТЧИКЕ «ТИКОВ»</h3><div class="doc">
     RVOL и «готов» в таблице обновляются на каждый тик формирующегося бара
     (примерно раз в секунду, как шлёт Binance), а не только на закрытии
     15-минутной свечи — даже для пар, которые ещё далеко от порога.
     Полный пересчёт score (дорогой) по-прежнему считается только когда пара
-    уже почти у порога объёма — иначе на 800 парах телефон не потянет.
+    уже почти у порога объёма — иначе на 800 парах телефон не потянет.<br><br>
+    <b>Если конкретное число в таблице кажется застывшим</b> — это может быть
+    честно: у тихой пары просто давно не было сделки, а объём в форминг-баре
+    обновляется только когда сделка приходит. Проверяйте не отдельную ячейку,
+    а счётчик <b>«тиков»</b> в шапке — он растёт на каждое сообщение потока
+    вообще по любой паре, независимо от того, сдвинулось ли число у той пары,
+    на которую вы смотрите. Если «тиков» растёт, а рядом «сейчас» —
+    поток точно живой; конкретная строка просто ждёт своей сделки.
   </div></div>
 
   <div class="card"><h3>ДИАГНОСТИКА</h3><div class="doc" id="cfg-diag"></div>
