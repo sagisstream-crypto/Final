@@ -88,7 +88,7 @@ HTTP_PORT = 8765
 # после обновления app.py эта строка на дашборде («Диагностика») не
 # совпадает с тем, что вы ожидаете увидеть, значит запущен СТАРЫЙ процесс:
 # закройте окно консоли (или Ctrl+C) и запустите run_windows.bat заново.
-BUILD = "2026-09-22.4-visible-ws-errors"
+BUILD = "2026-09-22.5-live-radar-tick-counter"
 BARS_KEEP = 260          # закрытых 15м баров в кольцевом буфере на пару
 M1_KEEP = 20             # закрытых 1м баров в буфере на пару (только для диагностики)
 DAILY_LIMIT = 31
@@ -132,7 +132,11 @@ WATCHLIST: list[str] = []
 DIAG = dict(bars=0, evals=0, max_rvol=0.0, max_rvol_sym="", last_bar_ts=0,
             started=now_ms(), near_miss=0, ws_ok15=0, ws_total15=0,
             ws_ok1m=0, ws_total1m=0, history_done=0, history_total=0, ready=False,
-            ws_fail_streak=0, ws_last_error="", ws_last_error_ts=0, ws_ever_connected=False)
+            ws_fail_streak=0, ws_last_error="", ws_last_error_ts=0, ws_ever_connected=False,
+            # счётчик КАЖДОГО входящего kline-сообщения (15m и 1m) — честное
+            # доказательство, что поток жив, отдельно от того, изменилось ли
+            # что-то у конкретной пары прямо сейчас (см. восемнадцатую ловушку в JS)
+            ws_msgs=0, last_msg_ts=0)
 
 
 def push_log(msg: str, level: str = ""):
@@ -146,7 +150,7 @@ def new_sym_state(sym: str, onboard: int) -> dict:
         bars=deque(maxlen=BARS_KEEP), daily=[], live=None, m1=deque(maxlen=M1_KEEP),
         score=0.0, ready=0.0, state="—", feats=None, cache=None,
         live_rvol=None, live_brk=None, live_ready=None,
-        last_sig=0, last_eval=0,
+        last_sig=0, last_eval=0, last_tick_at=0,
     )
 
 
@@ -519,6 +523,7 @@ def handle_kline15(sym: str, k: dict):
         return
     bar = kline_ws_to_bar(k)
     st["price"] = bar["c"]
+    st["last_tick_at"] = now_ms()
     if k.get("x"):
         bars = st["bars"]
         if not bars or bar["t"] > bars[-1]["t"]:
@@ -590,6 +595,8 @@ async def ws_kline_loop(session: aiohttp.ClientSession, syms: list[str], interva
                     k = d.get("k") if d else None
                     if not k:
                         continue
+                    DIAG["ws_msgs"] += 1
+                    DIAG["last_msg_ts"] = now_ms()
                     handler(d.get("s"), k)
         except Exception as e:
             DIAG["ws_fail_streak"] += 1
@@ -674,8 +681,13 @@ def build_state_snapshot() -> dict:
             rvol=(live_rvol if live_rvol is not None else f["rvol"]),
             brk=(live_brk if live_brk is not None else f["brk"]),
             qv24=st["qv24"], state=st["state"], age=f["age"],
+            last_tick_at=st.get("last_tick_at") or 0,
         ))
-    rows.sort(key=lambda r: (-r["score"], -rank.get(r["state"], 0), -(r["ready"] or 0), -r["qv24"]))
+    # тайбрейкер по времени последней реальной сделки — не трогает смысловую
+    # сортировку (score/state/ready), но заставляет нижнюю часть списка, где
+    # у всех score=0, реально тасоваться по мере поступления тиков (как в JS)
+    rows.sort(key=lambda r: (-r["score"], -rank.get(r["state"], 0), -(r["ready"] or 0),
+                              -r["last_tick_at"], -r["qv24"]))
     rows = rows[:80]
 
     armed = sum(1 for st in S.values() if st["state"] == "armed")
@@ -689,9 +701,17 @@ def build_state_snapshot() -> dict:
     def p_quiet(h):
         return math.exp(-rate * h / 24) * 100
 
-    # соединение считается мёртвым, если после загрузки истории нет ни одного
-    # живого потока И прошло больше времени, чем один цикл переподключения
-    ws_dead = (DIAG["ready"] and DIAG["ws_ok15"] == 0 and (now_ms() - DIAG["started"]) > 15000)
+    # соединение считается мёртвым в двух случаях: (1) после загрузки истории
+    # нет вообще ни одного живого потока дольше цикла переподключения, или
+    # (2) поток формально "подключён" (ws_ok15>0), но давно нет НИ ОДНОГО
+    # реального сообщения — та же ловушка, что и в JS: aiohttp heartbeat
+    # обычно сам ловит такое через ping/pong, но полагаться только на это
+    # рискованно, если сеть глушит и пинги тоже
+    ws_dead = DIAG["ready"] and (
+        (DIAG["ws_ok15"] == 0 and (now_ms() - DIAG["started"]) > 15000)
+        or (DIAG["ws_ok15"] > 0 and DIAG["last_msg_ts"] and (now_ms() - DIAG["last_msg_ts"]) > 30000)
+    )
+    msg_age_s = round((now_ms() - DIAG["last_msg_ts"]) / 1000) if DIAG["last_msg_ts"] else None
     stats = dict(
         pairs=n, armed=armed, signals=len(SIGNALS),
         ws15=f"{DIAG['ws_ok15']}/{DIAG['ws_total15']}", ws1m=f"{DIAG['ws_ok1m']}/{DIAG['ws_total1m']}",
@@ -701,6 +721,7 @@ def build_state_snapshot() -> dict:
         history_done=DIAG["history_done"], history_total=DIAG["history_total"],
         ready=DIAG["ready"], ws_dead=ws_dead,
         ws_last_error=DIAG["ws_last_error"], ws_fail_streak=DIAG["ws_fail_streak"],
+        ws_msgs=DIAG["ws_msgs"], msg_age_s=msg_age_s,
     )
     diag = dict(
         build=BUILD,

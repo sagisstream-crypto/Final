@@ -72,6 +72,10 @@
   .doc li{margin-bottom:3px}
   .bar{height:3px;background:#131a13;border-radius:2px;overflow:hidden;margin-top:3px}
   .bar i{display:block;height:100%;background:#5eff8f}
+  /* вспышка строки при изменении отображаемого текста — чтобы движение было
+     видно глазом при перерисовке каждые ~1.2с, а не только по числу в углу */
+  tr.row-flash{animation:rowFlash 1.1s ease-out}
+  @keyframes rowFlash{0%{background:#1c2e14}100%{background:transparent}}
   .progress{padding:24px 14px;text-align:center;color:#54664f;font-size:11px;line-height:1.9}
   .progress .big{font-size:22px;color:#5eff8f;display:block;margin-bottom:6px}
   .banner{background:#1e1810;border:1px solid #4a3a1e;color:#ffd85e;padding:8px 10px;border-radius:2px;
@@ -173,21 +177,30 @@ function stateCell(st){
   return '<span class="mut">—</span>';
 }
 
+const rowFingerprint = {};   // sym -> строка последнего отрисованного состояния строки
 function renderRadar(rows){
   const body = document.getElementById("radar-body");
   if(!rows.length){ body.innerHTML = `<tr><td colspan="9" class="empty">жду данные…</td></tr>`; return; }
   body.innerHTML = rows.map(st=>{
-    return `<tr class="${st.state}">
+    const priceTxt = fmtPx(st.price);
+    const rvolTxt = (st.rvol!=null&&isFinite(st.rvol))?"×"+st.rvol.toFixed(st.rvol>=10?0:1):"—";
+    const readyTxt = st.ready>0?Math.round(st.ready*100)+"%":"·";
+    const brkTxt = pct(st.brk);
+    const qvTxt = fmtUsd(st.qv24);
+    const fp = priceTxt+"|"+rvolTxt+"|"+readyTxt+"|"+brkTxt+"|"+qvTxt+"|"+st.state+"|"+(st.score>0?(st.score*100).toFixed(0):"");
+    const flash = rowFingerprint[st.sym]!==undefined && rowFingerprint[st.sym]!==fp;
+    rowFingerprint[st.sym] = fp;
+    return `<tr class="${st.state}${flash?" row-flash":""}">
       <td><span class="sym">${st.sym.replace("USDT","")}</span>
           <span class="sub">${st.age>=12? st.age+" баров тихо" : "&nbsp;"}</span></td>
       <td class="scorecell ${scoreClass(st.score)}">${st.score>0?(st.score*100).toFixed(0):"·"}</td>
-      <td>${fmtPx(st.price)}</td>
+      <td>${priceTxt}</td>
       <td class="${st.sw<=0.06?"up":""}">${(st.sw*100).toFixed(1)}%</td>
-      <td class="${st.rvol>=10?"hot":""}">${(st.rvol!=null&&isFinite(st.rvol))?"×"+st.rvol.toFixed(st.rvol>=10?0:1):"—"}</td>
-      <td class="${st.ready>=0.5?"hot":(st.ready>0?"":"mut")}">${st.ready>0?Math.round(st.ready*100)+"%":"·"}
+      <td class="${st.rvol>=10?"hot":""}">${rvolTxt}</td>
+      <td class="${st.ready>=0.5?"hot":(st.ready>0?"":"mut")}">${readyTxt}
         <div class="bar"><i style="width:${Math.round((st.ready||0)*100)}%"></i></div></td>
-      <td class="${st.brk>=0?"up":"mut"}">${pct(st.brk)}</td>
-      <td class="mut">${fmtUsd(st.qv24)}</td>
+      <td class="${st.brk>=0?"up":"mut"}">${brkTxt}</td>
+      <td class="mut">${qvTxt}</td>
       <td>${stateCell(st)}</td>
     </tr>`;
   }).join("");
@@ -195,6 +208,7 @@ function renderRadar(rows){
 
 function renderStats(stats){
   const alive = stats.last_bar_age_s!==null && stats.last_bar_age_s<90;
+  const msgAlive = stats.msg_age_s!==null && stats.msg_age_s<10;
   document.getElementById("stats").innerHTML =
     `<div><span class="dot ${stats.ready?"on":"warn"}"></span><b>${stats.pairs}</b> <span>пар</span></div>`+
     `<div><b>${stats.armed}</b> <span>на полке</span></div>`+
@@ -203,7 +217,12 @@ function renderStats(stats){
       ? `<div><span>ближе всех</span> <b class="${stats.best_ready>=50?"hot":""}">${stats.best_sym.replace("USDT","")} ${stats.best_ready}%</b></div>`
       : `<div><span>ближе всех</span> <b class="mut">никто</b></div>`)+
     `<div><span class="dot ${alive?"on":"warn"}"></span><span>свеча</span> <b>${stats.last_bar_age_s===null?"—":stats.last_bar_age_s+"с назад"}</b></div>`+
-    `<div><span>15м</span> <b>${stats.ws15}</b> <span>1м</span> <b>${stats.ws1m}</b></div>`;
+    `<div><span>15м</span> <b>${stats.ws15}</b> <span>1м</span> <b>${stats.ws1m}</b></div>`+
+    `<div title="каждое сообщение от Binance, растёт постоянно, если поток реально жив">`+
+      `<span class="dot ${msgAlive?"on":"warn"}"></span><span>тиков</span> `+
+      `<b class="${msgAlive?"up":"warn"}">${(stats.ws_msgs||0).toLocaleString("ru")}</b>`+
+      (stats.msg_age_s!==null ? ` <span class="mut">(${stats.msg_age_s<1?"сейчас":stats.msg_age_s+"с назад"})</span>` : "")+
+    `</div>`;
 }
 
 function renderSignals(signals){
@@ -391,8 +410,16 @@ function renderWsBanner(stats){
   const el = document.getElementById("ws-dead-banner");
   if(!el) return;
   if(stats.ws_dead){
+    const connectedButSilent = stats.ws15 && stats.ws15.split("/")[0] !== "0";
     el.style.display = "block";
-    el.innerHTML = `⚠ <b>Поток к Binance не подключается.</b> История загружена, но живых данных нет —
+    el.innerHTML = connectedButSilent
+      ? `⚠ <b>Поток формально подключён (${stats.ws15}), но данных нет уже ${stats.msg_age_s}с.</b>
+         История загружена, но таблица висит на старом снимке.<br>
+         <span class="mut">Похоже, сеть/файрвол пропускает подключение, но режет сами данные —
+         явление то же самое, что и в HTML-версии. python.exe пытается переподключаться
+         автоматически (ping/pong-проверка раз в 20с), но если сеть режет и это —
+         соединение будет виснуть снова и снова.</span>`
+      : `⚠ <b>Поток к Binance не подключается.</b> История загружена, но живых данных нет —
       таблица не будет обновляться, пока соединение не восстановится.<br>
       Неудачных попыток подряд: ${stats.ws_fail_streak||"?"}.
       ${stats.ws_last_error?`Последняя ошибка: <code>${stats.ws_last_error.replace(/</g,"&lt;")}</code>`:""}<br>
@@ -466,7 +493,7 @@ document.getElementById("btn-test-tg").onclick = async ()=>{
 };
 
 poll();
-setInterval(poll, 2000);
+setInterval(poll, 1200);
 </script>
 </body>
 </html>
