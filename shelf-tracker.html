@@ -592,7 +592,7 @@ function shelfClassify(bars, qv24){
     && Math.abs(sdrift)<=SHELF_CFG.maxDrift && ret>0 && satr>0
     && qv24>=SHELF_CFG.minQv24 && qv24<=SHELF_CFG.maxQv24;
 
-  if(gate) return "gate";                                          // уже пробивает — это вынос, не "на полке"
+  if(gate) return "gate";                        // уже пробивает (gate/fired в терминах evaluate()) — вызывающий код сам решает, включать ли такие
   if(sw<=SHELF_CFG.maxWidth && satr<=SHELF_CFG.maxSatr && age>=12) return "armed";
   if(sw<=SHELF_CFG.maxWidth) return "quiet";
   return "—";
@@ -627,7 +627,16 @@ async function buildShelfWatchlist(silent){
     list.sort((a,b)=> Math.abs(Math.log10(qv[a])-PEAK) - Math.abs(Math.log10(qv[b])-PEAK));
     if(list.length > SHELF_CFG.maxPairs) list = list.slice(0, SHELF_CFG.maxPairs);
 
-    const armed = new Set();
+    // "armed" — это именно пилюля "полка" в ShelfScan, но сигнал там стреляет
+    // из состояний "gate"/"fired" (полка уже пробивается) — то есть ровно в
+    // момент, когда пара становится интересной, она перестаёт быть "armed".
+    // Если брать только "armed", любая пара, по которой только что пришёл
+    // сигнал, тут же выпадает из списка — как раз это и вызвало путаницу
+    // (TRADOOR/ARPA сигналили в ShelfScan, но их не было в shelf-tracker).
+    // Берём всё, что прошло форму полки (armed + gate + fired), кроме явно
+    // тихих/неоформившихся ("quiet"/"—") — тогда пара остаётся видна и во
+    // время, и сразу после выноса.
+    const shelfWorthy = new Set();
     let done = 0;
     const CH = 8;
     for(let k=0;k<list.length;k+=CH){
@@ -637,26 +646,31 @@ async function buildShelfWatchlist(silent){
           const k15 = await shelfGetJson(`/fapi/v1/klines?symbol=${sym}&interval=15m&limit=220`);
           const bars = k15.map(shelfKlineToBar);
           if(bars.length && Date.now() < bars[bars.length-1].t + 900000) bars.pop();
-          if(shelfClassify(bars, qv[sym]) === "armed") armed.add(sym);
+          const state = shelfClassify(bars, qv[sym]);
+          // shelfClassify не считает score (он не нужен для формы полки), поэтому
+          // "fired" (gate + score>=minScore) она не отличает от простого "gate" —
+          // обе возвращаются как "gate", и обе должны остаться в списке
+          if(state==="armed" || state==="gate") shelfWorthy.add(sym);
         }catch(e){ /* одна неудачная пара не должна ронять весь отбор */ }
       }));
       done += chunk.length;
       say(`строю список полки: ${Math.min(done,list.length)} / ${list.length}`);
     }
-    SHELF_SET = armed;
-    say(`полка: ${armed.size} пар — запускаю трекинг`);
+    SHELF_SET = shelfWorthy;
+    say(`полка: ${shelfWorthy.size} пар — запускаю трекинг`);
   }catch(e){
     say("не удалось построить список полки: "+e.message);
     SHELF_SET = new Set();          // пусто, но не null — не блокируем страницу навсегда
   }
 }
 
-// сама полка живая: пара может стать "armed" уже после того, как эта страница
-// загрузилась (или наоборот — уйти в вынос и перестать быть "на полке"), а
-// SHELF_SET иначе остался бы замороженным снимком на момент открытия страницы.
-// Раз в 15 минут — ровно цикл закрытия 15м свечи, чаще нет смысла: геометрия
-// полки не меняется быстрее этого.
-const SHELF_REFRESH_MS = 15*60000;
+// сама полка живая: пара может стать "armed"/"gate" уже после того, как эта
+// страница загрузилась, а SHELF_SET иначе остался бы замороженным снимком на
+// момент открытия. Геометрия полки меняется не быстрее закрытия 15м свечи,
+// но снимок этой странице и ShelfScan берут не в одну и ту же секунду —
+// каждые 5 минут вместо 15, чтобы отставание от живого радара ShelfScan
+// было в пределах нескольких минут, а не четверти часа.
+const SHELF_REFRESH_MS = 5*60000;
 async function refreshShelfWatchlist(){
   await buildShelfWatchlist(true);
   Object.keys(rows).forEach(key => {
