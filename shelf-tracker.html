@@ -900,7 +900,10 @@ function renderShelfScorePanel(){
   if(!summaryEl || !listEl) return;
   const ageS = shelfScoreDiag.lastRun ? Math.round((Date.now()-shelfScoreDiag.lastRun)/1000) : null;
   summaryEl.textContent = shelfScoreDiag.lastRun
-    ? ` — посчитано ${shelfScoreDiag.computed}/${shelfScoreDiag.total} пар, ${ageS<60?ageS+"с":Math.round(ageS/60)+"мин"} назад`+
+    ? ` — посчитано ${shelfScoreDiag.computed}/${shelfScoreDiag.total} пар`+
+      (shelfScoreDiag.failed ? ` (${shelfScoreDiag.failed} не удалось: ${shelfScoreDiag.failedSyms.map(s=>s.replace("USDT","")).join(", ")})` : "")+
+      (shelfScoreDiag.inBand>shelfScoreDiag.total ? ` · в полосе оборота ${shelfScoreDiag.inBand}, потолок ${shelfScoreDiag.cap} отрезал ${shelfScoreDiag.inBand-shelfScoreDiag.total}` : "")+
+      `, ${ageS<60?ageS+"с":Math.round(ageS/60)+"мин"} назад`+
       (shelfScoreBest ? ` · лучший сейчас: ${shelfScoreBest.sym.replace("USDT","")} ${(shelfScoreBest.score*100).toFixed(0)}/100` : "")
     : " — считается…";
   if(!shelfScoreFiredLog.length){
@@ -953,6 +956,7 @@ async function buildShelfWatchlist(silent){
       .filter(s => Number.isFinite(qv[s]) && qv[s] >= SHELF_CFG.minQv24 && qv[s] <= SHELF_CFG.maxQv24);
     const PEAK = Math.log10(1e7);
     list.sort((a,b)=> Math.abs(Math.log10(qv[a])-PEAK) - Math.abs(Math.log10(qv[b])-PEAK));
+    const inBand = list.length;   // сколько пар попало в полосу оборота ДО потолка вотчлиста
     if(list.length > SHELF_CFG.maxPairs) list = list.slice(0, SHELF_CFG.maxPairs);
 
     // "armed" — это именно пилюля "полка" в ShelfScan, но сигнал там стреляет
@@ -968,6 +972,8 @@ async function buildShelfWatchlist(silent){
     let computed = 0;
     let cycleBest = null;
     let done = 0;
+    const failed = [];   // символы, у которых REST/классификация упали в этом цикле — иначе
+                          // "пары нет в списке" не отличить от "не удалось её посчитать"
     // маленькие пачки + пауза между ними — раньше при пачках по 8 и 2
     // запросах на пару разом (15м+дневные) сборка списка полки заливала
     // сеть десятками параллельных запросов и, похоже, сама же гасила и
@@ -1003,13 +1009,14 @@ async function buildShelfWatchlist(silent){
               if(shelfScoreFiredLog.length > SHELFSCORE_LOG_MAX) shelfScoreFiredLog.length = SHELFSCORE_LOG_MAX;
             }
           }
-        }catch(e){ /* одна неудачная пара не должна ронять весь отбор */ }
+        }catch(e){ failed.push(sym); }
       }));
       done += chunk.length;
       say(`строю список полки: ${Math.min(done,list.length)} / ${list.length}`);
     }
     SHELF_SET = shelfWorthy;
-    shelfScoreDiag = { computed, total: list.length, lastRun: Date.now() };
+    shelfScoreDiag = { computed, total: list.length, failed: failed.length, failedSyms: failed.slice(0,15),
+      inBand, cap: SHELF_CFG.maxPairs, lastRun: Date.now() };
     shelfScoreBest = cycleBest;
     renderShelfScorePanel();
     say(`полка: ${shelfWorthy.size} пар — запускаю трекинг`);
