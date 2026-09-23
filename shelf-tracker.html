@@ -324,6 +324,12 @@
     .pair-columns-panel { display: flex; }
   }
 
+  /* убраны по просьбе: CSV, план сделки (кнопка/поля/панель), статистика,
+     вкладка «СИГНАЛЫ» внизу — скрыто через display:none, а не вырезано из
+     DOM/JS, чтобы не задеть остальную логику (рендер продолжает находить
+     эти элементы, просто они невидимы) */
+  #csv-btn, #trade-plan-btn, #trade-params-box, #trade-panel,
+  #stats-btn, #stats-panel, #tab-bar button[data-pane="alerts"] { display: none !important; }
 </style>
 </head>
 <body>
@@ -400,7 +406,7 @@
       <input id="score-threshold-input" value="60">
       <button class="ok-btn" id="apply-score-threshold">OK</button>
     </div>
-    <div class="box">
+    <div class="box" id="trade-params-box">
       <span>📐</span>
       <span class="stat-label">стоп −%/цель +%/часов</span>
       <input id="trade-stop-input" value="8" style="width:34px">
