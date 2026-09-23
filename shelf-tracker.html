@@ -871,6 +871,21 @@ function shelfEvaluate(bars, daily, qv24, onboardTs, btc15){
 const SHELF_MINSCORE = 0.10;         // как minScore в DEFAULTS shelf-scanner.html
 const SHELF_COOLDOWN_MS = 90*60000;  // как cooldownMin=90 в DEFAULTS — не слать повторно по той же паре чаще
 let lastShelfSignalAt = {};          // symbol -> ts последней отправки ⭐ ShelfScan-сигнала в Telegram
+// дневные свечи нужны только для pos30/qv24Mult — 30-дневная статистика,
+// за 5 минут между циклами она не меняется заметно. Кэшируем на час,
+// вместо того чтобы тянуть 31×1d по 600+ парам на КАЖДОМ цикле — это было
+// лишней третью REST-веса и, похоже, приводило к упору в лимиты Binance
+// (сканер переставал находить полки, USDT-M тикер уходил в ERR/REST)
+const SHELF_DAILY_TTL_MS = 60*60000;
+let shelfDailyCache = {};            // symbol -> { bars, fetchedAt }
+async function getShelfDaily(sym){
+  const c = shelfDailyCache[sym];
+  if(c && Date.now()-c.fetchedAt < SHELF_DAILY_TTL_MS) return c.bars;
+  const k1d = await shelfGetJson(`/fapi/v1/klines?symbol=${sym}&interval=1d&limit=31`);
+  const bars = k1d.map(shelfKlineToBar);
+  shelfDailyCache[sym] = { bars, fetchedAt: Date.now() };
+  return bars;
+}
 
 // видимое доказательство, что score ShelfScan вообще считается, не дожидаясь
 // реального сигнала — иначе непонятно, работает оно вообще или нет
@@ -953,18 +968,23 @@ async function buildShelfWatchlist(silent){
     let computed = 0;
     let cycleBest = null;
     let done = 0;
-    const CH = 8;
+    // маленькие пачки + пауза между ними — раньше при пачках по 8 и 2
+    // запросах на пару разом (15м+дневные) сборка списка полки заливала
+    // сеть десятками параллельных запросов и, похоже, сама же гасила и
+    // собственный тикер-поток VolScan (видели ERR/REST на USDT-M сразу
+    // после запуска) — не хватало пропускной способности/лимита на всех сразу
+    const CH = 4;
     for(let k=0;k<list.length;k+=CH){
       const chunk = list.slice(k,k+CH);
+      if(k>0) await new Promise(r=>setTimeout(r, 150));
       await Promise.all(chunk.map(async sym=>{
         try{
-          const [k15, k1d] = await Promise.all([
+          const [k15, daily] = await Promise.all([
             shelfGetJson(`/fapi/v1/klines?symbol=${sym}&interval=15m&limit=220`),
-            shelfGetJson(`/fapi/v1/klines?symbol=${sym}&interval=1d&limit=31`)
+            getShelfDaily(sym)
           ]);
           const bars = k15.map(shelfKlineToBar);
           if(bars.length && Date.now() < bars[bars.length-1].t + 900000) bars.pop();
-          const daily = k1d.map(shelfKlineToBar);
           const { state, score, feats } = shelfEvaluate(bars, daily, qv[sym], onboard[sym], btc15);
           computed++;
           if(!cycleBest || score > cycleBest.score) cycleBest = { sym, score, state };
