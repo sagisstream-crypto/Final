@@ -192,6 +192,18 @@
   .shelf-sym { font-size: 12px; font-weight: 600; color: #ffd85e; }
   .shelf-delta { font-size: 11px; color: #ffb454; font-weight: 600; }
   .shelf-time { font-size: 9px; color: #8a7a4a; }
+  /* панель-доказательство, что score ShelfScan вообще считается — без нужды
+     ждать реального сигнала: видно, сколько пар посчитано и когда в
+     последний раз обновлялось, обновляется на каждом цикле buildShelfWatchlist */
+  .shelfscore-panel { border: 1px solid #1e3a2a; background: #081a12; border-radius: 4px; margin: 0 12px 8px; padding: 6px 8px; }
+  .shelfscore-header { font-size: 11px; font-weight: 700; color: #5eff8f; margin-bottom: 4px; }
+  .shelfscore-summary { color: #4a9a6f; font-weight: 400; }
+  .shelfscore-list { display: flex; flex-wrap: wrap; gap: 6px; max-height: 120px; overflow-y: auto; }
+  .shelfscore-empty { font-size: 11px; color: #3a6b4a; padding: 2px 0; }
+  .shelfscore-item { display: flex; gap: 8px; align-items: center; background: #0a2216; border: 1px solid #1e3a2a; border-radius: 3px; padding: 4px 8px; }
+  .shelfscore-sym { font-size: 12px; font-weight: 600; color: #5eff8f; }
+  .shelfscore-val { font-size: 11px; color: #ffd85e; font-weight: 600; }
+  .shelfscore-time { font-size: 9px; color: #4a7a5a; }
   .trade-panel { border: 1px solid #1a2a3a; background: #0a0e14; border-radius: 4px; margin: 0 12px 8px; padding: 6px 8px; }
   .trade-header { font-size: 11px; font-weight: 700; color: #5ec8ff; margin-bottom: 4px; }
   .trade-summary { color: #8aa8bf; font-weight: 400; }
@@ -450,6 +462,12 @@
     <div class="shelf-header">🪤 ТИХАЯ ПОЛКА</div>
     <div class="shelf-list" id="shelf-list">
       <div class="shelf-empty">Пока нет.</div>
+    </div>
+  </div>
+  <div class="shelfscore-panel" id="shelfscore-panel">
+    <div class="shelfscore-header">⭐ SCORE SHELFSCAN <span class="shelfscore-summary" id="shelfscore-summary"></span></div>
+    <div class="shelfscore-list" id="shelfscore-list">
+      <div class="shelfscore-empty">Пока нет — досчитается на первом цикле сборки полки.</div>
     </div>
   </div>
   <div class="trade-panel" id="trade-panel">
@@ -854,6 +872,34 @@ const SHELF_MINSCORE = 0.10;         // как minScore в DEFAULTS shelf-scanne
 const SHELF_COOLDOWN_MS = 90*60000;  // как cooldownMin=90 в DEFAULTS — не слать повторно по той же паре чаще
 let lastShelfSignalAt = {};          // symbol -> ts последней отправки ⭐ ShelfScan-сигнала в Telegram
 
+// видимое доказательство, что score ShelfScan вообще считается, не дожидаясь
+// реального сигнала — иначе непонятно, работает оно вообще или нет
+let shelfScoreDiag = { computed: 0, total: 0, lastRun: 0 };
+let shelfScoreBest = null;           // {sym, score, state} — максимум score за последний цикл
+let shelfScoreFiredLog = [];         // последние fired-события (не только те, что дошли до Telegram)
+const SHELFSCORE_LOG_MAX = 20;
+
+function renderShelfScorePanel(){
+  const summaryEl = document.getElementById("shelfscore-summary");
+  const listEl = document.getElementById("shelfscore-list");
+  if(!summaryEl || !listEl) return;
+  const ageS = shelfScoreDiag.lastRun ? Math.round((Date.now()-shelfScoreDiag.lastRun)/1000) : null;
+  summaryEl.textContent = shelfScoreDiag.lastRun
+    ? ` — посчитано ${shelfScoreDiag.computed}/${shelfScoreDiag.total} пар, ${ageS<60?ageS+"с":Math.round(ageS/60)+"мин"} назад`+
+      (shelfScoreBest ? ` · лучший сейчас: ${shelfScoreBest.sym.replace("USDT","")} ${(shelfScoreBest.score*100).toFixed(0)}/100` : "")
+    : " — считается…";
+  if(!shelfScoreFiredLog.length){
+    listEl.innerHTML = `<div class="shelfscore-empty">Fired-сигналов ещё не было — это нормально, само по себе ничего не значит.</div>`;
+  } else {
+    listEl.innerHTML = shelfScoreFiredLog.map(e => `
+      <div class="shelfscore-item">
+        <span class="shelfscore-sym">${e.sym.replace("USDT","")}</span>
+        <span class="shelfscore-val">${(e.score*100).toFixed(0)}/100</span>
+        <span class="shelfscore-time">${new Date(e.ts).toLocaleTimeString("ru", {hour:"2-digit", minute:"2-digit"})}</span>
+      </div>`).join("");
+  }
+}
+
 async function shelfGetJson(path){
   const r = await fetch(SHELF_API+path);
   if(!r.ok) throw new Error("HTTP "+r.status);
@@ -904,6 +950,8 @@ async function buildShelfWatchlist(silent){
     // тихих/неоформившихся ("quiet"/"—") — тогда пара остаётся видна и во
     // время, и сразу после выноса.
     const shelfWorthy = new Set();
+    let computed = 0;
+    let cycleBest = null;
     let done = 0;
     const CH = 8;
     for(let k=0;k<list.length;k+=CH){
@@ -918,15 +966,21 @@ async function buildShelfWatchlist(silent){
           if(bars.length && Date.now() < bars[bars.length-1].t + 900000) bars.pop();
           const daily = k1d.map(shelfKlineToBar);
           const { state, score, feats } = shelfEvaluate(bars, daily, qv[sym], onboard[sym], btc15);
+          computed++;
+          if(!cycleBest || score > cycleBest.score) cycleBest = { sym, score, state };
           if(state==="armed" || state==="gate" || state==="fired") shelfWorthy.add(sym);
           // ⭐ ShelfScan-сигнал в Telegram: тот же score/текст, что реально шлёт
-          // shelf-scanner.html, с тем же антиспамом (cooldownMin=90 по умолчанию)
+          // shelf-scanner.html, с тем же антиспамом (cooldownMin=90 по умолчанию).
+          // Пишем в shelfScoreFiredLog независимо от того, настроен ли Telegram —
+          // панель "⭐ SCORE SHELFSCAN" должна показывать fired-события и без него.
           if(state==="fired"){
             const now = Date.now();
             const last = lastShelfSignalAt[sym] || 0;
             if(now - last >= SHELF_COOLDOWN_MS){
               lastShelfSignalAt[sym] = now;
               sendTelegram(shelfTgText(sym, score, feats, qv[sym]));
+              shelfScoreFiredLog.unshift({ sym, score, ts: now });
+              if(shelfScoreFiredLog.length > SHELFSCORE_LOG_MAX) shelfScoreFiredLog.length = SHELFSCORE_LOG_MAX;
             }
           }
         }catch(e){ /* одна неудачная пара не должна ронять весь отбор */ }
@@ -935,6 +989,9 @@ async function buildShelfWatchlist(silent){
       say(`строю список полки: ${Math.min(done,list.length)} / ${list.length}`);
     }
     SHELF_SET = shelfWorthy;
+    shelfScoreDiag = { computed, total: list.length, lastRun: Date.now() };
+    shelfScoreBest = cycleBest;
+    renderShelfScorePanel();
     say(`полка: ${shelfWorthy.size} пар — запускаю трекинг`);
   }catch(e){
     say("не удалось построить список полки: "+e.message);
@@ -2681,6 +2738,7 @@ function hasRecentEarly(key) {
 
 function render() {
   processRankSignals();
+  renderShelfScorePanel();
 
   let list = Object.values(rows);
   if (marketFilter !== "ALL") list = list.filter(r => r.market === marketFilter);
