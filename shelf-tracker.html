@@ -325,11 +325,14 @@
   }
 
   /* убраны по просьбе: CSV, план сделки (кнопка/поля/панель), статистика,
-     вкладка «СИГНАЛЫ» внизу — скрыто через display:none, а не вырезано из
-     DOM/JS, чтобы не задеть остальную логику (рендер продолжает находить
-     эти элементы, просто они невидимы) */
+     вкладка «СИГНАЛЫ» внизу, фильтр макс.цены/нач.объёма (список пар и так
+     ведёт SHELF_SET, этот фильтр в shelf-tracker больше ни на что не влияет)
+     — скрыто через display:none, а не вырезано из DOM/JS, чтобы не задеть
+     остальную логику (рендер продолжает находить эти элементы, просто они
+     невидимы) */
   #csv-btn, #trade-plan-btn, #trade-params-box, #trade-panel,
-  #stats-btn, #stats-panel, #tab-bar button[data-pane="alerts"] { display: none !important; }
+  #stats-btn, #stats-panel, #tab-bar button[data-pane="alerts"],
+  #max-price-box, #max-volume-box { display: none !important; }
 </style>
 </head>
 <body>
@@ -388,13 +391,13 @@
       <input id="threshold-vel1m30-input" value="20000">
       <button class="ok-btn" id="apply-threshold-vel1m30">OK</button>
     </div>
-    <div class="box">
+    <div class="box" id="max-price-box">
       <span>⚙</span>
       <span class="stat-label">макс. цена $</span>
       <input id="max-price-input" value="10">
       <button class="ok-btn" id="apply-max-price">OK</button>
     </div>
-    <div class="box">
+    <div class="box" id="max-volume-box">
       <span>⚙</span>
       <span class="stat-label">макс. нач. объём $</span>
       <input id="max-volume-input" value="3000000">
@@ -555,29 +558,126 @@ function shelfTrueRange(bar, prev){
 function shelfKlineToBar(k){
   return { t:+k[0], o:+k[1], h:+k[2], l:+k[3], c:+k[4], qv:+k[7], n:+k[8], tb:+k[10] };
 }
-// та же машина состояний, что evaluate() в shelf-scanner.html — без самой
-// модели/score, нас интересует только "armed" (пилюля "полка" в ShelfScan)
-function shelfClassify(bars, qv24){
-  const n = bars.length;
-  if(n < 200) return "—";
+/* ============================================================================
+   ПОЛНАЯ МОДЕЛЬ ShelfScan — дословная копия MODEL/CALIB/computeFeatures/
+   featureVector/scoreOf/passesGate/explain/probFor/tgText из
+   shelf-scanner.html (имена с префиксом shelf/SHELF_, чтобы не столкнуться
+   с одноимёнными вещами VolScan — там уже есть свои median/CFG/explain и т.п.)
+   Нужна не только для отбора "на полке", но и для полноценного ⭐-сигнала
+   с тем же score и тем же текстом в Telegram, что шлёт сам shelf-scanner.html.
+   ============================================================================ */
+function shelfClamp(x,a,b){ return x<a?a:(x>b?b:x); }
+function shelfFmtUsd(v){
+  if(!Number.isFinite(v)) return "—";
+  if(v>=1e9) return (v/1e9).toFixed(2)+"B";
+  if(v>=1e6) return (v/1e6).toFixed(1)+"M";
+  if(v>=1e3) return (v/1e3).toFixed(0)+"K";
+  return v.toFixed(0);
+}
+function shelfFmtPx(v){
+  if(!Number.isFinite(v)) return "—";
+  if(v>=1000) return v.toFixed(1);
+  if(v>=1) return v.toFixed(3);
+  if(v>=0.01) return v.toFixed(5);
+  return v.toPrecision(4);
+}
+function shelfPct(v,d){ return (v>=0?"+":"")+(v*100).toFixed(d===undefined?1:d)+"%"; }
+
+const SHELF_MODEL = {
+  L: 48, b: -2.433694839477539,
+  f: [
+    ["log_rvol",   4.32982,  0.55945, +0.0650],
+    ["log_rvol96",   4.28831,  0.64636, -0.2019],
+    ["log_rexp",   2.17521,  0.53696, +0.4358],
+    ["brk_n",   1.16106,  2.47420, +0.1197],
+    ["clv",   0.65467,  0.23294, +0.0951],
+    ["body",   0.52133,  0.26087, -0.0212],
+    ["upwick",   0.34521,  0.23287, -0.0871],
+    ["taker",   0.52535,  0.07316, +0.0323],
+    ["log_sw",  -2.92045,  0.75510, +0.0142],
+    ["log_satr",  -5.09370,  0.66143, +0.7204],
+    ["spos",   0.69805,  0.27359, +0.0699],
+    ["sdrift_abs",   0.04097,  0.03444, +0.0308],
+    ["log_sq",  -0.04055,  0.51607, +0.0899],
+    ["log_shelf_age",   1.99516,  2.23495, +0.0070],
+    ["log_qv24",   6.59021,  0.43651, -0.1516],
+    ["log_qv24_mult",   0.14442,  0.80870, +0.0397],
+    ["log_pre3",   1.91825,  1.52637, -0.0160],
+    ["log_qv_accel",   2.09684,  1.68371, -0.0973],
+    ["log_ats",   0.81899,  0.43524, +0.0470],
+    ["log_trd",   3.44577,  0.74384, +0.1430],
+    ["consec_up",   2.74991,  1.83318, -0.0121],
+    ["pos30",   0.40847,  0.25374, -0.1313],
+    ["log_natr",  -4.50658,  0.70553, +0.5035],
+    ["ret_n",   2.61464,  2.11791, -0.1546],
+    ["ret3_n",   3.69946,  2.50432, +0.3020],
+    ["btc_ret6",   0.00046,  0.00691, -0.0872],
+    ["hour_sin",  -0.00844,  0.64749, +0.0799],
+    ["hour_cos",  -0.17459,  0.74183, -0.0086],
+    ["log_bars",   9.14093,  1.03039, +0.0755]
+  ]
+};
+const SHELF_CALIB = [
+  {t:0.00, day:51.6, p5:0.1423, p10:0.0635, p20:0.0191, p40:0.0028, rec:0.479},
+  {t:0.05, day:21.8, p5:0.2947, p10:0.1477, p20:0.0453, p40:0.0067, rec:0.479},
+  {t:0.10, day:13.3, p5:0.3811, p10:0.2075, p20:0.0655, p40:0.0109, rec:0.479},
+  {t:0.15, day: 8.0, p5:0.4462, p10:0.2617, p20:0.0892, p40:0.0183, rec:0.464},
+  {t:0.20, day: 5.4, p5:0.4806, p10:0.2866, p20:0.1075, p40:0.0239, rec:0.429},
+  {t:0.25, day: 3.5, p5:0.5023, p10:0.3180, p20:0.1290, p40:0.0369, rec:0.393},
+  {t:0.30, day: 2.4, p5:0.5099, p10:0.3510, p20:0.1589, p40:0.0530, rec:0.357},
+  {t:0.40, day: 1.2, p5:0.5890, p10:0.4521, p20:0.1918, p40:0.0685, rec:0.236},
+  {t:0.50, day: 0.6, p5:0.6667, p10:0.5278, p20:0.1944, p40:0.0278, rec:0.150}
+];
+const SHELF_BASE = {p5:0.1423, p10:0.0635, p20:0.0191, p40:0.0028};
+
+// полный computeFeatures() из shelf-scanner.html: bars — 15м история (>=200
+// баров), daily — до 31 дневной свечи, qv24 — 24ч оборот, onboardTs — дата
+// листинга (мс), btc15 — 15м история BTCUSDT (для режима рынка)
+function shelfComputeFeatures(bars, daily, qv24, onboardTs, btc15){
+  const L = SHELF_MODEL.L, n = bars.length;
+  if(n < 200) return null;
   const i = n-1, cur = bars[i], prev = bars[i-1];
-  if(!cur || !prev || !(cur.c>0)) return "—";
+  if(!cur || !prev || !(cur.c>0)) return null;
+
   let hi=-Infinity, lo=Infinity, sumC=0, sumTr=0;
-  const qvL=[];
-  for(let k=i-SHELF_L;k<=i-1;k++){
-    const b=bars[k]; if(!b) return "—";
+  const qvL=[], trL=[];
+  for(let k=i-L;k<=i-1;k++){
+    const b=bars[k]; if(!b) return null;
     if(b.h>hi) hi=b.h; if(b.l<lo) lo=b.l;
     sumC+=b.c; qvL.push(b.qv);
-    sumTr += shelfTrueRange(b, bars[k-1]);
+    const tr = shelfTrueRange(b, bars[k-1]); trL.push(tr); sumTr+=tr;
   }
-  const mid=(hi+lo)/2, meanC=sumC/SHELF_L, atrL=sumTr/SHELF_L, medQvL=shelfMedian(qvL);
-  const sw = (hi-lo)/mid;
+  const mid=(hi+lo)/2, meanC=sumC/L, atrL=sumTr/L, medQvL=shelfMedian(qvL);
+  const sw   = (hi-lo)/mid;
   const satr = atrL/meanC;
-  const brk = cur.c/hi - 1;
+  const spos = (hi-lo)>0 ? (prev.c-lo)/(hi-lo) : 0.5;
+  const brk  = cur.c/hi - 1;
   const rvol = medQvL>0 ? cur.qv/medQvL : NaN;
   const rexp = atrL>0 ? (cur.h-cur.l)/atrL : NaN;
-  const sdrift = bars[i-SHELF_L] ? prev.c/bars[i-SHELF_L].c - 1 : 0;
-  const ret = prev.c>0 ? cur.c/prev.c-1 : 0;
+  const sdrift = bars[i-L] ? prev.c/bars[i-L].c - 1 : 0;
+
+  const q4=[]; for(let k=i-Math.min(4*L,192);k<=i-1;k++){ if(bars[k]) q4.push(bars[k].qv); }
+  const med4 = shelfMedian(q4);
+  const sq = med4>0 ? medQvL/med4 : NaN;
+
+  const qv96=[], n96=[], ats96=[];
+  for(let k=i-96;k<=i-1;k++){
+    const b=bars[k]; if(!b) continue;
+    qv96.push(b.qv); n96.push(b.n);
+    if(b.n>0) ats96.push(b.qv/b.n);
+  }
+  const medQv96=shelfMedian(qv96), medN96=shelfMedian(n96), medAts=shelfMedian(ats96);
+  const rvol96 = medQv96>0 ? cur.qv/medQv96 : NaN;
+  const trdMult = medN96>0 ? cur.n/medN96 : NaN;
+  const atsCur = cur.n>0 ? cur.qv/cur.n : NaN;
+  const atsMult = (medAts>0 && Number.isFinite(atsCur)) ? atsCur/medAts : NaN;
+
+  const pre3 = (bars[i-1].qv+bars[i-2].qv+bars[i-3].qv)/3;
+  const pre3Mult = medQv96>0 ? pre3/medQv96 : NaN;
+  const qvAccel = prev.qv>0 ? cur.qv/prev.qv : NaN;
+
+  let s14=0; for(let k=i-13;k<=i;k++) s14+=shelfTrueRange(bars[k],bars[k-1]);
+  const natr = (s14/14)/cur.c;
 
   let age=0;
   for(let k=i;k>=1;k--){
@@ -585,18 +685,174 @@ function shelfClassify(bars, qv24){
     if((b.h-b.l)/b.c <= 0.018) age++; else break;
   }
 
-  const gate = Number.isFinite(sw) && Number.isFinite(rvol)
-    && sw<=SHELF_CFG.maxWidth && satr<=SHELF_CFG.maxSatr
-    && rvol>=SHELF_CFG.minRvol && rexp>=SHELF_CFG.minRexp
-    && brk>=SHELF_CFG.minBrk && brk<=SHELF_CFG.maxChase
-    && Math.abs(sdrift)<=SHELF_CFG.maxDrift && ret>0 && satr>0
-    && qv24>=SHELF_CFG.minQv24 && qv24<=SHELF_CFG.maxQv24;
+  const rngBar = cur.h-cur.l;
+  const clv  = rngBar>0 ? (cur.c-cur.l)/rngBar : 0.5;
+  const body = rngBar>0 ? Math.abs(cur.c-cur.o)/rngBar : 0;
+  const upwick = rngBar>0 ? (cur.h-Math.max(cur.c,cur.o))/rngBar : 0;
+  const taker = cur.qv>0 ? cur.tb/cur.qv : 0.5;
+  const ret  = prev.c>0 ? cur.c/prev.c-1 : 0;
+  const ret3 = bars[i-3] ? cur.c/bars[i-3].c-1 : 0;
+  let consecUp=0;
+  for(let k=i;k>=1;k--){ if(bars[k].c>bars[k-1].c) consecUp++; else break; }
 
-  if(gate) return "gate";                        // уже пробивает (gate/fired в терминах evaluate()) — вызывающий код сам решает, включать ли такие
-  if(sw<=SHELF_CFG.maxWidth && satr<=SHELF_CFG.maxSatr && age>=12) return "armed";
-  if(sw<=SHELF_CFG.maxWidth) return "quiet";
-  return "—";
+  let pos30=0.5, qv24Mult=1;
+  if(daily && daily.length>=10){
+    let dh=-Infinity, dl=Infinity; const dq=[];
+    for(const d of daily){ if(d.h>dh)dh=d.h; if(d.l<dl)dl=d.l; dq.push(d.qv); }
+    if(dh>dl) pos30 = shelfClamp((prev.c-dl)/(dh-dl),0,1);
+    const mq = shelfMedian(dq);
+    if(mq>0 && qv24>0) qv24Mult = qv24/mq;
+  }
+
+  let btcRet6 = 0;
+  if(btc15 && btc15.length>=7){
+    const b=btc15, m=b.length-1;
+    if(b[m-6] && b[m-6].c>0) btcRet6 = b[m].c/b[m-6].c - 1;
+  }
+
+  const hour = new Date(cur.t).getUTCHours();
+  const barsListed = onboardTs>0 ? shelfClamp((cur.t-onboardTs)/900000, 0, 40000) : 20000;
+
+  return {
+    sw, satr, spos, brk, rvol, rexp, sdrift, sq, rvol96, trdMult, atsMult,
+    pre3Mult, qvAccel, natr, age, clv, body, upwick, taker, ret, ret3, consecUp,
+    pos30, qv24Mult, btcRet6, hour, barsListed, shelfHi:hi, shelfLo:lo,
+    price:cur.c, barTime:cur.t
+  };
 }
+function shelfFeatureVector(f, qv24){
+  const natrC = shelfClamp(f.natr, 1e-4, 1e9);
+  const h = 2*Math.PI*f.hour/24;
+  return {
+    log_rvol:      Math.log1p(shelfClamp(f.rvol,0,500)),
+    log_rvol96:    Math.log1p(shelfClamp(f.rvol96,0,500)),
+    log_rexp:      Math.log1p(shelfClamp(f.rexp,0,80)),
+    brk_n:         shelfClamp(f.brk/natrC, -20, 60),
+    clv:           f.clv, body: f.body, upwick: f.upwick,
+    taker:         Number.isFinite(f.taker)?f.taker:0.5,
+    log_sw:        Math.log(shelfClamp(f.sw,1e-4,3)),
+    log_satr:      Math.log(shelfClamp(f.satr,1e-5,1)),
+    spos:          shelfClamp(f.spos,-1,2),
+    sdrift_abs:    shelfClamp(Math.abs(f.sdrift),0,2),
+    log_sq:        Math.log(shelfClamp(f.sq,1e-3,50)),
+    log_shelf_age: Math.log1p(shelfClamp(f.age,0,600)),
+    log_qv24:      Math.log10(shelfClamp(qv24||f.qv24||1e4,1e4,1e11)),
+    log_qv24_mult: Math.log(shelfClamp(f.qv24Mult,1e-2,100)),
+    log_pre3:      Math.log(shelfClamp(f.pre3Mult,1e-2,200)),
+    log_qv_accel:  Math.log(shelfClamp(f.qvAccel,1e-2,300)),
+    log_ats:       Math.log(shelfClamp(f.atsMult,1e-2,100)),
+    log_trd:       Math.log(shelfClamp(f.trdMult,1e-2,300)),
+    consec_up:     shelfClamp(f.consecUp,0,10),
+    pos30:         shelfClamp(f.pos30,0,1),
+    log_natr:      Math.log(shelfClamp(f.natr,1e-5,0.5)),
+    ret_n:         shelfClamp(f.ret/natrC, -20, 60),
+    ret3_n:        shelfClamp(f.ret3/natrC, -30, 90),
+    btc_ret6:      shelfClamp(f.btcRet6, -0.15, 0.15),
+    hour_sin:      Math.sin(h), hour_cos: Math.cos(h),
+    log_bars:      Math.log1p(shelfClamp(f.barsListed,0,40000))
+  };
+}
+function shelfScoreOf(f, qv24){
+  f.qv24 = qv24;
+  const v = shelfFeatureVector(f, qv24);
+  let z = SHELF_MODEL.b;
+  for(const [name,mu,sd,w] of SHELF_MODEL.f){
+    let x = v[name];
+    if(!Number.isFinite(x)) x = mu;
+    z += w * ((x-mu)/(sd||1));
+  }
+  return 1/(1+Math.exp(-z));
+}
+function shelfPassesGate(f, qv24){
+  if(!Number.isFinite(f.sw) || !Number.isFinite(f.rvol)) return false;
+  if(f.sw > SHELF_CFG.maxWidth) return false;
+  if(!(f.satr <= SHELF_CFG.maxSatr)) return false;
+  if(f.rvol < SHELF_CFG.minRvol) return false;
+  if(f.rexp < SHELF_CFG.minRexp) return false;
+  if(f.brk < SHELF_CFG.minBrk) return false;
+  if(f.brk > SHELF_CFG.maxChase) return false;
+  if(Math.abs(f.sdrift) > SHELF_CFG.maxDrift) return false;
+  if(!(f.ret > 0)) return false;
+  if(!(f.satr > 0)) return false;
+  if(qv24 < SHELF_CFG.minQv24 || qv24 > SHELF_CFG.maxQv24) return false;
+  return true;
+}
+function shelfExplain(f, score){
+  const out = [];
+  if(f.rvol>=30) out.push(`объём ×${f.rvol.toFixed(0)} к медиане полки`);
+  else if(f.rvol>=10) out.push(`объём ×${f.rvol.toFixed(0)}`);
+  else out.push(`объём ×${f.rvol.toFixed(1)}`);
+  out.push(`полка ${(f.sw*100).toFixed(1)}% / 12ч`);
+  if(f.age>=20) out.push(`стоит ${f.age} баров (${(f.age/4).toFixed(1)}ч)`);
+  if(f.satr<=0.004) out.push("очень тихая полка");
+  if(f.rexp>=4) out.push(`размах ×${f.rexp.toFixed(1)} ATR`);
+  if(f.brk>=0.005) out.push(`пробой +${(f.brk*100).toFixed(1)}% над потолком`);
+  else if(f.brk>=0) out.push("на потолке полки");
+  else out.push("подходит к потолку");
+  if(f.pre3Mult>=3) out.push(`подготовка: объём ×${f.pre3Mult.toFixed(1)} за 45м до бара`);
+  if(f.taker>=0.65) out.push(`тейкер-покупки ${Math.round(f.taker*100)}%`);
+  if(f.rvol96>=8 && f.rvol/Math.max(f.rvol96,1e-9) < 1.5) out.push("⚠ объём уже был поднят сутки");
+  if(f.pos30<=0.25) out.push("низ 30-дневного диапазона");
+  if(f.btcRet6<=-0.005) out.push("BTC не растёт — ротация в альты");
+  return out;
+}
+function shelfProbFor(score){
+  const lo = SHELF_CALIB[0], hi = SHELF_CALIB[SHELF_CALIB.length-1];
+  if(score <= lo.t) return lo;
+  if(score >= hi.t) return hi;
+  for(let k=0;k<SHELF_CALIB.length-1;k++){
+    const a=SHELF_CALIB[k], b=SHELF_CALIB[k+1];
+    if(score>=a.t && score<=b.t){
+      const u=(score-a.t)/(b.t-a.t);
+      const m=(x,y)=>x+(y-x)*u;
+      return {p5:m(a.p5,b.p5), p10:m(a.p10,b.p10), p20:m(a.p20,b.p20), p40:m(a.p40,b.p40)};
+    }
+  }
+  return hi;
+}
+function shelfStopLevel(shelfLo, price){
+  const below = shelfLo*0.997;
+  return Math.max(below, price*0.91);
+}
+// тот же текст, что реально уходит в Telegram из shelf-scanner.html
+function shelfTgText(sym, score, f, qv24){
+  const p = shelfProbFor(score);
+  const lift10 = (p.p10/SHELF_BASE.p10).toFixed(1);
+  const stop = shelfStopLevel(f.shelfLo, f.price);
+  const why = shelfExplain(f, score);
+  return [
+    `🟡 <b>${sym}</b> · тихая полка → вынос`, ``,
+    `score <b>${(score*100).toFixed(0)}</b>/100`,
+    `цена <b>${shelfFmtPx(f.price)}</b> · 24ч оборот ${shelfFmtUsd(qv24)}$`,
+    `полка ${(f.sw*100).toFixed(1)}% / 12ч · возраст ${f.age} баров`,
+    `объём бара ×${f.rvol.toFixed(0)} · пробой ${shelfPct(f.brk)}`, ``,
+    `<i>${why.join(" · ")}</i>`, ``,
+    `историч. частота для такого score (отложенные 62 дня):`,
+    `+5% за 2ч — <b>${(p.p5*100).toFixed(0)}%</b> · +10% — <b>${(p.p10*100).toFixed(0)}%</b> (×${lift10} к базе)`,
+    `+20% — <b>${(p.p20*100).toFixed(1)}%</b> · +40% — ${(p.p40*100).toFixed(1)}%`, ``,
+    `потолок полки ${shelfFmtPx(f.shelfHi)} · низ ${shelfFmtPx(f.shelfLo)}`,
+    `техн. инвалидация ниже ${shelfFmtPx(stop)}`, ``,
+    `<a href="https://www.binance.com/ru/futures/${sym}">график</a>`
+  ].join("\n");
+}
+
+// полная оценка одной пары: geometry → features → score → состояние —
+// та же логика, что evaluate() в shelf-scanner.html
+function shelfEvaluate(bars, daily, qv24, onboardTs, btc15){
+  const f = shelfComputeFeatures(bars, daily, qv24, onboardTs, btc15);
+  if(!f) return { state:"—", score:0, feats:null };
+  const gate = shelfPassesGate(f, qv24);
+  const score = gate ? shelfScoreOf(f, qv24) : 0;
+  let state;
+  if(gate) state = score>=SHELF_MINSCORE ? "fired" : "gate";
+  else if(f.sw<=SHELF_CFG.maxWidth && f.satr<=SHELF_CFG.maxSatr && f.age>=12) state = "armed";
+  else if(f.sw<=SHELF_CFG.maxWidth) state = "quiet";
+  else state = "—";
+  return { state, score, feats: f };
+}
+const SHELF_MINSCORE = 0.10;         // как minScore в DEFAULTS shelf-scanner.html
+const SHELF_COOLDOWN_MS = 90*60000;  // как cooldownMin=90 в DEFAULTS — не слать повторно по той же паре чаще
+let lastShelfSignalAt = {};          // symbol -> ts последней отправки ⭐ ShelfScan-сигнала в Telegram
 
 async function shelfGetJson(path){
   const r = await fetch(SHELF_API+path);
@@ -615,11 +871,22 @@ async function buildShelfWatchlist(silent){
     const info = await shelfGetJson("/fapi/v1/exchangeInfo");
     const perp = info.symbols.filter(s=>
       s.contractType==="PERPETUAL" && s.status==="TRADING" && s.quoteAsset==="USDT");
+    const onboard = {};
+    for(const s of perp) onboard[s.symbol] = s.onboardDate||0;
 
     say("строю список полки: смотрю обороты за 24ч…");
     const tick = await shelfGetJson("/fapi/v1/ticker/24hr");
     const qv = {};
     for(const t of tick) qv[t.symbol] = +t.quoteVolume;
+
+    // BTC — для признака режима рынка (btcRet6), нужна только последним
+    // барам, не полные 220 — одна лёгкая подгрузка на весь цикл, не на пару
+    let btc15 = [];
+    try{
+      const btcK = await shelfGetJson("/fapi/v1/klines?symbol=BTCUSDT&interval=15m&limit=10");
+      btc15 = btcK.map(shelfKlineToBar);
+      if(btc15.length && Date.now() < btc15[btc15.length-1].t + 900000) btc15.pop();
+    }catch(e){ /* без BTC-режима модель просто получит btcRet6=0 — не критично */ }
 
     let list = perp.map(s=>s.symbol)
       .filter(s => Number.isFinite(qv[s]) && qv[s] >= SHELF_CFG.minQv24 && qv[s] <= SHELF_CFG.maxQv24);
@@ -643,14 +910,25 @@ async function buildShelfWatchlist(silent){
       const chunk = list.slice(k,k+CH);
       await Promise.all(chunk.map(async sym=>{
         try{
-          const k15 = await shelfGetJson(`/fapi/v1/klines?symbol=${sym}&interval=15m&limit=220`);
+          const [k15, k1d] = await Promise.all([
+            shelfGetJson(`/fapi/v1/klines?symbol=${sym}&interval=15m&limit=220`),
+            shelfGetJson(`/fapi/v1/klines?symbol=${sym}&interval=1d&limit=31`)
+          ]);
           const bars = k15.map(shelfKlineToBar);
           if(bars.length && Date.now() < bars[bars.length-1].t + 900000) bars.pop();
-          const state = shelfClassify(bars, qv[sym]);
-          // shelfClassify не считает score (он не нужен для формы полки), поэтому
-          // "fired" (gate + score>=minScore) она не отличает от простого "gate" —
-          // обе возвращаются как "gate", и обе должны остаться в списке
-          if(state==="armed" || state==="gate") shelfWorthy.add(sym);
+          const daily = k1d.map(shelfKlineToBar);
+          const { state, score, feats } = shelfEvaluate(bars, daily, qv[sym], onboard[sym], btc15);
+          if(state==="armed" || state==="gate" || state==="fired") shelfWorthy.add(sym);
+          // ⭐ ShelfScan-сигнал в Telegram: тот же score/текст, что реально шлёт
+          // shelf-scanner.html, с тем же антиспамом (cooldownMin=90 по умолчанию)
+          if(state==="fired"){
+            const now = Date.now();
+            const last = lastShelfSignalAt[sym] || 0;
+            if(now - last >= SHELF_COOLDOWN_MS){
+              lastShelfSignalAt[sym] = now;
+              sendTelegram(shelfTgText(sym, score, feats, qv[sym]));
+            }
+          }
         }catch(e){ /* одна неудачная пара не должна ронять весь отбор */ }
       }));
       done += chunk.length;
@@ -816,7 +1094,7 @@ const SCORE_COOLDOWN_MS = 120000;        // не чаще раза в 2 мин �
 const SCORE_MIN_BASE_AGE_MS = 60000;     // не стреляем по свежедобавленной паре
 const TAKER_STALE_MS = 180000;           // тейкер-доля старше 3 мин считается неизвестной
 let scoreThreshold = 60;                 // порог composite score (0..100)
-let scoreOnlyMode = true;                // по умолчанию ВКЛ в этой версии: список пар и так только полка ShelfScan, свои же пороговые сигналы (SPIKE/VEL1M/...) не нужны — просто наблюдаем
+let scoreOnlyMode = false;               // пороговые сигналы VolScan (SPIKE/SPIKE30/VEL1M/VEL1M30/ACCEL) снова работают и шлют в Telegram — очистить конкретный порог полем ниже, чтобы выключить именно его
 let sortMode = "delta";                  // "delta" | "score"
 let takerStreamOn = true;                // kline_1m по «горячим» парам ради taker buy ratio
 
@@ -2669,6 +2947,14 @@ function flashApplied(inputEl) {
 
 document.getElementById("apply-threshold").addEventListener("click", () => {
   const inputEl = document.getElementById("threshold-input");
+  // пустое поле — не "забыл ввести", а осознанное "выключи этот сигнал":
+  // Infinity делает условие "rolling10 >= threshold" недостижимым, ничего
+  // отдельно в местах firing трогать не нужно
+  if (inputEl.value.trim() === "") {
+    threshold = Infinity;
+    saveState(); render(); flashApplied(inputEl);
+    return;
+  }
   const v = parseAmountInput(inputEl.value);
   if (!isNaN(v) && v > 0) {
     threshold = v;
@@ -2683,6 +2969,11 @@ document.getElementById("threshold-input").addEventListener("keydown", (e) => {
 });
 document.getElementById("apply-threshold-30s").addEventListener("click", () => {
   const inputEl = document.getElementById("threshold-30s-input");
+  if (inputEl.value.trim() === "") {
+    threshold30 = Infinity;
+    saveState(); render(); flashApplied(inputEl);
+    return;
+  }
   const v = parseAmountInput(inputEl.value);
   if (!isNaN(v) && v > 0) {
     threshold30 = v;
@@ -2697,6 +2988,13 @@ document.getElementById("threshold-30s-input").addEventListener("keydown", (e) =
 });
 document.getElementById("apply-threshold-1m").addEventListener("click", () => {
   const inputEl = document.getElementById("threshold-1m-input");
+  // пустое поле выключает не только VEL1M, но и ACCEL (её порог считается
+  // как доля threshold1m) — Infinity*0.6/0.4 тоже недостижимо, это верно
+  if (inputEl.value.trim() === "") {
+    threshold1m = Infinity;
+    saveState(); render(); flashApplied(inputEl);
+    return;
+  }
   const v = parseAmountInput(inputEl.value);
   if (!isNaN(v) && v > 0) {
     threshold1m = v;
@@ -2711,6 +3009,11 @@ document.getElementById("threshold-1m-input").addEventListener("keydown", (e) =>
 });
 document.getElementById("apply-threshold-vel1m30").addEventListener("click", () => {
   const inputEl = document.getElementById("threshold-vel1m30-input");
+  if (inputEl.value.trim() === "") {
+    thresholdVel1m30 = Infinity;
+    saveState(); render(); flashApplied(inputEl);
+    return;
+  }
   const v = parseAmountInput(inputEl.value);
   if (!isNaN(v) && v > 0) {
     thresholdVel1m30 = v;
