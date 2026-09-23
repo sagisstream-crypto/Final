@@ -844,6 +844,24 @@ function applyBar(sym, bar, isClosed){
   }else{
     st.live = bar;
     updateLiveReady(st, bar);
+    // внутрибарная оценка — та же ветка, что в WS-версии (onKline), просто
+    // проверяется не на каждый тик потока, а на очередной опрос этой пары
+    // (раз в ~60-90с при текущем размере вотчлиста). Без неё evaluate()
+    // вызывался бы только на закрытии свечи — а к закрытию резкий вынос
+    // мог уже уйти выше maxChase и гейт бы его просто отрезал как "поздно",
+    // хотя в моменте внутри бара цена ещё укладывалась в лимит погони.
+    if(!CFG.intrabar) return;
+    const last = st.bars[st.bars.length-1];
+    if(!last || !(bar.c > last.c)) return;              // растёт?
+    const c = st.cache;
+    if(c){
+      if(!(c.medQvL > 0) || bar.qv < CFG.minRvol*c.medQvL) return;
+      if(bar.c < c.hi*(1+CFG.minBrk) || bar.c > c.hi*(1+CFG.maxChase)) return;
+    }
+    const now = Date.now();
+    if(now - st.lastEval < 4000) return;
+    st.lastEval = now;
+    evaluate(sym, true);
   }
 }
 
