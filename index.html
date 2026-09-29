@@ -391,6 +391,7 @@
     <button class="reset-btn" id="wakelock-btn">💡 НЕ ГАСИТЬ ЭКРАН: ВЫКЛ</button>
     <button class="reset-btn" id="stats-btn">📊 СТАТИСТИКА</button>
     <button class="reset-btn" id="early-only-btn">⚡ ТОЛЬКО РАННИЕ: ВЫКЛ</button>
+    <button class="reset-btn" onclick="location.href='./vynos.html'">🎯 ВЫНОСЫ (LONG-сигналы)</button>
     <div class="hint" id="poll-hint">live: websocket</div>
   </div>
   <div class="shelf-panel" id="shelf-panel">
@@ -462,6 +463,7 @@
 <nav class="tab-bar" id="tab-bar">
   <button data-pane="table" class="active">ТАБЛИЦА</button>
   <button data-pane="alerts">СИГНАЛЫ</button>
+  <button data-href="./vynos.html">⚡ ВЫНОСЫ</button>
 </nav>
 
 <script>
@@ -2137,6 +2139,7 @@ document.body.classList.add("pane-table");
 document.getElementById("tab-bar").addEventListener("click", (e) => {
   const btn = e.target.closest("button");
   if (!btn) return;
+  if (btn.dataset.href) { location.href = btn.dataset.href; return; }
   document.querySelectorAll("#tab-bar button").forEach(b => b.classList.remove("active"));
   btn.classList.add("active");
   document.body.classList.toggle("pane-table", btn.dataset.pane === "table");

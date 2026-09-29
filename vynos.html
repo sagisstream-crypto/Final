@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#0a0e0a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<title>VolScan · Выносы</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0a0e0a; color: #c8d6c8; font-family: 'SF Mono', 'Consolas', 'Menlo', monospace; font-size: 12px; min-height: 100vh; padding-bottom: 40px; }
+  .header { border-bottom: 1px solid #1e2b1e; background: #0d120d; padding: 12px 16px; position: sticky; top: 0; z-index: 20; }
+  .row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+  .brand-title { font-size: 13px; letter-spacing: 0.2em; color: #5eff8f; font-weight: 600; }
+  .brand-sub { font-size: 10px; color: #5a6b5a; margin-top: 2px; }
+  a { color: #7ab8ff; }
+  .controls { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  button { font-family: inherit; font-size: 11px; cursor: pointer; border-radius: 2px; padding: 8px 10px; background: #1a1e2e; border: 1px solid #2f3a4a; color: #7ab8ff; }
+  button.on { background: #1a2e1a; border-color: #2f4a2f; color: #5eff8f; }
+  button:disabled { opacity: .5; }
+  #status { font-size: 10px; color: #5a6b5a; margin-top: 8px; }
+  .wrap { padding: 12px 16px; max-width: 980px; margin: 0 auto; }
+  .card { border: 1px solid #1e2b1e; background: #0d120d; border-radius: 2px; padding: 10px 12px; margin-bottom: 10px; }
+  .card h3 { font-size: 10px; letter-spacing: .08em; color: #5a6b5a; font-weight: 400; margin-bottom: 8px; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+  .kpi b { display: block; font-size: 18px; color: #c8d6c8; font-weight: 500; }
+  .kpi span { font-size: 10px; color: #5a6b5a; }
+  .good { color: #5eff8f !important; } .bad { color: #ff6b6b !important; } .warn { color: #ffd85e !important; }
+  .sig { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; border-top: 1px solid #16201a; padding: 8px 0; }
+  .sig:first-child { border-top: none; }
+  .sym { font-size: 14px; color: #5eff8f; }
+  .badge { font-size: 9px; padding: 1px 5px; border: 1px solid #2f4a2f; margin-left: 6px; color: #8fb08f; }
+  .lv { font-size: 11px; color: #8fa08f; }
+  .res { text-align: right; font-size: 12px; }
+  .muted { color: #5a6b5a; font-size: 10px; }
+  .empty { color: #3f4f3f; padding: 10px 0; }
+  .rules { font-size: 11px; line-height: 1.6; color: #8fa08f; }
+  .rules b { color: #c8d6c8; font-weight: 500; }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  td, th { padding: 3px 4px; text-align: right; border-bottom: 1px solid #16201a; }
+  th { color: #5a6b5a; font-weight: 400; } td:first-child, th:first-child { text-align: left; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="row">
+    <div>
+      <div class="brand-title">⚡ ВЫНОСЫ · ALT</div>
+      <div class="brand-sub">вынос 4ч-лоя + подтверждённый отскок · Binance spot + USDT-M · без BTC/ETH/топов</div>
+    </div>
+    <a href="./index.html">← сканер объёма</a>
+  </div>
+  <div class="controls">
+    <button id="run-btn" class="on">▶ СКАНЕР: ВКЛ</button>
+    <button id="bt-btn">🧪 ПРОВЕРКА НА ИСТОРИИ</button>
+    <button id="sound-btn" class="on">🔊 ЗВУК</button>
+    <button id="notif-btn">🔔 УВЕДОМЛЕНИЯ</button>
+    <button id="clear-btn">↺ ОЧИСТИТЬ ЖУРНАЛ</button>
+  </div>
+  <div id="status">загрузка списка пар…</div>
+</div>
+
+<div class="wrap">
+  <div class="card">
+    <h3>ЖИВАЯ СТАТИСТИКА ЭТОГО УСТРОЙСТВА (закрытые сигналы, комиссия 0.1% учтена)</h3>
+    <div class="kpis" id="live-kpis"></div>
+  </div>
+  <div class="card">
+    <h3>СИГНАЛЫ</h3>
+    <div id="signals"><div class="empty">Ждём закрытия 5-минутной свечи. Сигналы бывают только с 12:00 UTC (15:00 МСК) до полуночи UTC.</div></div>
+  </div>
+  <div class="card" id="bt-card" style="display:none">
+    <h3>ПРОВЕРКА НА ПОСЛЕДНИХ 3.5–5 СУТКАХ (те же правила, считается прямо на телефоне)</h3>
+    <div class="kpis" id="bt-kpis"></div>
+    <div id="bt-table" style="margin-top:10px"></div>
+  </div>
+  <div class="card rules">
+    <h3>КАК РАБОТАЕТ</h3>
+    <b>Вынос:</b> 5m-свеча прокалывает минимум последних 4 часов (48 свечей) и закрывается обратно выше него — стопы собраны.
+    Фильтр: перед выносом не было обвала (падение за последний час не глубже 2 ATR).<br>
+    <b>Подтверждение:</b> следующая свеча закрывается на <b>1.5–10%</b> выше дна выноса (это отскок <b>w</b>). Только с 12:00 UTC.
+    Пары моложе 7 дней пропускаются.<br>
+    <b>Сделка (LONG):</b> вход по рынку на открытии следующей свечи. <b>TP = +0.5·w</b>, <b>SL = −2·w</b>, если за 4 часа ничего не сработало — выход по рынку.<br>
+    <b>Бэктест</b> (155 альт-пар, 5m, 0.1% комиссии, TP+SL в одной свече = стоп):
+    <table style="margin:6px 0">
+      <tr><th>период</th><th>сделок</th><th>winrate</th><th>EV/сделка</th></tr>
+      <tr><td>мар–июн 2026 (подбор)</td><td>643</td><td>83.7%</td><td>+0.41%</td></tr>
+      <tr><td>июл–авг 2026 (вне выборки)</td><td>303</td><td>78.2%</td><td>+0.18%</td></tr>
+      <tr><td>1–28 сен 2026 (новые данные)</td><td>315</td><td>77.5%</td><td>+0.29%</td></tr>
+    </table>
+    <span class="warn">Важно:</span> средний выигрыш ≈ +1%, средний проигрыш ≈ −2.8%. Прибыль держится только пока winrate выше ~74%.
+    Проскальзывание на альтах съедает часть результата — входите лимиткой у цены сигнала, не догоняйте. Не финансовая рекомендация.
+  </div>
+</div>
+
+<script src="./vynos-core.js"></script>
+<script>
+const V = VynosCore;
+const MAJORS = new Set("BTC ETH BNB SOL XRP DOGE ADA TRX TON LINK AVAX LTC BCH DOT XLM SHIB HBAR SUI UNI NEAR APT ICP ETC FIL ATOM".split(" "));
+const STABLE = new Set("USDC FDUSD TUSD USD1 RLUSD USDP DAI EUR XAUT PAXG U USDE BFUSD AEUR".split(" "));
+const MIN_QV = 2e6;          // тот же порог ликвидности, что в исследовании
+const MAX_PER_MARKET = 120;
+const MARKETS = [
+  { id: "SPOT", hosts: ["https://api.binance.com", "https://data-api.binance.vision"], ticker: "/api/v3/ticker/24hr", klines: "/api/v3/klines" },
+  { id: "FUT", hosts: ["https://fapi.binance.com"], ticker: "/fapi/v1/ticker/24hr", klines: "/fapi/v1/klines" },
+];
+const LS_SIGNALS = "vynos_signals_v1", LS_FIRST = "vynos_firstbar_v1";
+const BAR_MS = 300000;
+
+let running = true, soundOn = true;
+let universe = [];           // [{m, sym}]
+let signals = lsGet(LS_SIGNALS, []);
+let firstBar = lsGet(LS_FIRST, {});
+let lastScanBar = 0;
+
+function lsGet(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
+function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+function setStatus(t, cls) { const el = document.getElementById("status"); el.textContent = t; el.className = cls || ""; }
+
+function okSym(s) {
+  if (!s.endsWith("USDT")) return false;
+  const b = s.slice(0, -4);
+  if (!/^[A-Z0-9]+$/.test(b) || MAJORS.has(b) || STABLE.has(b)) return false;
+  if (/(UP|DOWN|BULL|BEAR)$/.test(b) || s.endsWith("BUSDT") || b.includes("ALPHA")) return false;
+  return true;
+}
+async function getJson(market, path) {
+  let err;
+  for (const h of market.hosts) {
+    try {
+      const r = await fetch(h + path, { cache: "no-store" });
+      if (r.ok) return await r.json();
+      err = new Error(h + " " + r.status);
+    } catch (e) { err = e; }
+  }
+  throw err;
+}
+async function pool(items, n, fn) {
+  let i = 0; const out = [];
+  await Promise.all(Array.from({ length: n }, async () => {
+    while (i < items.length) { const k = i++; try { out[k] = await fn(items[k]); } catch (e) { out[k] = null; } }
+  }));
+  return out;
+}
+function toBars(raw) { return raw.map(k => ({ ot: +k[0], o: +k[1], h: +k[2], l: +k[3], c: +k[4], ct: +k[6] })); }
+async function klines(u, limit) {
+  const m = MARKETS.find(x => x.id === u.m);
+  const bars = toBars(await getJson(m, `${m.klines}?symbol=${u.sym}&interval=5m&limit=${limit}`));
+  while (bars.length && bars[bars.length - 1].ct > Date.now()) bars.pop(); // только закрытые свечи
+  return bars;
+}
+async function ensureFirstBar(u) {
+  const k = u.m + ":" + u.sym;
+  if (firstBar[k]) return firstBar[k];
+  const m = MARKETS.find(x => x.id === u.m);
+  const r = await getJson(m, `${m.klines}?symbol=${u.sym}&interval=5m&startTime=0&limit=1`);
+  if (r && r[0]) { firstBar[k] = +r[0][0]; lsSet(LS_FIRST, firstBar); }
+  return firstBar[k];
+}
+
+async function loadUniverse() {
+  const out = [];
+  for (const m of MARKETS) {
+    try {
+      const t = await getJson(m, m.ticker);
+      t.filter(x => okSym(x.symbol) && +x.quoteVolume >= MIN_QV && (x.count == null || +x.count > 0))
+        .sort((a, b) => b.quoteVolume - a.quoteVolume).slice(0, MAX_PER_MARKET)
+        .forEach(x => out.push({ m: m.id, sym: x.symbol }));
+    } catch (e) { console.warn("ticker", m.id, e); }
+  }
+  universe = out;
+  await pool(universe, 6, ensureFirstBar);
+}
+
+function fmtP(p) { return p >= 1 ? p.toFixed(4) : p >= 0.01 ? p.toFixed(5) : p.toPrecision(4); }
+function fmtT(ts) { return new Date(ts).toLocaleString([], { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }); }
+function pct(x, d = 2) { return (x >= 0 ? "+" : "") + (x * 100).toFixed(d) + "%"; }
+
+function beep() {
+  if (!soundOn) return;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [0, 0.18].forEach(dt => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.frequency.value = 1180; o.connect(g); g.connect(ctx.destination);
+      g.gain.setValueAtTime(0.15, ctx.currentTime + dt); g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dt + 0.15);
+      o.start(ctx.currentTime + dt); o.stop(ctx.currentTime + dt + 0.16);
+    });
+  } catch (e) {}
+}
+function notify(title, body) {
+  try {
+    if (!("Notification" in window) || Notification.permission !== "granted") return;
+    navigator.serviceWorker && navigator.serviceWorker.getRegistration
+      ? navigator.serviceWorker.getRegistration().then(r => r ? r.showNotification(title, { body }) : new Notification(title, { body }))
+      : new Notification(title, { body });
+  } catch (e) {}
+}
+
+// Одно сканирование: по каждой паре тянем последние свечи, проверяем свежий сигнал
+// и докручиваем исходы уже открытых сигналов по той же логике, что и бэктест.
+async function scan() {
+  if (!running || !universe.length) return;
+  const t0 = Date.now(); let fresh = 0;
+  const openByKey = {};
+  signals.filter(s => !s.result).forEach(s => { openByKey[s.m + ":" + s.sym] = s; });
+  await pool(universe, 8, async (u) => {
+    const bars = await klines(u, V.NEED + V.P.HOLD + 5);
+    if (bars.length < V.NEED) return;
+    const key = u.m + ":" + u.sym, open = openByKey[key];
+    if (open) { // трекинг исхода
+      const e = bars.findIndex(b => b.ot === open.entryOt);
+      if (e >= 0) {
+        const r = V.runTrade(bars, e, open.tpPct, open.slPct);
+        if (r) Object.assign(open, { result: r.result, ret: r.ret, exitOt: bars[r.exitIdx].ot });
+      } else if (bars[0].ot > open.entryOt) open.result = "LOST"; // свечи входа уже нет в окне
+      return; // пока сделка открыта, новые сигналы по паре не берём (как в бэктесте)
+    }
+    const k = bars.length - 1, s = V.signalAt(bars, k, firstBar[key]);
+    if (!s || signals.some(x => x.m === u.m && x.sym === u.sym && x.confirmOt === s.confirmOt)) return;
+    const ref = bars[k].c; // вход — открытие следующей свечи ≈ текущая цена
+    const sig = Object.assign({ m: u.m, sym: u.sym, at: Date.now(), ref, entryOt: bars[k].ot + BAR_MS }, s);
+    signals.unshift(sig); fresh++;
+    notify(`⚡ ВЫНОС ${u.sym} ${u.m}`, `LONG ≈${fmtP(ref)} · TP ${fmtP(ref * (1 + s.tpPct))} · SL ${fmtP(ref * (1 - s.slPct))}`);
+  });
+  signals = signals.slice(0, 300);
+  lsSet(LS_SIGNALS, signals);
+  if (fresh) beep();
+  render();
+  setStatus(`${universe.length} пар · скан ${new Date().toLocaleTimeString()} за ${((Date.now() - t0) / 1000).toFixed(1)}с · новых: ${fresh}`, "");
+}
+
+function kpi(label, val, cls) { return `<div class="kpi"><b class="${cls || ""}">${val}</b><span>${label}</span></div>`; }
+function statsOf(list) {
+  const n = list.length, w = list.filter(x => x.ret > 0).length, sum = list.reduce((a, x) => a + x.ret, 0);
+  return { n, win: n ? w / n : 0, ev: n ? sum / n : 0, sum };
+}
+function render() {
+  const closed = signals.filter(s => s.result && s.result !== "LOST");
+  const st = statsOf(closed), open = signals.filter(s => !s.result).length;
+  document.getElementById("live-kpis").innerHTML =
+    kpi("закрыто сигналов", st.n) + kpi("открыто", open) +
+    kpi("winrate", st.n ? (st.win * 100).toFixed(1) + "%" : "—", st.n ? (st.win >= 0.7 ? "good" : "bad") : "") +
+    kpi("EV на сделку", st.n ? pct(st.ev) : "—", st.ev > 0 ? "good" : st.n ? "bad" : "") +
+    kpi("сумма %", st.n ? pct(st.sum, 1) : "—", st.sum > 0 ? "good" : st.n ? "bad" : "");
+  const el = document.getElementById("signals");
+  if (!signals.length) return;
+  el.innerHTML = signals.slice(0, 80).map(s => {
+    const tp = s.ref * (1 + s.tpPct), sl = s.ref * (1 - s.slPct);
+    const res = !s.result ? `<span class="warn">в работе</span>` :
+      s.result === "LOST" ? `<span class="muted">нет данных</span>` :
+      `<span class="${s.ret > 0 ? "good" : "bad"}">${s.result} ${pct(s.ret)}</span>`;
+    return `<div class="sig">
+      <div><span class="sym">${s.sym}</span><span class="badge">${s.m}</span><span class="badge">LONG</span></div>
+      <div class="res">${res}</div>
+      <div class="lv">вход ≈${fmtP(s.ref)} · <span class="good">TP ${fmtP(tp)} (${pct(s.tpPct)})</span> · <span class="bad">SL ${fmtP(sl)} (−${(s.slPct * 100).toFixed(2)}%)</span></div>
+      <div class="muted">${fmtT(s.confirmOt + BAR_MS)}</div>
+      <div class="muted">вынос до ${fmtP(s.sweepLow)} под 4ч-лой ${fmtP(s.lowN)} · отскок ${pct(s.w)} · макс. 4ч</div>
+    </div>`;
+  }).join("");
+}
+
+async function historyCheck() {
+  const btn = document.getElementById("bt-btn"); btn.disabled = true;
+  document.getElementById("bt-card").style.display = "";
+  const trades = []; let done = 0;
+  await pool(universe, 6, async (u) => {
+    const bars = await klines(u, u.m === "FUT" ? 1500 : 1000); // лимиты API: spot 1000, fut 1500
+    V.backtest(bars, firstBar[u.m + ":" + u.sym]).forEach(t => trades.push(Object.assign({ m: u.m, sym: u.sym }, t)));
+    if (++done % 10 === 0) setStatus(`проверка: ${done}/${universe.length} пар…`);
+  });
+  const all = statsOf(trades);
+  document.getElementById("bt-kpis").innerHTML =
+    kpi("сделок", all.n) + kpi("winrate", all.n ? (all.win * 100).toFixed(1) + "%" : "—", all.win >= 0.7 ? "good" : "bad") +
+    kpi("EV на сделку", all.n ? pct(all.ev) : "—", all.ev > 0 ? "good" : "bad") + kpi("сумма %", pct(all.sum, 1), all.sum > 0 ? "good" : "bad");
+  const rows = ["SPOT", "FUT"].map(m => { const s = statsOf(trades.filter(t => t.m === m)); return `<tr><td>${m}</td><td>${s.n}</td><td>${s.n ? (s.win * 100).toFixed(1) + "%" : "—"}</td><td>${s.n ? pct(s.ev) : "—"}</td></tr>`; });
+  const last = trades.sort((a, b) => b.ot - a.ot).slice(0, 25).map(t =>
+    `<tr><td>${t.sym} <span class="muted">${t.m}</span></td><td>${fmtT(t.ot + BAR_MS)}</td><td>${pct(t.w)}</td><td class="${t.ret > 0 ? "good" : "bad"}">${t.result} ${pct(t.ret)}</td></tr>`).join("");
+  document.getElementById("bt-table").innerHTML =
+    `<table><tr><th>рынок</th><th>сделок</th><th>winrate</th><th>EV</th></tr>${rows.join("")}</table>
+     <div class="muted" style="margin:8px 0 4px">последние сделки</div>
+     <table><tr><th>пара</th><th>вход</th><th>отскок</th><th>итог</th></tr>${last}</table>
+     <div class="muted" style="margin-top:6px">~5 суток — это мало (десятки сделок), winrate здесь сильно скачет. Ориентир — бэктест за 7 месяцев ниже.</div>`;
+  btn.disabled = false; setStatus(`проверка готова: ${all.n} сделок на ${universe.length} парах`);
+}
+
+// Сканируем через 4с после закрытия каждой 5m-свечи.
+function tick() {
+  const bar = Math.floor(Date.now() / BAR_MS);
+  if (running && bar !== lastScanBar && Date.now() % BAR_MS > 4000) { lastScanBar = bar; scan(); }
+}
+
+document.getElementById("run-btn").onclick = (e) => {
+  running = !running; e.target.classList.toggle("on", running);
+  e.target.textContent = running ? "▶ СКАНЕР: ВКЛ" : "⏸ СКАНЕР: ВЫКЛ";
+  if (running) { lastScanBar = 0; tick(); }
+};
+document.getElementById("sound-btn").onclick = (e) => { soundOn = !soundOn; e.target.classList.toggle("on", soundOn); if (soundOn) beep(); };
+document.getElementById("notif-btn").onclick = () => { if ("Notification" in window) Notification.requestPermission(); };
+document.getElementById("clear-btn").onclick = () => { if (confirm("Очистить журнал сигналов?")) { signals = []; lsSet(LS_SIGNALS, signals); document.getElementById("signals").innerHTML = ""; render(); } };
+document.getElementById("bt-btn").onclick = historyCheck;
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { lastScanBar = 0; tick(); } });
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js").catch(() => {});
+
+render();
+loadUniverse().then(() => {
+  setStatus(`${universe.length} пар (spot ${universe.filter(u => u.m === "SPOT").length} · fut ${universe.filter(u => u.m === "FUT").length}) · ждём закрытия свечи`);
+  lastScanBar = Math.floor(Date.now() / BAR_MS);
+  scan(); setInterval(tick, 1000);
+}).catch(e => setStatus("нет связи с Binance: " + e.message, "bad"));
+</script>
+</body>
+</html>

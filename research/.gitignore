@@ -1,0 +1,7 @@
+data/
+data_hold/
+data_extra*/
+*.parquet
+*.pkl
+parity.json
+__pycache__/

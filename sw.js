@@ -1,8 +1,10 @@
-const CACHE = "volscan-v15-shell-1";
+const CACHE = "volscan-v15-shell-2";
 const SHELL = [
   "./",
   "./index.html",
   "./manifest.json",
+  "./vynos.html",
+  "./vynos-core.js",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
 ];
