@@ -5,3 +5,5 @@ data_extra*/
 *.pkl
 parity.json
 __pycache__/
+vynos_data/
+vynos_result/
