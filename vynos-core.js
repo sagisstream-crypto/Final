@@ -9,6 +9,10 @@
 //                           час открытия бара i+1 по UTC >= 12.
 //   вход — открытие бара i+2, TP = +0.5·w, SL = −2·w, выход по времени через 48 баров (4ч).
 //   у пары должно быть >= 7 дней истории (свежие листинги отсекаются).
+// Фильтры v2 (год, все альт-пары Binance, подбор окт–апр, проверка май–сен):
+//   w / ATR% >= 4        — отскок сильный относительно обычной волатильности пары,
+//   глубина выноса > 0.3 ATR под 4ч-лоем,
+//   оборот пары за 24ч до выноса >= $1M.
 (function (root) {
   const P = {
     N: 48,            // окно минимума, баров (48 × 5m = 4ч)
@@ -19,15 +23,16 @@
     TPK: 0.5, SLK: 2.0,
     HOLD: 48,
     MIN_AGE_MS: 7 * 24 * 3600 * 1000,
+    W_ATR_MIN: 4, DEPTH_MIN: 0.3, QV24_MIN: 1e6, QV_N: 288,
     FEE: 0.001,
   };
-  const NEED = P.N + P.ATR_N + 3; // баров истории, нужных для одной проверки
+  const NEED = P.QV_N + 3; // баров истории, нужных для одной проверки
 
-  // bars: [{ot,o,h,l,c}], только ЗАКРЫТЫЕ свечи, по возрастанию времени.
+  // bars: [{ot,o,h,l,c,qv}], только ЗАКРЫТЫЕ свечи, по возрастанию времени (qv = оборот в USDT).
   // Проверяет, дал ли сигнал бар подтверждения k (сигнал на его закрытии).
   function signalAt(bars, k, firstBarMs) {
     const i = k - 1; // бар выноса
-    if (i < P.N + P.ATR_N + 1 || k >= bars.length) return null;
+    if (i < P.QV_N || k >= bars.length) return null;
     const b = bars[i], cb = bars[k];
     if (firstBarMs != null && cb.ot - firstBarMs < P.MIN_AGE_MS) return null;
     if (new Date(cb.ot).getUTCHours() < P.H_FROM) return null;
@@ -45,9 +50,15 @@
     if (!(ret12 > P.RET12_MIN)) return null;
     const w = cb.c / b.l - 1;
     if (!(w >= P.W_LO && w < P.W_HI)) return null;
+    if (!(w / atrp >= P.W_ATR_MIN)) return null;
+    const depth = (lowN - b.l) / (atrp * b.c);
+    if (!(depth > P.DEPTH_MIN)) return null;
+    let qv24 = 0;
+    for (let j = i - P.QV_N; j < i; j++) qv24 += bars[j].qv;
+    if (!(qv24 >= P.QV24_MIN)) return null;
     return {
       sweepOt: b.ot, confirmOt: cb.ot, sweepLow: b.l, lowN, w,
-      tpPct: P.TPK * w, slPct: P.SLK * w, ret12, atrp,
+      tpPct: P.TPK * w, slPct: P.SLK * w, ret12, atrp, depth, qv24,
     };
   }
 

@@ -49,7 +49,7 @@
   <div class="row">
     <div>
       <div class="brand-title">⚡ ВЫНОСЫ · ALT</div>
-      <div class="brand-sub">вынос 4ч-лоя + подтверждённый отскок · Binance spot + USDT-M · без BTC/ETH/топов</div>
+      <div class="brand-sub">вынос 4ч-лоя + сильный отскок (≥4 ATR) · Binance spot + USDT-M · без BTC/ETH/топов</div>
     </div>
     <a href="./index.html">← сканер объёма</a>
   </div>
@@ -80,19 +80,21 @@
   <div class="card rules">
     <h3>КАК РАБОТАЕТ</h3>
     <b>Вынос:</b> 5m-свеча прокалывает минимум последних 4 часов (48 свечей) и закрывается обратно выше него — стопы собраны.
-    Фильтр: перед выносом не было обвала (падение за последний час не глубже 2 ATR).<br>
-    <b>Подтверждение:</b> следующая свеча закрывается на <b>1.5–10%</b> выше дна выноса (это отскок <b>w</b>). Только с 12:00 UTC.
+    Прокол не меньше 0.3 ATR под уровнем. Перед выносом не было обвала (падение за последний час не глубже 2 ATR). Оборот пары за сутки ≥ $1M.<br>
+    <b>Подтверждение:</b> следующая свеча закрывается на <b>1.5–10%</b> выше дна выноса (это отскок <b>w</b>), и этот отскок не меньше <b>4 средних свечей (ATR)</b> пары. Только с 12:00 UTC.
     Пары моложе 7 дней пропускаются.<br>
     <b>Сделка (LONG):</b> вход по рынку на открытии следующей свечи. <b>TP = +0.5·w</b>, <b>SL = −2·w</b>, если за 4 часа ничего не сработало — выход по рынку.<br>
-    <b>Бэктест</b> (155 альт-пар, 5m, 0.1% комиссии, TP+SL в одной свече = стоп):
+    <b>Бэктест за год</b> (окт 2025 – сен 2026, все 1205 альт-пар spot + USDT-M вкл. делистнутые, 0.1% комиссии, TP+SL в одной свече = стоп):
     <table style="margin:6px 0">
       <tr><th>период</th><th>сделок</th><th>winrate</th><th>EV/сделка</th></tr>
-      <tr><td>мар–июн 2026 (подбор)</td><td>643</td><td>83.7%</td><td>+0.41%</td></tr>
-      <tr><td>июл–авг 2026 (вне выборки)</td><td>303</td><td>78.2%</td><td>+0.18%</td></tr>
-      <tr><td>1–28 сен 2026 (новые данные)</td><td>315</td><td>77.5%</td><td>+0.29%</td></tr>
+      <tr><td>окт–апр (подбор фильтров)</td><td>1858</td><td>73.2%</td><td>+0.24%</td></tr>
+      <tr><td>май–сен (вне выборки)</td><td>1804</td><td>70.6%</td><td>+0.19%</td></tr>
+      <tr><td>без фильтров v2, весь год</td><td>19961</td><td>73.1%</td><td class="bad">−0.09%</td></tr>
     </table>
-    <span class="warn">Важно:</span> средний выигрыш ≈ +1%, средний проигрыш ≈ −2.8%. Прибыль держится только пока winrate выше ~74%.
-    Проскальзывание на альтах съедает часть результата — входите лимиткой у цены сигнала, не догоняйте. Не финансовая рекомендация.
+    <b>$10 000, 1% депозита на сделку, до 100 позиций:</b> +$450 за год (+4.5%, просадка −1%); с проскальзыванием 0.1% — +$125.
+    Крупные позиции (10% × 10 слотов) дают ≈0 или минус: сигналы идут пачками, и прибыль как раз в пачках.<br>
+    <span class="warn">Важно:</span> средний выигрыш ≈ +1.2%, средний проигрыш ≈ −2.5%. Край ≈ +0.2% на сделку — его съедает проскальзывание 0.1–0.2%.
+    Входите лимиткой у цены сигнала, не догоняйте. Не финансовая рекомендация.
   </div>
 </div>
 
@@ -101,8 +103,8 @@
 const V = VynosCore;
 const MAJORS = new Set("BTC ETH BNB SOL XRP DOGE ADA TRX TON LINK AVAX LTC BCH DOT XLM SHIB HBAR SUI UNI NEAR APT ICP ETC FIL ATOM".split(" "));
 const STABLE = new Set("USDC FDUSD TUSD USD1 RLUSD USDP DAI EUR XAUT PAXG U USDE BFUSD AEUR".split(" "));
-const MIN_QV = 2e6;          // тот же порог ликвидности, что в исследовании
-const MAX_PER_MARKET = 120;
+const MIN_QV = 1e6;          // пары с 24ч-оборотом от $1M (тот же порог в сигнале)
+const MAX_PER_MARKET = 250;
 const MARKETS = [
   { id: "SPOT", hosts: ["https://api.binance.com", "https://data-api.binance.vision"], ticker: "/api/v3/ticker/24hr", klines: "/api/v3/klines" },
   { id: "FUT", hosts: ["https://fapi.binance.com"], ticker: "/fapi/v1/ticker/24hr", klines: "/fapi/v1/klines" },
@@ -145,7 +147,7 @@ async function pool(items, n, fn) {
   }));
   return out;
 }
-function toBars(raw) { return raw.map(k => ({ ot: +k[0], o: +k[1], h: +k[2], l: +k[3], c: +k[4], ct: +k[6] })); }
+function toBars(raw) { return raw.map(k => ({ ot: +k[0], o: +k[1], h: +k[2], l: +k[3], c: +k[4], ct: +k[6], qv: +k[7] })); }
 async function klines(u, limit) {
   const m = MARKETS.find(x => x.id === u.m);
   const bars = toBars(await getJson(m, `${m.klines}?symbol=${u.sym}&interval=5m&limit=${limit}`));
@@ -283,7 +285,7 @@ async function historyCheck() {
     `<table><tr><th>рынок</th><th>сделок</th><th>winrate</th><th>EV</th></tr>${rows.join("")}</table>
      <div class="muted" style="margin:8px 0 4px">последние сделки</div>
      <table><tr><th>пара</th><th>вход</th><th>отскок</th><th>итог</th></tr>${last}</table>
-     <div class="muted" style="margin-top:6px">~5 суток — это мало (десятки сделок), winrate здесь сильно скачет. Ориентир — бэктест за 7 месяцев ниже.</div>`;
+     <div class="muted" style="margin-top:6px">3.5–5 суток — это мало (единицы–десятки сделок), winrate здесь сильно скачет. Ориентир — годовой бэктест ниже.</div>`;
   btn.disabled = false; setStatus(`проверка готова: ${all.n} сделок на ${universe.length} парах`);
 }
 

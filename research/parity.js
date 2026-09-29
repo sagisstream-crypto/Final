@@ -1,9 +1,9 @@
-// Сверка JS-ядра (vynos-core.js) с Python-бэктестом: node research/parity.js parity.json
+// Сверка JS-ядра (vynos-core.js) с Python (backtest_vynos.py): python parity_py.py DIR && node parity.js parity.json
 const V = require("../vynos-core.js");
 const data = require(require("path").resolve(process.argv[2]));
 let sigOk = 0, sigBad = 0, trOk = 0, trBad = 0;
 for (const [name, d] of Object.entries(data)) {
-  const bars = d.bars.map(([ot, o, h, l, c]) => ({ ot, o, h, l, c }));
+  const bars = d.bars.map(([ot, o, h, l, c, qv]) => ({ ot, o, h, l, c, qv }));
   const first = bars[0].ot, js = [];
   for (let k = 0; k < bars.length; k++) if (V.signalAt(bars, k, first)) js.push(k);
   const same = JSON.stringify(js) === JSON.stringify(d.sig);
