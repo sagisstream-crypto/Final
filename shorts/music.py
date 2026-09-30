@@ -86,7 +86,7 @@ def reverb(x, rng, secs=3.2, decay=0.85):
     return fftconvolve(x, ir)[: len(x)]
 
 
-def compose(root, prog, climax_t, dur=30.0, seed=0, bpm=70, arp_oct=2, brightness=1800):
+def compose(root, prog, climax_t, dur=30.0, seed=0, bpm=70, arp_oct=2, brightness=1800, pulse_from=None):
     """root: MIDI тоника; prog: список аккордов (полутона от тоники);
     climax_t: время кульминации в секундах. Возвращает стерео (N,2)."""
     rng = np.random.default_rng(seed)
@@ -140,6 +140,16 @@ def compose(root, prog, climax_t, dur=30.0, seed=0, bpm=70, arp_oct=2, brightnes
             _add(hits, hb, boom(1.2) * 0.18)
             _add(hits, hb + 0.28, boom(1.0) * 0.12)
         hb += 60 / bpm * 2
+    # ровный нарастающий пульс (для мотивационного подъёма)
+    if pulse_from is not None:
+        beat = 60 / bpm
+        tt = pulse_from
+        while tt < dur - 2.0:
+            post = tt >= climax_t
+            if abs(tt - climax_t) > 0.2 and not (climax_t - 6 < tt < climax_t):
+                v = 0.32 if post else 0.12 + 0.12 * (tt - pulse_from) / max(1, climax_t - pulse_from)
+                _add(hits, tt, boom(1.2) * v)
+            tt += beat if not post else beat
     rz = riser(3.0, rng)
     _add(hits, climax_t - 3.0, rz * 0.12)
 

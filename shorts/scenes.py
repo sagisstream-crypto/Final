@@ -825,5 +825,227 @@ class IceScene(Scene):
         return arr * np.array([0.96, 1.0, 1.06], np.float32)
 
 
+# =====================================================================
+# 6. Поднимайся (45 c): буря -> рассвет -> крылья света
+# =====================================================================
+class SummitScene(Scene):
+    caption_y = 560
+
+    def __init__(self, ev):
+        self.ev = ev
+        rng = np.random.default_rng(66)
+        td = ev.get("dawn", 28)
+        self.k_dawn = lambda t: float(ease((t - td + 0.5) / 4.0))
+        storm = sky_gradient([(0, "#07090f"), (0.35, "#161b27"), (0.62, "#2c3342"), (0.75, "#3b4252"), (1, "#0d1016")])
+        cl = Image.new("L", (WW // 4, H // 4), 0)
+        d = ImageDraw.Draw(cl)
+        for _ in range(90):
+            x, y = rng.random() * WW / 4, rng.random() * 300
+            rx, ry = 30 + rng.random() * 90, 10 + rng.random() * 30
+            d.ellipse([x - rx, y - ry, x + rx, y + ry], fill=int(80 + rng.random() * 175))
+        cl = np.asarray(cl.filter(ImageFilter.GaussianBlur(8)).resize((WW, H)), np.float32)[..., None] / 255
+        storm = storm * (1 - 0.55 * cl) + np.array([70, 78, 95], np.float32) * cl * 0.55
+        dawn = sky_gradient([(0, "#0e1438"), (0.3, "#34306c"), (0.5, "#7e4474"), (0.62, "#d0706a"),
+                             (0.71, "#ffaa6c"), (0.76, "#ffd49a"), (1, "#3a2c4a")])
+        add_radial(dawn, 790 + PAD, 1250, 700, (255, 170, 110), 1.8, 0.3)
+        bake_stars(dawn, rng, 250, 450)
+        self.layers = [(to_rgba_img(storm), 0.05, 0), (to_rgba_img(dawn), 0.05, 0, self.k_dawn)]
+        far = ridge_layer(1330 - 380 * smooth_noise(WW, 61, 6, 3), "#6a5a8c", "#3a3058", rim=(255, 200, 150), rim_w=4,
+                          haze="#c08aa0", haze_amt=0.35)
+        mid = ridge_layer(1450 - 260 * smooth_noise(WW, 62, 6, 4), "#3a2c50", "#1c1530", rim=(255, 170, 120), rim_w=3)
+        n = smooth_noise(WW, 63, 7, 8)
+        self.peak = (600.0, 1160.0)
+        px, py = self.peak
+        ys = np.where(WX < px, py + (px - WX) * 0.95, py + (WX - px) * 1.5) + 26 * (n - 0.5) * np.clip(np.abs(WX - px) / 60, 0, 1)
+        self.ridge = ys.astype(np.float32)
+        rock = ridge_layer(self.ridge, "#1a1220", "#08060c", rim=(255, 190, 140), rim_w=2.5, depth=500)
+        self.fog = fog_texture(64, 520, "#d8c0d0", 0.55)
+        self.fog2 = fog_texture(65, 520, "#b8a0c0", 0.45)
+        self.layers += [(far, 0.2, 0), (self.fog2, 0.35, 1180), (mid, 0.45, 0), (self.fog, 0.6, 1330), (rock, 1.0, 0)]
+        r = np.random.default_rng(9)
+        self.rain = r.random((260, 3))
+        self.motes = r.random((120, 5))
+        # вспышки молний
+        tb = ev.get("storm", 15)
+        self.bolts = [(4.2, 11), (tb + 0.1, 12), (tb + 3.2, 13), (ev.get("fall", 9) + 0.2, 14)]
+
+    def progress(self, t):
+        t0, t1 = 2.5, self.ev.get("dawn", 28) - 1.0
+        f0, f1 = self.ev.get("fall", 9), self.ev.get("rise", 19)
+        act = lambda x: max(0.0, min(x, t1) - t0) - max(0.0, min(x, f1) - max(t0, f0)) if x > t0 else 0.0
+        return act(t) / act(t1)
+
+    def ridge_y(self, x):
+        return float(self.ridge[int(np.clip(x + PAD, 0, WW - 1))])
+
+    def girl(self, t, pose, open_k):
+        col = (8, 5, 12, 255)
+        sp = Sprite(520, 520, 260, 440)
+        wind = math.sin(t * 2.4) * 0.5 + 0.5
+        storm = 1 - self.k_dawn(t)
+        gust = 1 + storm * 0.8
+        if pose == "walk":
+            st = math.sin(t * 4.0)
+            sp.line([(0, -110), (-18 + 16 * st, -52), (-26 + 26 * st, 0)], 11, col)
+            sp.line([(0, -110), (16 - 16 * st, -55), (22 - 24 * st, 0)], 11, col)
+            hip, sh, head = (0, -110), (22, -195), (34, -222)
+            arm1 = [(sh[0] - 4, sh[1] + 6), (-14, -150), (-24 + 10 * st, -120)]
+            arm2 = [(sh[0], sh[1] + 6), (40, -160), (52 - 10 * st, -128)]
+        elif pose == "kneel":
+            sp.line([(0, -60), (40, -40), (40, 0)], 11, col)
+            sp.line([(0, -60), (-40, -6), (-70, 0)], 11, col)
+            hip, sh, head = (0, -62), (30, -140), (52, -160)
+            arm1 = [(sh[0], sh[1] + 6), (50, -90), (56, -10)]
+            arm2 = [(sh[0] - 4, sh[1] + 6), (60, -100), (70, -6)]
+        else:
+            sp.line([(-4, -110), (-12, -55), (-16, 0)], 11, col)
+            sp.line([(4, -110), (12, -55), (18, 0)], 11, col)
+            hip, sh, head = (0, -110), (4, -198), (6, -228)
+            a = open_k
+            arm1 = [(sh[0] - 8, sh[1] + 6), (-30 - 30 * a, -150 - 40 * a), (-40 - 70 * a, -120 - 110 * a)]
+            arm2 = [(sh[0] + 8, sh[1] + 6), (36 + 30 * a, -150 - 40 * a), (46 + 70 * a, -120 - 110 * a)]
+        # плащ, развевается влево
+        cx, cy = sh
+        cape = [(cx - 12, cy), (cx + 10, cy), (hip[0] - 10, hip[1] + 10),
+                (hip[0] - 70 * gust - 20 * wind, hip[1] + 20 + 10 * math.sin(t * 3.1)),
+                (hip[0] - 110 * gust - 30 * wind, hip[1] - 20 + 14 * math.sin(t * 2.7)),
+                (cx - 60 * gust, cy + 20)]
+        sp.poly(cape, col)
+        sp.poly([(cx - 16, cy), (cx + 16, cy), (hip[0] + 14, hip[1] + 4), (hip[0] - 14, hip[1] + 4)], col)
+        sw = 6 * math.sin(t * 2.6)
+        sp.poly([(hip[0] - 16, hip[1] - 6), (hip[0] + 16, hip[1] - 6), (hip[0] + 30, hip[1] + 58),
+                 (hip[0] - 34 - sw, hip[1] + 62)], col)
+        sp.line(arm1, 9, col)
+        sp.line(arm2, 9, col)
+        hx, hy = head
+        sp.ell(hx, hy, 17, 19, col)
+        hair = [(hx - 10, hy - 16), (hx + 8, hy - 18), (hx - 4, hy + 4), (hx - 50 * gust - 16 * wind, hy + 14 + 8 * math.sin(t * 3.3)),
+                (hx - 70 * gust - 20 * wind, hy + 34), (hx - 30, hy + 10)]
+        sp.poly(hair, col)
+        self.shoulder = (sh[0], sh[1] + 10)
+        return sp
+
+
+    def wings(self, img, t, S, k):
+        """Крылья света за спиной: веер перьев, раскрываются с k 0->1."""
+        R = 560
+        lay = Image.new("RGBA", (2 * R, 2 * R), (0, 0, 0, 0))
+        d = ImageDraw.Draw(lay)
+        c0 = (R, R)
+        self.tips = []
+        breathe = 0.04 * math.sin(t * 1.6)
+        for side in (-1, 1):
+            for row, (n, lmul, wid, colr) in enumerate(((13, 1.0, 30, (255, 214, 140, 150)),
+                                                         (10, 0.62, 36, (255, 232, 180, 185)),
+                                                         (7, 0.34, 40, (255, 244, 215, 215)))):
+                for i in range(n):
+                    u = i / (n - 1)
+                    th_open = math.radians(68 - 95 * u) + breathe
+                    th_fold = math.radians(-70 - 15 * u)
+                    th = th_fold + (th_open - th_fold) * k
+                    ln = 470 * lmul * (0.55 + 0.45 * math.sin(math.pi * (0.25 + 0.75 * u))) * (0.35 + 0.65 * k)
+                    bx = c0[0] + side * (10 + 40 * u) * k
+                    by = c0[1] - 20 * u
+                    dx, dy = side * math.cos(th), -math.sin(th)
+                    px, py = -dy, dx
+                    tip = (bx + dx * ln, by + dy * ln)
+                    mid = (bx + dx * ln * 0.55, by + dy * ln * 0.55)
+                    w = wid * (0.6 + 0.4 * k)
+                    d.polygon([(bx + px * w * 0.25, by + py * w * 0.25), (mid[0] + px * w / 2, mid[1] + py * w / 2), tip,
+                               (mid[0] - px * w / 2, mid[1] - py * w / 2), (bx - px * w * 0.25, by - py * w * 0.25)],
+                              fill=colr)
+                    d.line([(bx, by), tip], fill=(255, 250, 235, 200), width=2)
+                    if row == 0:
+                        self.tips.append((S[0] - R + tip[0], S[1] - R + tip[1]))
+        a = np.asarray(lay).copy()
+        a[..., 3] = (a[..., 3] * min(1.0, k * 1.5)).astype(np.uint8)
+        lay = Image.fromarray(a, "RGBA")
+        glow = lay.resize((R // 2, R // 2)).filter(ImageFilter.GaussianBlur(10)).resize((2 * R, 2 * R))
+        img.alpha_composite(glow, (int(S[0] - R), int(S[1] - R)))
+        img.alpha_composite(lay.filter(ImageFilter.GaussianBlur(1.2)), (int(S[0] - R), int(S[1] - R)))
+
+    def dynamic(self, img, t, cam):
+        f0, f1 = self.ev.get("fall", 9), self.ev.get("rise", 19)
+        td = self.ev.get("dawn", 28)
+        tc = self.ev["climax"]
+        x = 150 + (self.peak[0] - 20 - 150) * self.progress(t)
+        if f0 + 0.3 < t < f1 + 0.4:
+            pose = "kneel"
+        elif t < td - 1.0:
+            pose = "walk"
+        else:
+            pose = "stand"
+        open_k = float(ease((t - tc + 0.3) / 1.5))
+        y = self.ridge_y(x) + 4
+        sp = self.girl(t, pose, open_k)
+        self.origin = (sx(x, 1.0, cam), y)
+        g = sp.done()
+        S = 1.5
+        wk = float(ease((t - tc + 0.2) / 2.2))
+        if wk > 0:
+            self.wings(img, t, (self.origin[0] + self.shoulder[0] * S, y + self.shoulder[1] * S), wk)
+        g = g.resize((int(g.width * S), int(g.height * S)), Image.LANCZOS)
+        img.alpha_composite(g, (int(self.origin[0] - sp.ax * S), int(y - sp.ay * S)))
+        self.shoulder = (self.shoulder[0] * S, self.shoulder[1] * S)
+
+    def light(self, L, t, cam):
+        kd = self.k_dawn(t)
+        storm = 1 - kd
+        tc = self.ev["climax"]
+        ox, oy = self.origin
+        # дождь
+        if storm > 0.01:
+            for x0, y0, s in self.rain:
+                sp = 1400 + 900 * s
+                y = (y0 * (H + 200) + t * sp) % (H + 200) - 100
+                x = (x0 * (W + 400) - t * sp * 0.35) % (W + 400) - 100
+                for k in range(4):
+                    add_glow(L, x + k * 7, y - k * 20, 3, (0.7, 0.78, 0.9), 0.55 * storm * (0.4 + 0.6 * s))
+        # молнии
+        for tb, seed in self.bolts:
+            dt = t - tb
+            if 0 <= dt < 0.5:
+                fl = math.exp(-dt * 9) * (1 + 0.6 * (dt > 0.12) * math.exp(-(dt - 0.12) * 12))
+                L += 70 * fl * storm
+                r = np.random.default_rng(seed)
+                x, y = 200 + r.random() * 700, 0.0
+                while y < 750:
+                    nx, ny = x + r.normal(0, 22), y + 14 + r.random() * 16
+                    add_glow(L, (x + nx) / 2, (y + ny) / 2, 7, (0.8, 0.85, 1.0), 1.4 * fl * storm)
+                    x, y = nx, ny
+        # солнце
+        if kd > 0:
+            sy = 1250 - 280 * ease((t - self.ev.get("dawn", 28)) / 12)
+            sxp = sx(790, 0.05, cam)
+            add_glow(L, sxp, sy, 80, (1.0, 0.92, 0.75), 0.9 * kd)
+            add_glow(L, sxp, sy, 380, (1.0, 0.6, 0.35), 0.3 * kd)
+            add_glow(L, ox, oy - 120, 160, (1.0, 0.75, 0.45), 0.25 * kd)
+        # пылинки / искры
+        for x0, y0, s, ph, c in self.motes:
+            y = H - ((y0 * (H + 100) + t * (20 + 40 * s)) % (H + 100))
+            x = x0 * W + 40 * math.sin(t * 0.6 + ph * 9)
+            add_glow(L, x, y, 3 + int(4 * s), (1.0, 0.8, 0.5), 0.45 * kd * (0.5 + 0.5 * math.sin(t * 2 + ph * 11)))
+        # крылья света
+        k = float(ease((t - tc + 0.2) / 2.2))
+        if k > 0:
+            shx, shy = ox + self.shoulder[0], oy + self.shoulder[1]
+            add_glow(L, shx, shy, 600, (1.0, 0.6, 0.3), 0.15 * k * (1 + 2.0 * math.exp(-max(0, t - tc) * 1.5)))
+            add_glow(L, shx, shy, 60, (1.0, 0.9, 0.7), 0.5 * k)
+            for tx, ty in getattr(self, "tips", []):
+                add_glow(L, tx, ty, 10, (1.0, 0.85, 0.55), 0.5 * k * (0.7 + 0.3 * math.sin(t * 4 + tx)))
+            rng = np.random.default_rng(17)
+            dt = t - tc
+            for i in range(70):
+                a, v, s0 = rng.random() * 6.28, 30 + rng.random() * 120, rng.random() * 4
+                tt = (dt + s0) % 4.0
+                add_glow(L, shx + math.cos(a) * 200 * rng.random() + math.sin(tt + i) * 20, shy - v * tt + 40,
+                         5, (1.0, 0.85, 0.5), 0.6 * (1 - tt / 4) * k)
+
+    def grade(self, arr, t):
+        kd = self.k_dawn(t)
+        g = np.array([0.72, 0.78, 0.9], np.float32) * (1 - kd) + np.array([1.06, 1.0, 0.94], np.float32) * kd
+        return arr * g
+
+
 SCENES = {"01_dragon": DragonScene, "02_stars": StarsScene, "03_knight": KnightScene, "04_forest": ForestScene,
-          "05_ice": IceScene}
+          "05_ice": IceScene, "06_summit": SummitScene}

@@ -32,6 +32,8 @@ EVENTS = {
     "03_knight": {"climax": "ждала", "helm": "шлем", "sit": "сел"},
     "04_forest": {"believe": "верю", "climax": "засиял"},
     "05_ice": {"open": "открыла", "climax": "вспыхнуло"},
+    "06_summit": {"fall": "падала", "storm": "буря", "rise": "вставала", "dawn": "годы", "climax": "раскрылись",
+                  "final": "поднимайся"},
 }
 MUSIC = {
     "01_dragon": dict(root=50, prog=[[0, 3, 7], [-4, 0, 3], [3, 7, 10], [-2, 2, 5]] * 2, bpm=66, seed=1),
@@ -39,6 +41,9 @@ MUSIC = {
     "03_knight": dict(root=52, prog=[[0, 3, 7], [5, 8, 12], [-4, 0, 3], [-5, -1, 2]] * 2, bpm=64, seed=3),
     "04_forest": dict(root=55, prog=[[0, 4, 7], [-5, -1, 2], [-3, 0, 4], [-7, -3, 0]] * 2, bpm=70, seed=4, brightness=2200),
     "05_ice": dict(root=59, prog=[[0, 3, 7], [-4, 0, 3], [3, 7, 10], [-2, 2, 5]] * 2, bpm=68, seed=5, arp_oct=3),
+    # vi-IV-I-V: грусть -> надежда
+    "06_summit": dict(root=55, prog=[[-3, 0, 4], [-7, -3, 0], [0, 4, 7], [-5, -1, 2]] * 3, bpm=72, seed=6,
+                      brightness=2400),
 }
 
 
@@ -83,7 +88,8 @@ def make_audio(story, ev):
     voice = np.zeros(N)
     s = int(VOICE_OFF * SR)
     voice[s:s + len(v)] = v[: N - s]
-    m = compose(climax_t=ev["climax"], dur=DUR, **MUSIC[sid])
+    extra = {"pulse_from": ev["dawn"]} if "dawn" in ev else {}
+    m = compose(climax_t=ev["climax"], dur=DUR, **MUSIC[sid], **extra)
     # дакинг музыки под голос
     env = np.abs(voice)
     k = int(0.25 * SR)
@@ -108,7 +114,18 @@ class Renderer:
         sc = self.scene
         cam = -60 + 120 * (t / DUR)
         base = Image.new("RGBA", (W, H), (0, 0, 0, 255))
-        for img, speed, yoff in sc.layers:
+        for lay in sc.layers:
+            img, speed, yoff = lay[:3]
+            if len(lay) > 3:
+                a = lay[3](t)
+                if a <= 0.004:
+                    continue
+                if a < 0.996:
+                    x0 = int(round(PAD + cam * speed))
+                    c = np.asarray(img.crop((x0, 0, x0 + W, img.height))).copy()
+                    c[..., 3] = (c[..., 3] * a).astype(np.uint8)
+                    base.alpha_composite(Image.fromarray(c, "RGBA"), (0, yoff))
+                    continue
             if img.width > W + 2 * PAD:  # туман: медленно плывёт
                 x0 = int(PAD + cam * speed + t * 22 * speed)
                 base.alpha_composite(img.crop((x0, 0, x0 + W, img.height)), (0, yoff))
@@ -141,6 +158,8 @@ class Renderer:
 def main():
     sid = sys.argv[1]
     story = next(s for s in STORIES if s["id"] == sid)
+    global DUR
+    DUR = story.get("dur", 30.0)
     words = prepare_voice(story)
     ev = event_times(sid, words)
     print(sid, "voice", round(words[-1][1], 2), "events", ev, flush=True)
