@@ -11,7 +11,7 @@
 <link rel="manifest" href="./manifest.json">
 <link rel="apple-touch-icon" href="./icons/icon-192.png">
 <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
-<title>VolScan · Binance Early v16-score</title>
+<title>VolScan · Binance Early v16-score+early</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -169,7 +169,7 @@
   .rng-fill { display: block; height: 100%; background: #5eff8f; }
   tr.score-row { background: #12240f; }
   tr.score-row:hover { background: #17300f; }
-  #score-threshold-input { width: 50px; }
+  #score-threshold-input, #early-threshold-input { width: 50px; }
   #hot-badge { color: #ff9f43; }
   .del-btn {
     background: transparent; border: 1px solid #3a1e1e; color: #ff6b6b;
@@ -438,6 +438,12 @@
       <button class="ok-btn" id="apply-score-threshold">OK</button>
     </div>
     <div class="box">
+      <span>🌱</span>
+      <span class="stat-label">ранний ≥</span>
+      <input id="early-threshold-input" value="75">
+      <button class="ok-btn" id="apply-early-threshold">OK</button>
+    </div>
+    <div class="box">
       <span>📨</span>
       <span class="stat-label">telegram bot token / chat id</span>
       <input id="telegram-token-input" placeholder="123456:AAExample" style="width:120px">
@@ -460,6 +466,7 @@
   </div>
   <div class="filters-hint">
     <b>⭐ SCORE</b> — главный сигнал (score ≥ порога + рост цены + RVOL ≥ 3). Откалиброван на годе истории фьючерсов с объёмом ≤ $3M: 80 ≈ 17 алертов/день по всему рынку, 85 ≈ 9, 90 ≈ 5. Чем выше порог, тем меньше шума и тем больше пропущенных выносов. Пустой порог = выкл.
+    <b>🌱 РАННИЙ</b> — только фьючерсы ≤ $3M, пока цена ещё не ушла (≤ +3% за час, ≤ +2% за 15 мин). Приходит раньше ⭐, но шумнее в разы: на 75 ≈ 32 алерта/день, вынос дают ~2%. Это «присмотреться», подтверждение — ⭐.
     <b>Пороги $</b> (10с / 30с / Δ1м / VEL1M30): пустое поле → сигнал не срабатывает. Макс. цена/объём: пусто = без ограничения.
     <b>✕</b> убирает пару навсегда (и после перезагрузки), пока не нажмёте «вернуть скрытые» или не сбросите скрытые.
     <b>🚀 быстрее всех</b> — макс. Δ$ объёма за 10с/30с/1м среди строк таблицы; тап → 📌 слежу.
@@ -996,7 +1003,8 @@ function recordThresholdSignal(entry) {
   // остальное ниже.
   const amountStr = `${entry.amount >= 0 ? "+" : ""}$${fmtMoney(entry.amount)}`;
   const pairAmountLine = `${entry.seq ? bigNumber(entry.seq) + " " : ""}<b>${entry.base}/${entry.quote} ${amountStr}</b>${momentumIcon}`;
-  const typeLine = `🟡 ${entry.type} (${entry.market})${entry.extra ? " · " + entry.extra : ""}`;
+  const typeLabel = entry.type === "SIGNAL" ? "⭐ SCORE" : entry.type === "EARLY" ? "🌱 РАННИЙ" : entry.type;
+  const typeLine = `🟡 ${typeLabel} (${entry.market})${entry.extra ? " · " + entry.extra : ""}`;
   sendTelegram(`${pairAmountLine}\n${typeLine}${volLine}${priceLine}${imbalLine}${fundLine}${oiLine}`);
 }
 function sendTelegram(text) {
@@ -1023,7 +1031,7 @@ function buildPayload() {
     shelfAlerts: [],
     outcomes: [],
     threshold, threshold30, threshold1m, thresholdVel1m30, maxInitialPrice, maxInitialVolume,
-    scoreThreshold, scoreVersion: SCORE_VERSION, scoreOnlyMode, sortMode, takerStreamOn,
+    scoreThreshold, scoreVersion: SCORE_VERSION, earlyThreshold, scoreOnlyMode, sortMode, takerStreamOn,
     everInTop30, everInTop15,
     tradePlanOn, tradeStopPct, tradeTargetPct, tradeTimeHours, tradeEquity,
     openTrades, closedTrades,
@@ -1061,6 +1069,7 @@ function applyPayload(payload) {
   if ("scoreThreshold" in payload) scoreThreshold = payload.scoreThreshold == null ? null : payload.scoreThreshold;
   // шкала v16 другая: старый порог 60 теперь значит ~160 алертов в день, ставим новый дефолт
   if (payload.scoreVersion !== SCORE_VERSION && scoreThreshold != null) scoreThreshold = SCORE_DEFAULT_THRESHOLD;
+  if ("earlyThreshold" in payload) earlyThreshold = payload.earlyThreshold == null ? null : payload.earlyThreshold;
   scoreOnlyMode = !!payload.scoreOnlyMode;
   sortMode = payload.sortMode === "score" ? "score" : "delta";
   takerStreamOn = payload.takerStreamOn !== false;
@@ -1511,7 +1520,7 @@ function pushAlert(entry) {
 function pushShelfAlert(entry) {
   // полка тоже без записи
 }
-const EARLY_TYPES = new Set(["VEL1M", "VEL1M30", "ACCEL", "SIGNAL"]); // "ранние" = быстрее, чем базовый SPIKE
+const EARLY_TYPES = new Set(["VEL1M", "VEL1M30", "ACCEL", "SIGNAL", "EARLY"]); // "ранние" = быстрее, чем базовый SPIKE
 function isEarlyType(type) {
   return EARLY_TYPES.has(type);
 }
@@ -1559,29 +1568,83 @@ const SCORE_POINTS = {
 const SCORE_PART_LABEL = {
   pct60m:    v => (v >= 0 ? "+" : "") + v.toFixed(1) + "%/1ч",
   pct15m:    v => (v >= 0 ? "+" : "") + v.toFixed(1) + "%/15м",
-  pct5m:     v => "+" + v.toFixed(1) + "%/5м",
-  pct1m:     v => "+" + v.toFixed(1) + "%/1м",
+  pct5m:     v => (v >= 0 ? "+" : "") + v.toFixed(1) + "%/5м",
+  pct1m:     v => (v >= 0 ? "+" : "") + v.toFixed(1) + "%/1м",
   vwapDev:   v => "VWAP " + (v >= 0 ? "+" : "") + v.toFixed(1) + "%",
   sig60:     v => "вола " + v.toFixed(2) + "%/м",
   rng:       v => "диапазон " + Math.round(v * 100) + "%",
   rvolPre20: v => "фон ×" + v.toFixed(1),
   rvol5:     v => "RVOL5 ×" + v.toFixed(1),
   pct24h:    v => (v >= 0 ? "+" : "") + v.toFixed(0) + "%/24ч",
+  rvol:      v => "RVOL ×" + v.toFixed(0),
+  rvolPre60: v => "фон 1ч ×" + v.toFixed(1),
+  range60:   v => "размах 1ч " + v.toFixed(1) + "%",
 };
+
+// ---------- v16: 🌱 РАННИЙ score — до того, как цена ушла ----------
+// research/futures_breakout_score/early*.py. Тот же год, те же USDⓈ-M ≤ $3M, та же метка
+// (+10% за час раньше −5%), но обучен только на минутах, где цена ЕЩЁ не ушла:
+// ≤ +3% за час и ≤ +2% за 15 минут. Ровно эти же условия — ворота сигнала.
+// Проверка «тихая полка → пробой» на годе истории: полка выносы НЕ предсказывает
+// (узкий 4ч-диапазон перед выносом встречается реже, чем перед шумом; сканер
+// «полка + пробой хая полки» = 0.4–0.7% выносов при 100–500 алертах в день, как и
+// пробой без полки). Поэтому признаков полки здесь нет: модель сама выбрала
+// расширяющуюся волатильность, растущий фоновый объём и отскок после слива.
+// Вне выборки: порог 75 ≈ 32 алерта/день, 2.1% из них — вынос, в среднем впереди ~90% хода
+// (у ⭐ SCORE 80: 17/день, 11%, впереди ~69%). Это «присмотреться», не «входить».
+const EARLY_DEFAULT_THRESHOLD = 75;
+const EARLY_MAX_PCT60M = 3;
+const EARLY_MAX_PCT15M = 2;
+const EARLY_MAX_VOL24 = 3_000_000;
+const EARLY_COOLDOWN_MS = 15 * 60000;
+const EARLY_BINS = {
+  pct1m:     [0.1, 0.2, 0.3, 0.5, 1, 2],
+  pct5m:     [-1, 0, 0.3, 0.6, 1, 2],
+  pct15m:    [-2, -1, 0, 0.5, 1, 1.5],
+  pct60m:    [-5, -3, -1, 0, 1, 2],
+  pct24h:    [-10, -5, -2, 0, 2, 4, 8, 15],
+  rng:       [0.2, 0.4, 0.6, 0.8, 0.9],
+  vwapDev:   [-3, -1, 0, 1, 2, 4],
+  sig60:     [0.07, 0.1, 0.13, 0.17, 0.22, 0.3, 0.45],
+  rvol5:     [1.5, 2.5, 4, 6, 10, 20],
+  rvol:      [4, 6, 10, 20, 40],
+  rvolPre20: [0.5, 1, 2, 3, 5, 10],
+  rvolPre60: [0.5, 1, 1.5, 2.5, 4],
+  range60:   [0.8, 1.2, 1.8, 2.5, 3.5, 5],
+};
+const EARLY_POINTS = {
+  pct1m:     [0, 1, 3, 4, 6, 8, 9],
+  pct5m:     [8, 2, 0, 4, 7, 9, 10],
+  pct15m:    [7, 5, 0, 0, 5, 8, 9],
+  pct60m:    [8, 6, 2, 0, 1, 6, 9],
+  pct24h:    [7, 2, 0, 1, 1, 4, 7, 8, 7],
+  rng:       [0, 2, 5, 6, 7, 7],
+  vwapDev:   [2, 0, 1, 2, 4, 6, 8],
+  sig60:     [1, 0, 0, 3, 4, 5, 5, 7],
+  rvol5:     [0, 0, 2, 3, 4, 5, 6],
+  rvol:      [0, 0, 1, 3, 6, 7],
+  rvolPre20: [2, 0, 0, 3, 4, 5, 7],
+  rvolPre60: [4, 0, 1, 2, 4, 7],
+  range60:   [0, 1, 2, 4, 5, 6, 6],
+};
+let earlyThreshold = EARLY_DEFAULT_THRESHOLD; // порог 🌱 (0..100), пусто = выкл
+function computeEarlyScore(f) {
+  return computeScore(f, EARLY_BINS, EARLY_POINTS);
+}
 function scoreBinIndex(x, edges) {
   let i = 0;
   while (i < edges.length && x >= edges[i]) i++;
   return i;
 }
-function computeScore(f) {
+function computeScore(f, bins = SCORE_BINS, points = SCORE_POINTS) {
   let s = 0;
   const contrib = [];
-  for (const name in SCORE_POINTS) {
+  for (const name in points) {
     const x = f[name];
     if (x === null || x === undefined || !isFinite(x)) continue;
-    const pts = SCORE_POINTS[name][scoreBinIndex(x, SCORE_BINS[name])];
+    const pts = points[name][scoreBinIndex(x, bins[name])];
     s += pts;
-    const maxPts = Math.max(...SCORE_POINTS[name]);
+    const maxPts = Math.max(...points[name]);
     if (pts >= 0.7 * maxPts) contrib.push({ pts, label: SCORE_PART_LABEL[name](x) });
   }
   contrib.sort((a, b) => b.pts - a.pts);
@@ -1594,7 +1657,7 @@ function computeScore(f) {
 // Поэтому по паре, которая начала шевелиться (RVOL ≥ 2 и цена вверх), берём 66 закрытых
 // 1м-свечей REST'ом и обновляем раз в минуту, пока пара тёплая. Вес запроса — 1, при
 // лимите Binance 2400/мин мы укладываемся в BAR_MAX_PER_MIN с большим запасом.
-const BAR_LIMIT = 66;
+const BAR_LIMIT = 70;
 const BAR_MAX_INFLIGHT = 4;
 const BAR_MAX_PER_MIN = 240;
 const BAR_STALE_MS = 3 * 60000;          // свечи старше 3 мин не используем
@@ -1627,7 +1690,8 @@ function requestBars(key, marketId, symbol, now) {
       const bars = [];
       for (const k of arr) {
         const closeT = +k[6], cl = parseFloat(k[4]), q = parseFloat(k[7]);
-        if (closeT < t && isFinite(cl) && cl > 0 && isFinite(q)) bars.push({ c: cl, q, closeT });
+        const hi = parseFloat(k[2]), lo = parseFloat(k[3]);
+        if (closeT < t && isFinite(cl) && cl > 0 && isFinite(q)) bars.push({ c: cl, h: hi, l: lo, q, closeT });
       }
       if (bars.length) { c.bars = bars; c.at = t; }
     })
@@ -1641,7 +1705,7 @@ setInterval(() => pruneBarCache(Date.now()), 60000);
 // Признаки так же, как в research/futures_breakout_score/proc.py: сигнальная минута —
 // последние 60с ленты (pct1m, d1m), всё остальное — закрытые свечи до неё.
 function barFeatures(key, now, price, curVol, d1m) {
-  const out = { pct5m: null, pct15m: null, pct60m: null, sig60: null, rvol5: null, rvolPre20: null };
+  const out = { pct5m: null, pct15m: null, pct60m: null, sig60: null, rvol5: null, rvolPre20: null, rvolPre60: null, range60: null };
   const c = barCache[key];
   if (!c || !c.bars.length || !(price > 0)) return out;
   const bars = c.bars;
@@ -1665,11 +1729,21 @@ function barFeatures(key, now, price, curVol, d1m) {
     const v = r.reduce((a, b) => a + (b - m) * (b - m), 0) / (r.length - 1);
     out.sig60 = Math.sqrt(v) * 100;
   }
+  {
+    const pre = bars.filter(b => b.closeT <= now - 60000).slice(-60);
+    if (pre.length >= 30) {
+      let hi = -Infinity, lo = Infinity;
+      for (const b of pre) { if (b.h > hi) hi = b.h; if (b.l < lo) lo = b.l; }
+      if (lo > 0 && isFinite(hi)) out.range60 = (hi / lo - 1) * 100;
+    }
+  }
   const exp = curVol > 0 ? curVol / 1440 : null;
   if (exp) {
     const before = bars.filter(b => b.closeT <= now - 60000);   // минуты до сигнальной
     const pre20 = before.slice(-20);
     if (pre20.length >= 10) out.rvolPre20 = pre20.reduce((a, b) => a + b.q, 0) / pre20.length / exp;
+    const pre60 = before.slice(-60);
+    if (pre60.length >= 30) out.rvolPre60 = pre60.reduce((a, b) => a + b.q, 0) / pre60.length / exp;
     if (d1m !== null && before.length >= 4) {
       out.rvol5 = (d1m + before.slice(-4).reduce((a, b) => a + b.q, 0)) / (5 * exp);
     }
@@ -2272,6 +2346,15 @@ function handleTickerBatch(market, arr) {
         pct1m, pct5m: bf.pct5m, pct15m: bf.pct15m, pct60m: bf.pct60m, pct24h: pct24hNum,
         vwapDev, sig60: bf.sig60, rng, rvolPre20: bf.rvolPre20, rvol5: bf.rvol5,
       });
+      // 🌱 только фьючерсы ≤ $3M и только пока цена ещё не ушла (на этом и обучен)
+      const earlyZone = market.id === "USDT-M" && parsed.curVol <= EARLY_MAX_VOL24
+        && bf.pct60m !== null && bf.pct60m <= EARLY_MAX_PCT60M
+        && bf.pct15m !== null && bf.pct15m <= EARLY_MAX_PCT15M;
+      const earlyObj = earlyZone ? computeEarlyScore({
+        pct1m, pct5m: bf.pct5m, pct15m: bf.pct15m, pct60m: bf.pct60m, pct24h: pct24hNum,
+        rng, vwapDev, sig60: bf.sig60, rvol5: bf.rvol5, rvol,
+        rvolPre20: bf.rvolPre20, rvolPre60: bf.rvolPre60, range60: bf.range60,
+      }) : { score: 0, parts: [] };
 
       // age of base — ignore very first minutes for some signals to reduce noise
       const baseAge = now - (baseTime[key] || now);
@@ -2288,6 +2371,7 @@ function handleTickerBatch(market, arr) {
         highFresh, trades: parsed.trades,
         high: parsed.high, low: parsed.low, openPrice: parsed.openPrice,
         score: scoreObj.score, scoreParts: scoreObj.parts,
+        earlyScore: earlyObj.score, earlyParts: earlyObj.parts,
         lastTick: now,
         oiUsd: market.id === "USDT-M" ? oiSnapshot(parsed.symbol).usd : null,
         oiChangePct: market.id === "USDT-M" ? oiSnapshot(parsed.symbol).pct : null,
@@ -2453,18 +2537,48 @@ function handleTickerBatch(market, arr) {
           && baseAge >= SCORE_MIN_BASE_AGE_MS
           && canFire(key, "SIGNAL", SCORE_COOLDOWN_MS)) {
         markFired(key, "SIGNAL");
-        pushAlert({
+        const sigEntry = {
           key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
           amount: d1m, time: now, type: "SIGNAL",
           extra: `score ${scoreObj.score} · ` + (scoreObj.parts.slice(0, 4).join(" · ") || "—"),
           score: scoreObj.score,
-        });
+          curVol: parsed.curVol, pct24h: parsed.pct, price: parsed.price, dirPct: pct1m,
+          fundingPct: market.id === "USDT-M" && fundingRate[parsed.symbol] ? fundingRate[parsed.symbol].r * 100 : null,
+          oiChangePct: oiChangePctForSignal(market.id, parsed.symbol),
+        };
+        pushAlert(sigEntry);
+        recordThresholdSignal(sigEntry);
         signalBeep();
         notify(`⭐ SCORE ${scoreObj.score}: ${parsed.base}/${parsed.quote}`,
                `${scoreObj.parts.slice(0, 3).join(" · ")} · Δ1м +$${fmtMoney(d1m)}`);
         startOutcome(key, market.id, parsed, now, "SIGNAL", { rvol, pct1m, ats, atsMedian, imbal, spreadPct, vwapDev, rng, taker, d1m, score: scoreObj.score, parts: scoreObj.parts });
         // встроенная стратегия: одна виртуальная позиция на пару одновременно
         if (tradePlanOn && !openTrades[key]) openTradePlan(key, market.id, parsed, now, scoreObj.score);
+      }
+
+      // ---- 🌱 РАННИЙ — вход до того, как цена ушла. Шумнее ⭐ в разы, зато раньше.
+      if (earlyThreshold != null && earlyObj.score >= earlyThreshold
+          && d1m !== null && d1m >= RVOL_MIN_ABS
+          && pct1m !== null && pct1m > 0
+          && rvol !== null && rvol >= 3
+          && baseAge >= SCORE_MIN_BASE_AGE_MS
+          && canFire(key, "EARLY", EARLY_COOLDOWN_MS)) {
+        markFired(key, "EARLY");
+        const earlyEntry = {
+          key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
+          amount: d1m, time: now, type: "EARLY",
+          extra: `ранний ${earlyObj.score} · ` + (earlyObj.parts.slice(0, 4).join(" · ") || "—"),
+          score: earlyObj.score,
+          curVol: parsed.curVol, pct24h: parsed.pct, price: parsed.price, dirPct: pct1m,
+          fundingPct: fundingRate[parsed.symbol] ? fundingRate[parsed.symbol].r * 100 : null,
+          oiChangePct: oiChangePctForSignal(market.id, parsed.symbol),
+        };
+        pushAlert(earlyEntry);
+        recordThresholdSignal(earlyEntry);
+        earlyBeep();
+        notify(`🌱 РАННИЙ ${earlyObj.score}: ${parsed.base}/${parsed.quote}`,
+               `${earlyObj.parts.slice(0, 3).join(" · ")} · Δ1м +$${fmtMoney(d1m)}`);
+        startOutcome(key, market.id, parsed, now, "EARLY", { rvol, pct1m, ats, atsMedian, imbal, spreadPct, vwapDev, rng, taker, d1m, score: earlyObj.score, parts: earlyObj.parts });
       }
 
       // doubling sound (kept)
@@ -2611,10 +2725,10 @@ function renderStats() {
   const completed = outcomes.filter(o => o.done).length;
   const pending = outcomes.length - completed;
 
-  const types = ["SIGNAL", "QUIET", "ACCEL", "VEL1M", "VEL1M30", "SPIKE"];
+  const types = ["SIGNAL", "EARLY", "QUIET", "ACCEL", "VEL1M", "VEL1M30", "SPIKE"];
   const byType = types.map(t => {
     const list = outcomes.filter(o => (o.type || "SPIKE") === t);
-    return list.length ? exLine(t === "SIGNAL" ? "⭐ SCORE" : t, excursion(list)) : "";
+    return list.length ? exLine(t === "SIGNAL" ? "⭐ SCORE" : t === "EARLY" ? "🌱 РАННИЙ" : t, excursion(list)) : "";
   }).filter(Boolean).join("");
 
   // разбивка SCORE-сигналов по силе — сразу видно, стоит ли поднимать порог
@@ -2696,7 +2810,7 @@ function renderTradePanel() {
 }
 
 // ---------- пороговый сигнал: рендер ----------
-const THRESHOLD_TYPE_LABEL = { SPIKE: "10с", SPIKE30: "30с", VEL1M: "Δ1м", VEL1M30: "Δ30с", ACCEL: "наклон" };
+const THRESHOLD_TYPE_LABEL = { SPIKE: "10с", SPIKE30: "30с", VEL1M: "Δ1м", VEL1M30: "Δ30с", ACCEL: "наклон", SIGNAL: "⭐", EARLY: "🌱" };
 function renderPairColumns() {
   const summaryEl = document.getElementById("pair-columns-summary");
   const scrollEl = document.getElementById("pair-columns-scroll");
@@ -2787,7 +2901,9 @@ function scoreCell(r) {
   else if (v >= scoreThreshold) cls = "score-mid";
   const parts = (r.scoreParts && r.scoreParts.length)
     ? `<span class="score-parts">${r.scoreParts.slice(0, 3).join(" · ")}</span>` : "";
-  return `<span class="${cls}">${v}</span>${parts}`;
+  const early = (r.earlyScore || 0) > 0
+    ? `<span class="score-parts">🌱 ${r.earlyScore}${r.earlyParts && r.earlyParts.length ? " · " + r.earlyParts.slice(0, 2).join(" · ") : ""}</span>` : "";
+  return `<span class="${cls}">${v}</span>${parts}${early}`;
 }
 function pctCell(r) {
   if (r.pct1m === null || r.pct1m === undefined) return `<span class="vel-cold">—</span>`;
@@ -3557,6 +3673,17 @@ document.getElementById("apply-score-threshold").addEventListener("click", () =>
 document.getElementById("score-threshold-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter") document.getElementById("apply-score-threshold").click();
 });
+document.getElementById("apply-early-threshold").addEventListener("click", () => {
+  const inputEl = document.getElementById("early-threshold-input");
+  const raw = (inputEl.value || "").trim();
+  const v = parseFloat(raw);
+  if (raw && !isNaN(v) && v >= 1 && v <= 100) { earlyThreshold = v; inputEl.value = String(v); }
+  else { earlyThreshold = null; inputEl.value = ""; }
+  saveState(); render(); flashApplied(inputEl);
+});
+document.getElementById("early-threshold-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.getElementById("apply-early-threshold").click();
+});
 document.getElementById("apply-telegram").addEventListener("click", () => {
   const tokenEl = document.getElementById("telegram-token-input");
   const chatEl = document.getElementById("telegram-chatid-input");
@@ -3742,6 +3869,7 @@ loadStateAsync().then((ok) => {
   document.getElementById("max-price-input").value = _nv(maxInitialPrice);
   document.getElementById("max-volume-input").value = _nv(maxInitialVolume);
   document.getElementById("score-threshold-input").value = _nv(scoreThreshold);
+  document.getElementById("early-threshold-input").value = _nv(earlyThreshold);
   document.getElementById("telegram-token-input").value = telegramToken;
   document.getElementById("telegram-chatid-input").value = telegramChatId;
   if (telegramOn) {

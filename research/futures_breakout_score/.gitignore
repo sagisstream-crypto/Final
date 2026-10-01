@@ -3,3 +3,4 @@ ev/
 *.parquet
 syms.txt
 eligible.txt
+ev2/
