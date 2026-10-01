@@ -11,7 +11,7 @@
 <link rel="manifest" href="./manifest.json">
 <link rel="apple-touch-icon" href="./icons/icon-192.png">
 <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
-<title>VolScan · Binance Early v15</title>
+<title>VolScan · Binance Early v16-score</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -70,7 +70,7 @@
   #search-input { width: 120px; }
   #threshold-input { width: 80px; }
   #threshold-1m-input { width: 80px; }
-  #threshold-2m-input { width: 80px; }
+  #threshold-vel1m30-input { width: 80px; }
   #max-price-input { width: 60px; }
   #max-volume-input { width: 90px; }
   .market-toggle { display: flex; border: 1px solid #1e2b1e; border-radius: 2px; overflow: hidden; }
@@ -93,14 +93,21 @@
   }
   .sound-btn.off { color: #5a6b5a; border-color: #1e2b1e; background: #0a0e0a; }
   #stop-btn.paused { color: #ff6b6b; border-color: #4a1e1e; background: #1e1010; }
-  #stats-btn.paused { color: #5eff8f; border-color: #2f4a2f; background: #131f13; }
   #wakelock-btn.paused { color: #5eff8f; border-color: #2f4a2f; background: #131f13; }
   #early-only-btn.paused { color: #ffd85e; border-color: #4a3a1e; background: #1e1810; }
   .reset-btn:hover, .sound-btn:hover { background: #232838; }
   .ok-btn:hover { background: #233823; }
   .hint { font-size: 10px; color: #3f4f3f; margin-left: auto; }
-  .body-wrap { flex: 1; display: flex; overflow: hidden; }
-  .table-wrap { flex: 1; overflow: auto; min-width: 0; }
+  .body-wrap { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 320px; }
+  .filters-collapsible { overflow-y: auto; max-height: 60vh; }
+  .filters-collapsible.collapsed { display: none; }
+  .filters-toggle-btn {
+    background: #0a0e0a; border: 1px solid #1e2b1e; border-radius: 2px;
+    color: #5eff8f; font-family: inherit; font-size: 11px; padding: 6px 10px;
+    cursor: pointer; white-space: nowrap;
+  }
+  .filters-toggle-btn:hover { border-color: #2f4a2f; }
+  .table-wrap { flex: 1; overflow: auto; min-width: 0; width: 100%; position: relative; }
   table { width: 100%; border-collapse: collapse; }
   thead { position: sticky; top: 0; background: #0d120d; border-bottom: 1px solid #1e2b1e; z-index: 5; }
   th {
@@ -121,6 +128,8 @@
   }
   .badge-SPOT { color: #7ab8ff; border-color: #2f3a4a; background: #131a24; }
   .badge-USDT-M { color: #ffb454; border-color: #4a3a1e; background: #1e1810; }
+  .price-cell-SPOT { background: #16283a; }
+  .price-cell-USDT-M { background: #3a2410; color: #ffb454; }
   .sym-base { color: #e4ece4; font-weight: 600; }
   .sym-quote { color: #4a5a4a; }
   .pct-pos { color: #5eff8f; }
@@ -168,75 +177,33 @@
     width: 22px; height: 22px; cursor: pointer;
   }
   .del-btn:hover { background: #2a1414; border-color: #ff6b6b; }
-  .alerts-panel {
-    width: 280px; border-left: 1px solid #1e2b1e; background: #0d120d;
-    display: flex; flex-direction: column; flex-shrink: 0;
+  .trade-item .t-line { font-size: 9.5px; color: #6b8494; }
+  .trade-closed-item { display: flex; align-items: center; gap: 8px; background: #0f1a24; border: 1px solid #1a2a3a; border-radius: 3px; padding: 4px 8px; }
+  .trade-closed-item .t-sym { font-size: 11px; font-weight: 600; color: #8aa8bf; min-width: 76px; }
+  .trade-closed-item .t-time { font-size: 9px; color: #4a6478; margin-left: auto; }
+  /* только телефон (см. @media max-width:900px ниже) — на ПК сканер остаётся как был, без этой панели.
+     Занимает место старого "🔔 ЖУРНАЛ СИГНАЛОВ" (убран целиком, он всё равно был мёртвый). */
+  .pair-group + .pair-group { border-top: 1px solid #1a3a3a; }
+  .pair-group-head {
+    padding: 6px 12px; font-size: 12px; font-weight: 600; color: #4adede;
+    background: #0d1a1a; position: sticky; top: 0; display: flex; align-items: baseline; gap: 6px;
   }
-  .alerts-header {
-    padding: 8px 12px; border-bottom: 1px solid #1e2b1e; font-size: 10px;
-    color: #5a6b5a; letter-spacing: 0.05em; display: flex; align-items: center; gap: 6px;
-  }
-  .shelf-panel { border: 1px solid #4a3a14; background: #1a1408; border-radius: 4px; margin: 0 12px 8px; padding: 6px 8px; }
-  .shelf-header { font-size: 11px; font-weight: 700; color: #ffd85e; margin-bottom: 4px; }
-  .shelf-list { display: flex; flex-wrap: wrap; gap: 6px; max-height: 120px; overflow-y: auto; }
-  .shelf-empty { font-size: 11px; color: #6b5a3a; padding: 2px 0; }
-  .shelf-item { display: flex; gap: 8px; align-items: center; background: #221a0a; border: 1px solid #4a3a14; border-radius: 3px; padding: 4px 8px; cursor: pointer; }
-  .shelf-item:hover { border-color: #ffd85e; }
-  .shelf-sym { font-size: 12px; font-weight: 600; color: #ffd85e; }
-  .shelf-delta { font-size: 11px; color: #ffb454; font-weight: 600; }
-  .shelf-time { font-size: 9px; color: #8a7a4a; }
-  .alerts-tabs {
-    display: flex; border-bottom: 1px solid #1e2b1e;
-  }
-  .alerts-tabs button {
-    flex: 1; background: transparent; border: none; border-right: 1px solid #1e2b1e;
-    color: #5a6b5a; font-family: inherit; font-size: 10px; padding: 7px 4px; cursor: pointer;
-  }
-  .alerts-tabs button:last-child { border-right: none; }
-  .alerts-tabs button.active { background: #1a2e1a; color: #5eff8f; }
-  .alerts-tabs button.early-tab.active { background: #1e1a10; color: #ffd85e; }
-  .alerts-list { flex: 1; overflow: auto; }
-  .alert-item { padding: 8px 12px; border-bottom: 1px solid #141a14; font-size: 11px; cursor: pointer; border-left: 3px solid transparent; }
-  .alert-item.market-SPOT { border-left-color: #7ab8ff; }
-  .alert-item.market-SPOT .alert-sym { color: #7ab8ff; }
-  .alert-item.market-USDT-M { border-left-color: #ffb454; }
-  .alert-item.market-USDT-M .alert-sym { color: #ffb454; }
-  .alert-item.type-VEL { border-left-color: #ffd85e; }
-  .alert-item.type-ACCEL { border-left-color: #ff9f43; }
-  .alert-item.type-RANK { border-left-color: #a29bfe; }
-  .alert-item.type-TOP { border-left-color: #fd79a8; }
-  .alert-item:hover { background: #10160f; }
+  .pair-group-head .pcc-market { font-weight: 400; font-size: 9px; color: #2a6a6a; }
+  .pair-group-table { width: 100%; border-collapse: collapse; }
+  .pair-group-table tr { cursor: pointer; border-bottom: 1px solid #10201f; }
+  .pair-group-table tr:hover { background: #0d1a1a; }
+  .pair-group-table td { padding: 5px 12px; font-size: 11px; white-space: nowrap; }
+  .pcc-amount { font-weight: 600; color: #ffb454; }
+  .pcc-price { color: #8ab8b8; }
+  .pcc-24h { color: #3a8a8a; }
+  .pcc-time { color: #2a6a6a; font-size: 9px; text-align: right; }
+  .pcc-type { color: #8ab8b8; font-size: 9.5px; }
+  #telegram-btn.paused { color: #5ec8ff; border-color: #1a3a4a; background: #0a1a1f; }
   tr.row-flash { animation: rowFlash 1.4s ease-out; }
   @keyframes rowFlash {
     0% { background: #2a3a1a; }
     100% { background: transparent; }
   }
-  .alert-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
-  .alert-sym { color: #e4ece4; font-weight: 600; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
-  .alert-seq { font-size: 9px; font-weight: 400; color: #5a6b5a; background: #131a13; border: 1px solid #223022; border-radius: 3px; padding: 1px 4px; }
-  .alert-type {
-    font-size: 8px; font-weight: 600; letter-spacing: 0.04em;
-    padding: 1px 5px; border-radius: 2px; border: 1px solid;
-  }
-  .alert-type.SPIKE { color: #ffb454; border-color: #4a3a1e; background: #1e1810; }
-  .alert-type.VEL1M { color: #ffd85e; border-color: #4a3a1e; background: #1e1a10; }
-  .alert-type.VEL2M { color: #ffeaa7; border-color: #4a3a1e; background: #1e1a10; }
-  .alert-type.ACCEL { color: #ff9f43; border-color: #4a2a1e; background: #1e1410; }
-  .alert-type.RANK { color: #a29bfe; border-color: #3a2a4a; background: #16101e; }
-  .alert-type.TOP30 { color: #fd79a8; border-color: #4a1e3a; background: #1e1018; }
-  .alert-type.TOP15 { color: #ff6b9d; border-color: #4a1e3a; background: #1e1018; }
-  .alert-type.RVOL { color: #55efc4; border-color: #1e4a3a; background: #101e18; }
-  .alert-type.FAST30 { color: #74b9ff; border-color: #1e3a4a; background: #10181e; }
-  .alert-type.NRATE { color: #81ecec; border-color: #1e4a4a; background: #101e1e; }
-  .alert-type.BIGPRINT { color: #ffeaa7; border-color: #4a3a1e; background: #1e1a10; }
-  .alert-type.IMBAL { color: #a29bfe; border-color: #3a2a4a; background: #16101e; }
-  .alert-type.VWAPX { color: #55efc4; border-color: #1e4a3a; background: #101e18; }
-  .alert-type.RANGEBRK { color: #fab1a0; border-color: #4a2a1e; background: #1e1410; }
-  .alert-type.QUIET { color: #dfe6e9; border-color: #2a2a2a; background: #141414; }
-  .alert-type.SIGNAL { color: #0a0e0a; background: #5eff8f; border-color: #5eff8f; font-weight: 700; }
-  .alert-delta { color: #ffb454; font-weight: 600; white-space: nowrap; }
-  .alert-bottom { display: flex; justify-content: space-between; color: #5a6b5a; margin-top: 3px; }
-  .alerts-empty { font-size: 11px; color: #3f4f3f; padding: 24px 12px; text-align: center; line-height: 1.5; }
   .footer {
     border-top: 1px solid #1e2b1e; background: #0d120d; padding: 6px 16px;
     font-size: 10px; color: #3f4f3f; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px;
@@ -246,18 +213,15 @@
   ::-webkit-scrollbar-thumb { background: #2f4a2f; border-radius: 4px; }
 
   @media (max-width: 900px) {
-    .body-wrap { flex-direction: column; overflow: visible; flex: none; }
-    .table-wrap { max-height: none; overflow: visible; }
-    .alerts-panel { width: 100%; border-left: none; border-top: 1px solid #1e2b1e; max-height: none; overflow: visible; }
-    .alerts-list { overflow: visible; }
-    thead { position: static; }
+    .body-wrap { flex-direction: column; overflow: hidden; flex: 1; }
+    .table-wrap { flex: 1; max-height: none; overflow: auto; }
   }
 
   /* ===== mobile / PWA shell ===== */
   html, body { height: 100%; }
   body {
     padding-top: env(safe-area-inset-top);
-    padding-bottom: calc(56px + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom);
     -webkit-tap-highlight-color: transparent;
     overscroll-behavior: none;
   }
@@ -268,22 +232,7 @@
     touch-action: manipulation;
   }
   .box input { font-size: 16px; } /* prevent iOS zoom */
-  .filters-hint { display: none; }
-  .tab-bar {
-    position: fixed; left: 0; right: 0; bottom: 0;
-    height: calc(56px + env(safe-area-inset-bottom));
-    padding-bottom: env(safe-area-inset-bottom);
-    background: #0d120d; border-top: 1px solid #1e2b1e;
-    display: flex; z-index: 40;
-  }
-  .tab-bar button {
-    flex: 1; background: transparent; border: none; color: #5a6b5a;
-    font-family: inherit; font-size: 10px; letter-spacing: 0.06em;
-    padding: 8px 4px 4px; cursor: pointer;
-  }
-  .tab-bar button.active { color: #5eff8f; }
-  body.pane-alerts .table-wrap { display: none; }
-  body.pane-table .alerts-panel { display: none; }
+  .filters-hint { display: block; max-width: 960px; }
   .bg-banner {
     display: none; position: sticky; top: 0; z-index: 30;
     background: #1e1810; color: #ffd85e; border-bottom: 1px solid #4a3a1e;
@@ -297,20 +246,120 @@
     .stats { gap: 8px; font-size: 10px; }
     .controls { gap: 6px; }
     .hint { display: none; }
-    .body-wrap { flex-direction: column; flex: 1; overflow: hidden; min-height: 0; }
+    .body-wrap { flex-direction: column; flex: 1; overflow: hidden; min-height: 280px; }
     .table-wrap { flex: 1; max-height: none; overflow: auto; -webkit-overflow-scrolling: touch; }
-    thead { position: sticky; top: 0; }
-    .alerts-panel {
-      width: 100%; border-left: none; flex: 1; min-height: 0;
-      display: flex; flex-direction: column;
-    }
-    body.pane-table .alerts-panel { display: none; }
-    body.pane-alerts .table-wrap { display: none; }
-    body.pane-alerts .alerts-panel { display: flex; }
-    .alerts-list { overflow: auto; -webkit-overflow-scrolling: touch; }
+    .filters-collapsible { max-height: 50vh; }
+    thead { position: static; top: auto; }
     td, th { padding: 8px 6px; }
     .del-btn { width: 28px; height: 28px; }
+    .focus-card { min-height: 52px; padding: 10px 12px; gap: 8px; }
+    .focus-card .fc-sym { font-size: 15px; }
+    .focus-card .fc-vol { font-size: 20px; }
+    .tm-windows button { min-height: 36px; }
   }
+
+
+  /* ===== top-mover (volume surge) + pin/focus ===== */
+  .sticky-rail {
+    flex-shrink: 0; z-index: 12;
+    background: #0a0e0a; border-bottom: 1px solid #1e2b1e;
+    display: flex; flex-direction: column; gap: 0;
+  }
+  .focus-card {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    min-height: 44px; padding: 8px 12px;
+    cursor: pointer; touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none; -webkit-user-select: none;
+  }
+  .focus-card.top-mover {
+    background: linear-gradient(90deg, #1a2410 0%, #0d120d 100%);
+    border-bottom: 1px solid #2a3a1a;
+  }
+  .focus-card.pin-card {
+    background: linear-gradient(90deg, #1a1a10 0%, #0d120d 100%);
+    border-bottom: 1px solid #3a3a1a;
+  }
+  .focus-card.hidden { display: none; }
+  .focus-card.tm-nogrowth { opacity: 0.55; filter: grayscale(0.35); }
+  .focus-card.tm-nogrowth .fc-pct { color: #6b7a6b !important; }
+  .focus-card .fc-label {
+    font-size: 10px; letter-spacing: 0.04em; color: #8a9a6a; white-space: nowrap;
+  }
+  .focus-card .fc-sym {
+    font-size: 14px; font-weight: 700; color: #e4ece4; white-space: nowrap;
+  }
+  .focus-card .fc-price { font-size: 13px; color: #c8d6c8; }
+  .focus-card .fc-pct { font-size: 14px; font-weight: 700; }
+  .focus-card .fc-pct.pos { color: #5eff8f; }
+  .focus-card .fc-pct.neg { color: #ff6b6b; }
+  .focus-card .fc-vol {
+    font-size: 22px; font-weight: 800; color: #ffb454; letter-spacing: 0.01em;
+    font-variant-numeric: tabular-nums; white-space: nowrap; line-height: 1.1;
+  }
+  .focus-card.tm-nogrowth .fc-vol { color: #6b7a6b; font-size: 16px; font-weight: 600; }
+  .focus-card .fc-vol-sub {
+    font-size: 11px; font-weight: 600; color: #ffd85e; white-space: nowrap;
+  }
+  .focus-card .fc-cycle {
+    width: 100%; font-size: 11px; color: #c8d6c8; font-variant-numeric: tabular-nums;
+    line-height: 1.35;
+  }
+  .focus-card .fc-cycle .cy-now { color: #ffb454; font-weight: 700; }
+  .focus-card .fc-cycle .cy-done { color: #5eff8f; font-weight: 700; }
+  .focus-card .fc-cycle .cy-wait { color: #5a6b5a; }
+  .focus-card .fc-cycle .cy-lbl { color: #5a6b5a; font-weight: 400; }
+  .focus-card .fc-pair-vols {
+    display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap; margin-left: 4px;
+  }
+  .focus-card .fc-volbox { display: flex; flex-direction: column; gap: 1px; }
+  .focus-card .fc-volbox-lbl {
+    font-size: 9px; letter-spacing: 0.06em; color: #5a6b5a; text-transform: uppercase;
+  }
+  .focus-card .fc-volbox .fc-vol { font-size: 20px; }
+  .focus-card .fc-volbox .cy-now { color: #ffb454; }
+  .focus-card .fc-volbox .cy-done { color: #5eff8f; font-size: 18px; }
+  .focus-card .fc-primary {
+    display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+    min-width: 0;
+  }
+  .focus-card .fc-meta { font-size: 10px; color: #5a6b5a; }
+  .focus-card .fc-badge {
+    font-size: 10px; padding: 2px 6px; border-radius: 2px;
+    border: 1px solid #4a3a1e; color: #ffd85e; background: #1e1810;
+  }
+  .focus-card .fc-close {
+    margin-left: auto; min-width: 40px; min-height: 40px;
+    background: transparent; border: 1px solid #3a3a1e; color: #ffd85e;
+    border-radius: 4px; font-size: 16px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    touch-action: manipulation;
+  }
+  .focus-card .fc-close:hover { background: #2a2410; }
+  .tm-windows {
+    display: inline-flex; gap: 2px; margin-left: 4px;
+  }
+  .tm-windows button {
+    min-width: 40px; min-height: 32px; padding: 4px 8px;
+    font-family: inherit; font-size: 11px; cursor: pointer;
+    background: #0d120d; border: 1px solid #2f4a2f; color: #5a6b5a;
+    border-radius: 3px; touch-action: manipulation;
+  }
+  .tm-windows button.active {
+    color: #5eff8f; border-color: #5eff8f; background: #12240f;
+  }
+  tr.row-pinned {
+    outline: 2px solid #ffd85e; outline-offset: -2px;
+    background: #1e1a10 !important;
+  }
+  tr.row-flash {
+    animation: rowFlash 3s ease-out;
+  }
+  @keyframes rowFlash {
+    0% { background: #3a4a1a; outline: 2px solid #5eff8f; outline-offset: -2px; }
+    100% { background: transparent; outline-color: transparent; }
+  }
+  thead { top: 0; }
 
 </style>
 </head>
@@ -322,8 +371,8 @@
     <div class="brand">
       <div class="brand-icon">⚡</div>
       <div>
-        <div class="brand-title">VOLUME SCANNER · EARLY v15</div>
-        <div class="brand-sub">BINANCE · SPOT + USDT-M · SCORE · цена+стакан+тейкер</div>
+        <div class="brand-title">VOLUME SCANNER · EARLY v15-livefix</div>
+        <div class="brand-sub">BINANCE · SPOT + USDT-M · 24h% from open · live vol kline/rolloff</div>
       </div>
     </div>
     <div class="stats">
@@ -333,7 +382,9 @@
       <span class="stat-label">TRIGGERED <span class="stat-val warn" id="triggered-count">0</span></span>
       <span class="stat-label">EARLY <span class="stat-val early" id="early-count">0</span></span>
     </div>
+    <button class="filters-toggle-btn" id="filters-toggle-btn">⚙ Фильтры ▾</button>
   </div>
+  <div class="filters-collapsible collapsed" id="filters-collapsible">
   <div class="controls">
     <div class="market-toggle" id="market-toggle">
       <button data-market="ALL" class="active">ВСЕ</button>
@@ -351,6 +402,12 @@
       <button class="ok-btn" id="apply-threshold">OK</button>
     </div>
     <div class="box">
+      <span>⚙</span>
+      <span class="stat-label">порог 30с $</span>
+      <input id="threshold-30s-input" value="50000">
+      <button class="ok-btn" id="apply-threshold-30s">OK</button>
+    </div>
+    <div class="box">
       <span>⚡</span>
       <span class="stat-label">порог Δ1м $</span>
       <input id="threshold-1m-input" value="30000">
@@ -358,9 +415,9 @@
     </div>
     <div class="box">
       <span>⚡</span>
-      <span class="stat-label">порог Δ2м $</span>
-      <input id="threshold-2m-input" value="50000">
-      <button class="ok-btn" id="apply-threshold-2m">OK</button>
+      <span class="stat-label">порог VEL1M 30с $</span>
+      <input id="threshold-vel1m30-input" value="20000">
+      <button class="ok-btn" id="apply-threshold-vel1m30">OK</button>
     </div>
     <div class="box">
       <span>⚙</span>
@@ -377,42 +434,91 @@
     <div class="box">
       <span>⭐</span>
       <span class="stat-label">score ≥</span>
-      <input id="score-threshold-input" value="60">
+      <input id="score-threshold-input" value="80">
       <button class="ok-btn" id="apply-score-threshold">OK</button>
     </div>
+    <div class="box">
+      <span>📨</span>
+      <span class="stat-label">telegram bot token / chat id</span>
+      <input id="telegram-token-input" placeholder="123456:AAExample" style="width:120px">
+      <input id="telegram-chatid-input" placeholder="123456789" style="width:80px">
+      <button class="ok-btn" id="apply-telegram">OK</button>
+      <button class="ok-btn" id="test-telegram">ТЕСТ</button>
+    </div>
     <button class="reset-btn" id="score-only-btn">⭐ ТОЛЬКО SCORE: ВЫКЛ</button>
+    <button class="reset-btn" id="telegram-btn">📨 TELEGRAM: ВЫКЛ</button>
     <button class="reset-btn" id="taker-btn">🔥 ТЕЙКЕР-ПОТОК: ВКЛ</button>
     <button class="reset-btn" id="sort-btn">⇅ СОРТ: Δ ОБЪЁМА</button>
-    <button class="reset-btn" id="csv-btn">💾 CSV</button>
     <button class="reset-btn" id="reset-btn">↺ СБРОС БАЗЫ</button>
+    <button class="reset-btn" id="undismiss-btn" title="Пары, убранные кнопкой ✕, не возвращаются сами. Эта кнопка снимает запрет.">↩ СКРЫТЫХ НЕТ</button>
     <button class="sound-btn" id="sound-btn">🔊 ЗВУК: ВКЛ</button>
     <button class="reset-btn" id="notif-btn">🔔 РАЗРЕШИТЬ УВЕДОМЛЕНИЯ</button>
     <button class="reset-btn" id="stop-btn">⏸ СТОП</button>
     <button class="reset-btn" id="wakelock-btn">💡 НЕ ГАСИТЬ ЭКРАН: ВЫКЛ</button>
-    <button class="reset-btn" id="stats-btn">📊 СТАТИСТИКА</button>
     <button class="reset-btn" id="early-only-btn">⚡ ТОЛЬКО РАННИЕ: ВЫКЛ</button>
     <div class="hint" id="poll-hint">live: websocket</div>
   </div>
-  <div class="shelf-panel" id="shelf-panel">
-    <div class="shelf-header">🪤 ТИХАЯ ПОЛКА</div>
-    <div class="shelf-list" id="shelf-list">
-      <div class="shelf-empty">Пока нет.</div>
-    </div>
-  </div>
   <div class="filters-hint">
-    <b>⭐ SCORE (0–100)</b> — главный сигнал: складывает RVOL (объём против средней минуты суток), Δ% цены за 1м, пробой дневного хая, положение к VWAP, скачок среднего чека сделки, перекос стакана и долю тейкер-покупок. Стреляет только при score ≥ порога И растущей цене. «ТОЛЬКО SCORE» глушит старые пороговые сигналы.
-    <b>Пороговые:</b> SPIKE (10с), VEL1M/VEL2M, ACCEL (наклон за 90с). <b>🪤 Тихая полка</b> — первый вынос у пары, которая долго стояла ровно; в течение 10 мин после неё score получает бонус.
-    <b>🔥 Тейкер-поток</b> — kline_1m по 12 самым горячим спот-парам, даёт долю покупок по рынку. <b>💾 CSV</b> — выгрузка всех сигналов с признаками и MFE/MAE для разбора.
-    Отбор при первом появлении: цена &lt; $10, нач. объём ≤ $3M. UTK и Alpha исключены.
+    <b>⭐ SCORE</b> — главный сигнал (score ≥ порога + рост цены + RVOL ≥ 3). Откалиброван на годе истории фьючерсов с объёмом ≤ $3M: 80 ≈ 17 алертов/день по всему рынку, 85 ≈ 9, 90 ≈ 5. Чем выше порог, тем меньше шума и тем больше пропущенных выносов. Пустой порог = выкл.
+    <b>Пороги $</b> (10с / 30с / Δ1м / VEL1M30): пустое поле → сигнал не срабатывает. Макс. цена/объём: пусто = без ограничения.
+    <b>✕</b> убирает пару навсегда (и после перезагрузки), пока не нажмёте «вернуть скрытые» или не сбросите скрытые.
+    <b>🚀 быстрее всех</b> — макс. Δ$ объёма за 10с/30с/1м среди строк таблицы; тап → 📌 слежу.
+    Крупная цифра — скользящее окно. Строка «цикл» — фиксированные отрезки по часам (:00/:30), прошлый закрывается и начинается следующий с нуля.
   </div>
-  <div id="stats-panel" style="display:none; margin-top:10px; border:1px solid #1e2b1e; border-radius:2px; background:#0a0e0a; padding:10px 12px;">
-    <div style="font-size:10px; color:#5a6b5a; letter-spacing:0.05em; margin-bottom:8px;">📊 СТАТИСТИКА ПО СИГНАЛАМ — что было с ценой ПОСЛЕ срабатывания (не рекомендация)</div>
-    <div id="stats-content" style="font-size:11px; line-height:1.7;"></div>
+  <div id="stats-content" style="font-size:11px; line-height:1.7;"></div>
   </div>
 </div>
 
 <div class="body-wrap">
-  <div class="table-wrap">
+  <div class="sticky-rail" id="sticky-rail">
+    <div class="focus-card top-mover" id="top-mover-card" role="button" tabindex="0" title="Закрепить лидера объёма">
+      <span class="fc-label">🚀 быстрее всех</span>
+      <span class="fc-sym" id="tm-sym">—</span>
+      <span class="tm-windows" id="tm-windows">
+        <button type="button" data-win="10">10с</button>
+        <button type="button" data-win="30" class="active">30с</button>
+        <button type="button" data-win="60">1м</button>
+      </span>
+      <span class="fc-pair-vols" id="tm-pair-vols">
+        <span class="fc-volbox">
+          <span class="fc-volbox-lbl">текущий</span>
+          <span class="fc-vol cy-now" id="tm-vol">+$—</span>
+        </span>
+        <span class="fc-volbox">
+          <span class="fc-volbox-lbl">прошлый</span>
+          <span class="fc-vol cy-done" id="tm-prev">+$—</span>
+        </span>
+        <span class="fc-volbox">
+          <span class="fc-volbox-lbl">24ч</span>
+          <span class="fc-vol" id="tm-pct24">—</span>
+        </span>
+        <span class="fc-volbox">
+          <span class="fc-volbox-lbl">сессия</span>
+          <span class="fc-vol" id="tm-pctsess">—</span>
+        </span>
+      </span>
+      <span class="fc-vol-sub" id="tm-vol-sub" style="display:none"></span>
+      <span class="fc-price" id="tm-price" style="display:none"></span>
+      <span class="fc-pct" id="tm-pct" style="display:none"></span>
+      <span class="fc-meta" id="tm-meta" style="display:none"></span>
+      <span class="fc-badge" id="tm-badge" style="display:none"></span>
+      <span class="fc-cycle" id="tm-cycle" style="display:none"></span>
+    </div>
+    <div class="focus-card pin-card hidden" id="pin-card" role="button" tabindex="0">
+      <span class="fc-label">📌 слежу</span>
+      <span class="fc-primary">
+        <span class="fc-vol" id="pin-vol">+$—</span>
+        <span class="fc-vol-sub" id="pin-vol-sub"></span>
+      </span>
+      <span class="fc-sym" id="pin-sym">—</span>
+      <span class="fc-price" id="pin-price"></span>
+      <span class="fc-pct" id="pin-pct"></span>
+      <span class="fc-meta" id="pin-meta"></span>
+      <span class="fc-cycle" id="pin-cycle"></span>
+      <button type="button" class="fc-close" id="pin-close" title="Снять фокус">✕</button>
+    </div>
+  </div>
+  <div class="table-wrap" id="table-wrap">
     <table>
       <thead>
         <tr>
@@ -426,7 +532,6 @@
           <th>Δ ОБЪЁМА</th>
           <th>×</th>
           <th>Δ1м</th>
-          <th>Δ2м</th>
           <th>⭐ SCORE</th>
           <th>Δ% 1м</th>
           <th>RVOL</th>
@@ -435,55 +540,77 @@
           <th>ТЕЙКЕР</th>
           <th>МЕСТО / Δ30с</th>
           <th></th>
+          <th>OI</th>
           <th></th>
         </tr>
       </thead>
       <tbody id="table-body">
-        <tr><td colspan="20" class="empty-row">подключение к Binance…</td></tr>
+        <tr><td colspan="21" class="empty-row">подключение к Binance…</td></tr>
       </tbody>
     </table>
-  </div>
-  <div class="alerts-panel">
-    <div class="alerts-header">🔔 ЖУРНАЛ СИГНАЛОВ</div>
-    <div class="alerts-tabs" id="alerts-tabs">
-      <button data-tab="all" class="active">ВСЕ</button>
-      <button data-tab="early" class="early-tab">РАННИЕ</button>
-    </div>
-    <div class="alerts-list" id="alerts-list">
-      <div class="alerts-empty">Здесь появятся сигналы: ⭐ SCORE, SPIKE, VEL1M/VEL2M, ACCEL.</div>
-    </div>
   </div>
 </div>
 
 <div class="footer">
-  <span>Данные: Binance WS !ticker@arr (~1с) + kline_1m по горячим парам · v15: score, цена, стакан, тейкер, MFE/MAE <span id="hot-badge"></span></span>
+  <span>Данные: Binance WS · SPOT stream · USDT-M via /market · !ticker@arr + kline_1m · v15-market-ws <span id="hot-badge"></span></span>
   <span>Не является финансовой рекомендацией</span>
 </div>
-<nav class="tab-bar" id="tab-bar">
-  <button data-pane="table" class="active">ТАБЛИЦА</button>
-  <button data-pane="alerts">СИГНАЛЫ</button>
-</nav>
 
 <script>
-const MARKETS = [
-  { id: "SPOT", label: "SPOT", wsUrl: "wss://stream.binance.com:9443/ws/!ticker@arr", restUrl: "https://api.binance.com/api/v3/ticker/24hr" },
-  { id: "USDT-M", label: "USDT-M", wsUrl: "wss://fstream.binance.com/ws/!ticker@arr", restUrl: "https://fapi.binance.com/fapi/v1/ticker/24hr" },
+const FSTREAM_MARKET_BASES = [
+  "wss://fstream.binance.com/market",
+  "wss://fstream.binancefuture.com/market",
 ];
+let fstreamMarketBaseIdx = 0;
+function fstreamMarketBase() {
+  return FSTREAM_MARKET_BASES[fstreamMarketBaseIdx % FSTREAM_MARKET_BASES.length];
+}
+function rotateFstreamMarketBase(reason) {
+  fstreamMarketBaseIdx = (fstreamMarketBaseIdx + 1) % FSTREAM_MARKET_BASES.length;
+  try { console.warn("[VolScan] futures WS base →", fstreamMarketBase(), reason || ""); } catch (e) {}
+}
+function usdtmTickerWsUrl() {
+  // Always /market/ws — never bare fstream …/ws/ (non-market) for USDT-M tickers.
+  return fstreamMarketBase() + "/ws/!ticker@arr";
+}
+function usdtmMarkPriceWsUrl() {
+  return fstreamMarketBase() + "/ws/!markPrice@arr@1s";
+}
+const SPOT_WS_URLS = [
+  "wss://stream.binance.com:9443/ws/!ticker@arr",
+  "wss://data-stream.binance.vision/ws/!ticker@arr",
+  "wss://stream.binance.com/ws/!ticker@arr",
+];
+let spotWsUrlIdx = 0;
+function spotTickerWsUrl() {
+  return SPOT_WS_URLS[spotWsUrlIdx % SPOT_WS_URLS.length];
+}
+function rotateSpotWsBase(reason) {
+  spotWsUrlIdx = (spotWsUrlIdx + 1) % SPOT_WS_URLS.length;
+  try { console.warn("[VolScan] spot WS url →", spotTickerWsUrl(), reason || ""); } catch (e) {}
+}
+const MARKETS = [
+  { id: "SPOT", label: "SPOT", wsUrl: null /* dynamic rotate */, restUrl: "https://api.binance.com/api/v3/ticker/24hr" },
+  { id: "USDT-M", label: "USDT-M", wsUrl: null /* dynamic via /market */, restUrl: "https://fapi.binance.com/fapi/v1/ticker/24hr" },
+];
+function marketWsUrl(market) {
+  if (market.id === "USDT-M") return usdtmTickerWsUrl();
+  return spotTickerWsUrl();
+}
 // !ticker@arr pushes 24hr ticker stats for changed symbols ~once/sec — no polling needed
-// while it's actually delivering data. If it opens but stays silent (blocked stream port,
-// flaky mobile network, etc.) we fall back to REST polling automatically — see watchdog below.
+// while it's actually delivering data. Prefer aggressive WS reconnect; REST is last resort.
 const REST_POLL_INTERVAL_MS = 4000;
-const WS_STALE_MS = 8000;              // no message this long after connect/last message = treat as dead
-const WS_MAX_FAILS_BEFORE_FALLBACK = 2; // consecutive stale cycles before switching that market to REST
-const WS_PROBE_INTERVAL_MS = 180000;    // while on REST fallback, retry WS in the background this often
+const WS_STALE_MS = 8000;
+const WS_MAX_FAILS_BEFORE_FALLBACK = 3;
+const WS_PROBE_INTERVAL_MS = 20000;
 let feedMode = {};        // market.id -> "ws" | "rest"
 let wsFailStreak = {};    // market.id -> consecutive stale-connection count
 let wsOpenAt = {};        // market.id -> timestamp of last successful ws open
 let restTimer = {};       // market.id -> REST fallback interval handle
 let wsProbeTimer = {};    // market.id -> pending WS-recovery probe timeout
 const RESYNC_GAP_MS = 15000;     // gap after which we treat the feed as having resynced (tab was backgrounded, reconnect, etc.)
-const RECONNECT_BASE_MS = 1000;
-const RECONNECT_MAX_MS = 30000;
+const RECONNECT_BASE_MS = 400;
+const RECONNECT_MAX_MS = 4000;
 let sockets = {};                // market.id -> WebSocket
 let reconnectDelay = {};         // market.id -> current backoff ms
 let reconnectTimer = {};         // market.id -> setTimeout handle
@@ -493,8 +620,8 @@ const STORAGE_KEY = "binance_volume_scanner_early_v1";
 const IDB_NAME = "volscan_pwa_v15";
 const IDB_STORE = "kv";
 const IS_MOBILE = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && window.innerWidth < 900);
-const PERSIST_INTERVAL_MS = IS_MOBILE ? 12000 : 8000;
-const RENDER_INTERVAL_MS = IS_MOBILE ? 900 : 500;
+const PERSIST_INTERVAL_MS = IS_MOBILE ? 20000 : 12000;
+const RENDER_INTERVAL_MS = IS_MOBILE ? 140 : 80;
 let persistTimer = null;
 let persistDirty = false;
 let lastPersistAt = 0;
@@ -545,28 +672,31 @@ async function requestPersistentStorage() {
 }
 
 let threshold = 50000;       // 10-sec spike
+let threshold30 = 50000;     // 30-sec spike
 let threshold1m = 30000;     // 1-minute volume growth
-let threshold2m = 50000;     // 2-minute volume growth
+let thresholdVel1m30 = 20000; // VEL1M30 — тот же принцип, что VEL1M, но на 30-секундном окне (rolling30)
 let soundOn = true;
 let paused = false;
 let earlyOnlyMode = false;   // table shows only pairs with recent early signals
-let alertsTab = "all";       // "all" | "early"
+let filtersCollapsed = true; // фильтры/пороги/панели свёрнуты по умолчанию — таблица сразу на всю страницу
 
 let rows = {};
+let dismissedKeys = {}; // key (market:symbol) закрытые кнопкой ✕ — не возвращать в список
 let sessionBase = {};
 let baseTime = {};
 let priceBase = {};
 let doubleLevel = {};
-let lastFired = {};          // key -> { SPIKE:ts, VEL1M:ts, VEL2M:ts, ACCEL:ts, RANK:ts, TOP30:ts, TOP15:ts }
+let lastFired = {};          // key -> { SPIKE:ts, VEL1M:ts, ACCEL:ts, RANK:ts, TOP30:ts, TOP15:ts }
 let signalCount = {};
+let totalTriggeredCount = 0;  // сколько сигналов всего сработало (любых типов)
+let totalEarlyCount = 0;      // из них — «ранних» (VEL1M/ACCEL/SIGNAL)
 let history = {};            // key -> [{t, vol}, ...]
 const HISTORY_WINDOW_MS = 10000;
+const HISTORY_30S_MS = 30000;
 const HISTORY_1M_MS = 60000;
 const HISTORY_2M_MS = 120000;
 const HISTORY_MAX_AGE_MS = 150000; // keep ~2.5 min
 const ANCHOR_TOLERANCE_MS = 8000;
-let alertsLog = [];
-const ALERTS_LOG_MAX = 400;
 let lastPollAt = {};
 
 let outcomes = [];
@@ -597,10 +727,34 @@ let lastRateSampleAt = {};   // key -> ts of last baseline sample
 // как выглядит стакан и кто агрессор. До v14 все сигналы считались только по
 // объёму, поэтому распродажа в бид и импульс вверх выглядели одинаково.
 const FEAT_BASELINE_MAX = 22;            // столько же сэмплов, сколько у rateHistory
-const SCORE_COOLDOWN_MS = 120000;        // не чаще раза в 2 мин на пару
+const SCORE_COOLDOWN_MS = 15 * 60000;    // не чаще раза в 15 мин на пару (так считался бэктест v16)
 const SCORE_MIN_BASE_AGE_MS = 60000;     // не стреляем по свежедобавленной паре
 const TAKER_STALE_MS = 180000;           // тейкер-доля старше 3 мин считается неизвестной
-let scoreThreshold = 60;                 // порог composite score (0..100)
+let scoreThreshold = 80;                 // порог score (0..100), см. SCORE_DEFAULT_THRESHOLD
+
+// ---- top-mover (VOLUME SURGE) + pin/focus ---------------------------------
+// Metric: max short-window USD volume delta among currently rendered rows.
+const TOP_MOVER_EVAL_MS = 120;
+const TOP_MOVER_HOLD_MS = 900;
+const TOP_MOVER_MARGIN_RATIO = 0.08;
+const TOP_MOVER_FLOOR_USD = 2500;
+const PIN_LS_KEY = "volscan_pinned_key_v1";
+const TM_WIN_LS_KEY = "volscan_tm_window_v1"; // 10 | 30 | 60 (seconds)
+let topMoverWindowSec = 30;
+try {
+  const w = parseInt(localStorage.getItem(TM_WIN_LS_KEY) || "30", 10);
+  if (w === 10 || w === 30 || w === 60) topMoverWindowSec = w;
+} catch (e) {}
+let topMoverKey = null;
+let topMoverSince = 0;
+let topMoverValue = -Infinity;
+let lastTopMoverEvalAt = 0;
+let pinnedKey = null;
+let cycleState = {}; // key -> { 10|30|60: { id, startVol, lastClosed, lastClosedAt } }
+try { pinnedKey = localStorage.getItem(PIN_LS_KEY) || null; } catch (e) {}
+let frozenOrder = null;                  // [key,...] while pinned
+let highlightUntil = {};
+
 let scoreOnlyMode = false;               // если ВКЛ — в журнал идут только SCORE-сигналы
 let sortMode = "delta";                  // "delta" | "score"
 let takerStreamOn = true;                // kline_1m по «горячим» парам ради taker buy ratio
@@ -612,6 +766,68 @@ let dayHigh = {};            // key -> последний виденный 24ч 
 let dayHighAt = {};          // key -> когда максимум в последний раз обновился (= пробой)
 let dayLow = {};             // key -> последний виденный 24ч минимум
 let takerRatio = {};         // key -> { r, at } из kline_1m «горячего» потока
+let candleShape = {};        // key -> { o,h,l,c,v,q, at } последняя 1m свеча горячего потока
+let klineQuoteHist = {};     // key -> [{t, q, openTime}] семплы quote-объёма текущей/прошлых 1м свечей
+let fundingRate = {};        // symbol (USDT-M, без префикса рынка) -> { r, price, at }
+let oiHistory = {};          // symbol -> [{t, oi_usd}, ...] горячие пары + те, что дали сигнал
+let oiWatchSymbols = {};     // symbol -> ts последнего сигнала (держим в опросе OI_WATCH_TTL_MS)
+
+// ---- план сделки: стратегия из research/binance_pump_patterns (12м бэктест, 267 событий)
+// поверх сигнала ⭐ SCORE. Не автоторговля — просто считаем виртуальный P&L теми же
+// параметрами, что были провалидированы в бэктесте (стоп/цель/тайм-аут, риск 1% на
+// сделку, комиссия 0.10% за круг), чтобы видеть вживую, отработала бы сделка или нет.
+// −5% стоп в бэктесте убивал edge на любой цели; −8%/+16–20% за 2ч стабильно давал плюс.
+const TRADE_FEE_PCT = 0.10;              // комиссия+проскальзывание за круг, как в бэктесте
+const TRADE_RISK_PCT = 1;                // риск на сделку, % от текущего виртуального капитала
+const TRADE_STARTING_EQUITY = 10000;     // виртуальный старт, для сравнимости с бэктестом
+const CLOSED_TRADES_MAX = 60;            // сколько закрытых сделок держим в журнале
+let tradePlanOn = true;                  // ВКЛ/ВЫКЛ встроенной стратегии
+let tradeStopPct = 8;                    // −X% от входа
+let tradeTargetPct = 16;                 // +X% от входа
+let tradeTimeHours = 2;                  // тайм-аут, часов
+let tradeEquity = TRADE_STARTING_EQUITY; // виртуальный капитал, компаундится
+let openTrades = {};                     // key -> открытый план сделки (максимум один на пару)
+let closedTrades = [];                   // закрытые сделки, самые новые первыми
+
+// ---- пороговый сигнал: отдельная пришпиленная лента для SPIKE/VEL1M/ACCEL,
+// в самом верху страницы. Старый "🔔 ЖУРНАЛ СИГНАЛОВ" внизу был мёртв (pushAlert()
+// его не писал) и полностью убран из UI — это новый, независимый список.
+const THRESHOLD_LOG_MAX = 30;
+let thresholdLog = [];                   // последние срабатывания порогов, самые новые первыми
+// номер сигнала — отдельный счётчик на каждую конкретную пару (по entry.key = рынок:символ),
+// а не общий на весь рынок: чтобы "5" значило "пятый VEL1M именно по этой паре", а не
+// "пятый VEL1M вообще среди всех пар". Только для SPIKE/SPIKE30/VEL1M.
+const NUMBERED_SIGNAL_TYPES = ["SPIKE", "SPIKE30", "VEL1M", "VEL1M30"];
+let signalSeq = { SPIKE: {}, SPIKE30: {}, VEL1M: {}, VEL1M30: {} }; // type -> key -> count
+let lastSignalPct24h = {}; // key -> 24ч% на прошлом сигнале ЛЮБОГО типа по этой паре (для 🔥/⬇️)
+
+// ---- "ПО ПАРАМ" — альтернатива Telegram-ленте: не общий поток вперемешку, а своя
+// колонка на каждую пару, в ней снизу вверх видно, как менялась цена/объём именно
+// у неё. Пока только VEL1M — чтобы список колонок не захламлялся; чтобы вернуть
+// ACCEL, достаточно дописать "ACCEL" в PAIR_VIEW_TYPES, больше ничего менять не нужно.
+const PAIR_VIEW_TYPES = ["VEL1M", "VEL1M30"];
+const PAIR_COLUMN_MAX = 12;      // сколько последних активных пар держим одновременно
+const PAIR_COLUMN_LOG_MAX = 20;  // сколько карточек храним в каждой колонке
+let pairSignalLog = {};          // key -> [entry,...] новые сверху
+let pairColumnOrder = [];        // [key,...] недавно активные первыми
+function recordPairSignal(entry) {
+  if (!PAIR_VIEW_TYPES.includes(entry.type)) return;
+  if (!pairSignalLog[entry.key]) pairSignalLog[entry.key] = [];
+  pairSignalLog[entry.key].unshift(entry);
+  if (pairSignalLog[entry.key].length > PAIR_COLUMN_LOG_MAX) pairSignalLog[entry.key].length = PAIR_COLUMN_LOG_MAX;
+  const idx = pairColumnOrder.indexOf(entry.key);
+  if (idx !== -1) pairColumnOrder.splice(idx, 1);
+  pairColumnOrder.unshift(entry.key);
+  if (pairColumnOrder.length > PAIR_COLUMN_MAX) {
+    const dropped = pairColumnOrder.splice(PAIR_COLUMN_MAX);
+    for (const k of dropped) delete pairSignalLog[k];
+  }
+  dataDirty = true;
+}
+
+let telegramOn = false;
+let telegramToken = "";
+let telegramChatId = "";
 
 // тихая полка — отдельный список над журналом, не смешивается с пороговыми сигналами
 let shelfAlerts = [];
@@ -634,9 +850,39 @@ const EXCLUDED_SYMBOLS = new Set([
   "OXTUSDT", "FIOUSDT", "SXPUSDT", "LRCUSDT",
   "A2ZUSDT", "DUSDT", "NTRNUSDT", "RDNTUSDT",
   "WANUSDT",
+  "HOTUSDT", "1000HOTUSDT", "HOTUSDC",
 ]);
 function isExcluded(symbol) {
-  return EXCLUDED_SYMBOLS.has(symbol) || symbol.toUpperCase().includes("ALPHA");
+  if (!symbol) return true;
+  const u = symbol.toUpperCase();
+  if (EXCLUDED_SYMBOLS.has(u)) return true;
+  if (u.includes("ALPHA")) return true;
+  if (u === "HOTUSDT" || u.startsWith("1000HOT")) return true;
+  return false;
+}
+function isDismissed(key) {
+  return !!(key && dismissedKeys && dismissedKeys[key]);
+}
+function dismissKey(key) {
+  if (!key) return;
+  dismissedKeys[key] = Date.now();
+  if (pinnedKey === key) {
+    pinnedKey = null;
+    frozenOrder = null;
+    try { localStorage.removeItem(PIN_LS_KEY); } catch (e) {}
+  }
+  if (topMoverKey === key) {
+    topMoverKey = null;
+    topMoverValue = -Infinity;
+    topMoverSince = 0;
+  }
+  if (frozenOrder) frozenOrder = frozenOrder.filter(k => k !== key);
+}
+function updateDismissedButton() {
+  const btn = document.getElementById("undismiss-btn");
+  if (!btn) return;
+  const n = Object.keys(dismissedKeys).length;
+  btn.textContent = n ? ("↩ ВЕРНУТЬ СКРЫТЫЕ (" + n + ")") : "↩ СКРЫТЫХ НЕТ";
 }
 function purgeKey(key) {
   delete rows[key]; delete sessionBase[key]; delete baseTime[key]; delete priceBase[key];
@@ -645,10 +891,121 @@ function purgeKey(key) {
   delete everInTop30[key]; delete everInTop15[key]; delete lastRankSignalAt[key];
   delete rateHistory[key]; delete lastRateSampleAt[key];
   delete atsHistory[key]; delete spreadHistory[key]; delete imbalHistory[key];
-  delete dayHigh[key]; delete dayHighAt[key]; delete dayLow[key]; delete takerRatio[key];
+  delete dayHigh[key]; delete dayHighAt[key]; delete dayLow[key]; delete takerRatio[key]; delete candleShape[key];
+  delete klineQuoteHist[key];
+  delete cycleState[key];
   shelfAlerts = shelfAlerts.filter(e => e.key !== key);
-  alertsLog = alertsLog.filter(e => e.key !== key);
   delete outcomesByKey[key];
+  delete openTrades[key];
+}
+
+// ---------- план сделки: открыть/закрыть виртуальную позицию ----------
+function openTradePlan(key, market, parsed, now, score) {
+  const entryPrice = parsed.price;
+  if (!(entryPrice > 0)) return;
+  const riskUsd = tradeEquity * (TRADE_RISK_PCT / 100);
+  const notional = riskUsd / (tradeStopPct / 100);
+  openTrades[key] = {
+    key, market, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
+    entryPrice, entryTime: now,
+    stopPrice: entryPrice * (1 - tradeStopPct / 100),
+    targetPrice: entryPrice * (1 + tradeTargetPct / 100),
+    expireAt: now + tradeTimeHours * 3600000,
+    notional, riskUsd, score,
+  };
+}
+function closeTradePlan(key, exitType, exitPrice, now) {
+  const ot = openTrades[key];
+  if (!ot) return;
+  const rawPct = (exitPrice / ot.entryPrice - 1) * 100;
+  const pnlPct = rawPct - TRADE_FEE_PCT;
+  const pnlUsd = ot.notional * (pnlPct / 100);
+  tradeEquity = Math.max(0, tradeEquity + pnlUsd);
+  closedTrades.unshift({
+    ...ot, exitType, exitPrice, exitTime: now,
+    pnlPct, pnlUsd, R: ot.riskUsd ? pnlUsd / ot.riskUsd : null,
+    equityAfter: tradeEquity,
+  });
+  if (closedTrades.length > CLOSED_TRADES_MAX) closedTrades.length = CLOSED_TRADES_MAX;
+  delete openTrades[key];
+  dataDirty = true;
+  const icon = exitType === "target" ? "✅" : exitType === "stop" ? "🛑" : "⏱";
+  notify(`${icon} План: ${ot.base}/${ot.quote}`,
+         `${exitType === "target" ? "цель" : exitType === "stop" ? "стоп" : "тайм-аут"} · ${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(1)}% · капитал $${tradeEquity.toFixed(0)}`);
+}
+
+// ---------- пороговый сигнал: лог + телеграм ----------
+// направление: цена (1м, либо 24ч если 1м ещё не набежала) — это то, что реально
+// отвечает "вверх или вниз", а не тейкер (P(REAL>FAIL) ≈ 0.51 на 12-месячном прогоне,
+// то есть монетка). 🟢/🔴 в тексте — прямой ответ на "куда упор".
+function directionEmoji(dirPct) {
+  if (dirPct === null || dirPct === undefined || isNaN(dirPct)) return "⚪";
+  return dirPct >= 0 ? "🟢" : "🔴";
+}
+// Telegram не умеет менять размер шрифта в тексте сообщения (нет тега size, только
+// b/i/u/s/code/pre/a/spoiler) — ближайший рабочий способ сделать номер реально
+// крупнее остального текста — цифры-эмодзи (keycap): они рисуются как отдельные
+// цветные квадраты заметно крупнее обычного шрифта, а не просто "жирным".
+const KEYCAP_DIGITS = { "0": "0️⃣", "1": "1️⃣", "2": "2️⃣", "3": "3️⃣", "4": "4️⃣", "5": "5️⃣", "6": "6️⃣", "7": "7️⃣", "8": "8️⃣", "9": "9️⃣" };
+function bigNumber(n) {
+  return String(n).split("").map(d => KEYCAP_DIGITS[d] || d).join("");
+}
+function recordThresholdSignal(entry) {
+  // Нумеруем SPIKE/SPIKE30/VEL1M — счётчик свой на каждую пару (entry.key), не общий. ACCEL без номера.
+  if (signalSeq[entry.type]) {
+    signalSeq[entry.type][entry.key] = (signalSeq[entry.type][entry.key] || 0) + 1;
+    entry.seq = signalSeq[entry.type][entry.key];
+  }
+  // 🔥/⬇️ справа в шапке сообщения — растёт или падает 24ч% пары от сигнала к сигналу
+  // (сравниваем с прошлым сигналом ЛЮБОГО типа по этой же паре, не только того же типа).
+  // На первом сигнале по паре сравнивать не с чем — без иконки.
+  let momentumIcon = "";
+  if (entry.pct24h !== null && entry.pct24h !== undefined && !isNaN(entry.pct24h)) {
+    const prevPct = lastSignalPct24h[entry.key];
+    if (prevPct !== undefined) {
+      if (entry.pct24h > prevPct) momentumIcon = " 🔥";
+      else if (entry.pct24h < prevPct) momentumIcon = " ⬇️";
+    }
+    lastSignalPct24h[entry.key] = entry.pct24h;
+  }
+  thresholdLog.unshift(entry);
+  if (thresholdLog.length > THRESHOLD_LOG_MAX) thresholdLog.length = THRESHOLD_LOG_MAX;
+  dataDirty = true;
+  const dot = directionEmoji(entry.dirPct);
+  const volLine = entry.curVol !== null && entry.curVol !== undefined
+    ? `\n🟢 Объём 24ч: <b>$${fmtMoney(entry.curVol)}</b>` + (entry.pct24h !== null && entry.pct24h !== undefined && !isNaN(entry.pct24h)
+        ? ` (${entry.pct24h >= 0 ? "+" : ""}${entry.pct24h.toFixed(2)}%)` : "")
+    : "";
+  const hasPrice = entry.price !== null && entry.price !== undefined && !isNaN(entry.price);
+  const hasDir = entry.dirPct !== null && entry.dirPct !== undefined && !isNaN(entry.dirPct);
+  const priceLine = (hasPrice || hasDir)
+    ? `\nЦена: ${hasPrice ? "$" + fmtPrice(entry.price) : ""}${hasPrice && hasDir ? " · " : ""}${hasDir ? `${dot} ${entry.dirPct >= 0 ? "+" : ""}${entry.dirPct.toFixed(2)}%` : ""}`
+    : "";
+  const imbalLine = entry.imbal !== null && entry.imbal !== undefined && !isNaN(entry.imbal)
+    ? ` · стакан ${Math.round(entry.imbal * 100)}% bid`
+    : "";
+  const fundLine = entry.fundingPct !== null && entry.fundingPct !== undefined && !isNaN(entry.fundingPct)
+    ? `\nФандинг: ${entry.fundingPct >= 0 ? "+" : ""}${entry.fundingPct.toFixed(3)}%` + (Math.abs(entry.fundingPct) >= 0.05 ? " ⚠ перегрето" : "")
+    : "";
+  const oiLine = entry.oiChangePct !== null && entry.oiChangePct !== undefined && !isNaN(entry.oiChangePct)
+    ? ` · OI: ${entry.oiChangePct >= 0 ? "+" : ""}${entry.oiChangePct.toFixed(1)}%`
+    : "";
+  // Telegram не даёт красить произвольный текст в сообщениях бота (нет тега color) —
+  // приближаем жёлтый/зелёный кружками-эмодзи (🟡 у сигнала, 🟢 у объёмов) плюс жирным
+  // шрифтом (parse_mode: HTML). 1-я строка — коротко: пара + сумма (+ 🔥/⬇️ справа), всё
+  // остальное ниже.
+  const amountStr = `${entry.amount >= 0 ? "+" : ""}$${fmtMoney(entry.amount)}`;
+  const pairAmountLine = `${entry.seq ? bigNumber(entry.seq) + " " : ""}<b>${entry.base}/${entry.quote} ${amountStr}</b>${momentumIcon}`;
+  const typeLine = `🟡 ${entry.type} (${entry.market})${entry.extra ? " · " + entry.extra : ""}`;
+  sendTelegram(`${pairAmountLine}\n${typeLine}${volLine}${priceLine}${imbalLine}${fundLine}${oiLine}`);
+}
+function sendTelegram(text) {
+  if (!telegramOn || !telegramToken || !telegramChatId) return;
+  fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: telegramChatId, text, parse_mode: "HTML" }),
+  }).catch(() => {}); // сеть/токен может быть плохим — не роняем сканер из-за этого
 }
 let marketFilter = "ALL";
 let searchTerm = "";
@@ -662,26 +1019,30 @@ function buildPayload() {
   // не пишем history/rateHistory/takerRatio — они восстанавливаются с ленты за секунды
   // режем outcomes, чтобы не раздувать базу на телефоне
   return {
-    rows, sessionBase, baseTime, priceBase, doubleLevel, lastFired, signalCount,
-    alertsLog: [],
+    rows, dismissedKeys, sessionBase, baseTime, priceBase, doubleLevel, lastFired, signalCount,
     shelfAlerts: [],
     outcomes: [],
-    threshold, threshold1m, threshold2m, maxInitialPrice, maxInitialVolume,
-    scoreThreshold, scoreOnlyMode, sortMode, takerStreamOn,
+    threshold, threshold30, threshold1m, thresholdVel1m30, maxInitialPrice, maxInitialVolume,
+    scoreThreshold, scoreVersion: SCORE_VERSION, scoreOnlyMode, sortMode, takerStreamOn,
     everInTop30, everInTop15,
+    tradePlanOn, tradeStopPct, tradeTargetPct, tradeTimeHours, tradeEquity,
+    openTrades, closedTrades,
+    thresholdLog, telegramOn, telegramToken, telegramChatId, signalSeq, lastSignalPct24h,
+    pairSignalLog, pairColumnOrder,
+    filtersCollapsed, totalTriggeredCount, totalEarlyCount,
     startTime, savedAt: Date.now(),
   };
 }
 function applyPayload(payload) {
   if (!payload || typeof payload !== "object") return false;
   rows = payload.rows || {};
+  dismissedKeys = (payload.dismissedKeys && typeof payload.dismissedKeys === "object") ? payload.dismissedKeys : {};
   sessionBase = payload.sessionBase || {};
   baseTime = payload.baseTime || {};
   priceBase = payload.priceBase || {};
   doubleLevel = payload.doubleLevel || {};
   lastFired = payload.lastFired || {};
   signalCount = payload.signalCount || {};
-  alertsLog = [];
   shelfAlerts = [];
   outcomes = [];
   outcomesByKey = {};
@@ -691,17 +1052,45 @@ function applyPayload(payload) {
       outcomesByKey[o.key].push(o);
     }
   });
-  threshold = payload.threshold || threshold;
-  threshold1m = payload.threshold1m || threshold1m;
-  threshold2m = payload.threshold2m || threshold2m;
-  maxInitialPrice = payload.maxInitialPrice || maxInitialPrice;
-  maxInitialVolume = payload.maxInitialVolume || maxInitialVolume;
-  scoreThreshold = payload.scoreThreshold || scoreThreshold;
+  if ("threshold" in payload) threshold = payload.threshold == null ? null : payload.threshold;
+  if ("threshold30" in payload) threshold30 = payload.threshold30 == null ? null : payload.threshold30;
+  if ("threshold1m" in payload) threshold1m = payload.threshold1m == null ? null : payload.threshold1m;
+  if ("thresholdVel1m30" in payload) thresholdVel1m30 = payload.thresholdVel1m30 == null ? null : payload.thresholdVel1m30;
+  if ("maxInitialPrice" in payload) maxInitialPrice = payload.maxInitialPrice == null ? null : payload.maxInitialPrice;
+  if ("maxInitialVolume" in payload) maxInitialVolume = payload.maxInitialVolume == null ? null : payload.maxInitialVolume;
+  if ("scoreThreshold" in payload) scoreThreshold = payload.scoreThreshold == null ? null : payload.scoreThreshold;
+  // шкала v16 другая: старый порог 60 теперь значит ~160 алертов в день, ставим новый дефолт
+  if (payload.scoreVersion !== SCORE_VERSION && scoreThreshold != null) scoreThreshold = SCORE_DEFAULT_THRESHOLD;
   scoreOnlyMode = !!payload.scoreOnlyMode;
   sortMode = payload.sortMode === "score" ? "score" : "delta";
   takerStreamOn = payload.takerStreamOn !== false;
   everInTop30 = payload.everInTop30 || {};
   everInTop15 = payload.everInTop15 || {};
+  tradePlanOn = payload.tradePlanOn !== false;
+  tradeStopPct = payload.tradeStopPct || tradeStopPct;
+  tradeTargetPct = payload.tradeTargetPct || tradeTargetPct;
+  tradeTimeHours = payload.tradeTimeHours || tradeTimeHours;
+  tradeEquity = typeof payload.tradeEquity === "number" ? payload.tradeEquity : TRADE_STARTING_EQUITY;
+  openTrades = payload.openTrades || {};
+  closedTrades = payload.closedTrades || [];
+  thresholdLog = payload.thresholdLog || [];
+  // старый формат signalSeq был { SPOT, "USDT-M" } (счётчик на весь рынок, не на пару) —
+  // если сохранённое значение в этой форме, не переносим его, просто считаем заново по парам.
+  signalSeq = { SPIKE: {}, SPIKE30: {}, VEL1M: {}, VEL1M30: {} };
+  for (const t of NUMBERED_SIGNAL_TYPES) {
+    const saved = payload.signalSeq && payload.signalSeq[t];
+    const isOldShape = saved && Object.keys(saved).every(k => k === "SPOT" || k === "USDT-M");
+    if (saved && typeof saved === "object" && !isOldShape) signalSeq[t] = { ...saved };
+  }
+  lastSignalPct24h = (payload.lastSignalPct24h && typeof payload.lastSignalPct24h === "object") ? { ...payload.lastSignalPct24h } : {};
+  pairSignalLog = (payload.pairSignalLog && typeof payload.pairSignalLog === "object") ? payload.pairSignalLog : {};
+  pairColumnOrder = Array.isArray(payload.pairColumnOrder) ? payload.pairColumnOrder : [];
+  telegramOn = !!payload.telegramOn;
+  telegramToken = payload.telegramToken || "";
+  telegramChatId = payload.telegramChatId || "";
+  filtersCollapsed = payload.filtersCollapsed !== false;
+  totalTriggeredCount = typeof payload.totalTriggeredCount === "number" ? payload.totalTriggeredCount : 0;
+  totalEarlyCount = typeof payload.totalEarlyCount === "number" ? payload.totalEarlyCount : 0;
   startTime = payload.startTime || Date.now();
   return true;
 }
@@ -852,21 +1241,95 @@ function numOrNull(v) {
   const n = parseFloat(v);
   return isNaN(n) ? null : n;
 }
+function resolveQuoteVolume(t, price) {
+  // Только USDT-оборот. Никогда не берём сырое v (штуки монеты) — у HOT/SHIB
+  // это миллиарды и пара вечно занимает топ-1.
+  const qLong = numOrNull(t.quoteVolume);
+  const qShort = numOrNull(t.q);
+  const base = numOrNull(t.volume != null ? t.volume : t.v);
+  const fromBase = (base != null && price > 0) ? base * price : null;
+  const q = (qLong != null) ? qLong : qShort;
+  if (q != null && q >= 0) {
+    if (fromBase == null || fromBase <= 0) return q;
+    const err = Math.abs(q - fromBase) / Math.max(fromBase, q, 1);
+    // q и v*price должны быть одного порядка. Если q — это last qty (Q),
+    // а не 24ч quote — err огромный, тогда берём v*price.
+    if (err <= 0.55) return q;
+    if (q > 0 && q < fromBase * 0.02 && fromBase >= 1000) return fromBase;
+    return q;
+  }
+  return fromBase != null ? fromBase : NaN;
+}
+function volumeJumpImplausible(prevVol, nextVol, prevTickAt, now) {
+  if (prevVol == null || prevVol <= 0 || nextVol == null || isNaN(nextVol)) return false;
+  if (nextVol === prevVol) return false;
+  const ratio = nextVol / prevVol;
+  const dt = prevTickAt ? (now - prevTickAt) : 0;
+  // 24ч quoteVolume не прыгает в разы за секунды — это почти всегда поле v (базовые монеты) вместо q (USDT)
+  if (dt > 0 && dt <= 15000 && (ratio >= 2.5 || ratio <= 0.4) && Math.abs(nextVol - prevVol) >= 2_000_000) return true;
+  if (dt > 0 && dt <= 120000 && (ratio >= 8 || ratio <= 0.15) && Math.abs(nextVol - prevVol) >= 5_000_000) return true;
+  if (ratio >= 20 && nextVol >= 20_000_000) return true;
+  return false;
+}
+function volumeLooksCorrupt(r) {
+  if (!r || r.baseVol == null || r.curVol == null) return false;
+  if (!(r.baseVol > 0)) return r.curVol >= 50_000_000;
+  return (r.curVol / r.baseVol) >= 20 && r.curVol >= 20_000_000;
+}
+function sanitizeVolumeRows() {
+  for (const key of Object.keys(rows)) {
+    const r = rows[key];
+    if (!r) continue;
+    if (maxInitialVolume != null && r.baseVol > maxInitialVolume) { purgeKey(key); continue; }
+    if (maxInitialVolume != null && r.curVol > maxInitialVolume * 40 && (r.mult || 1) >= 15) {
+      purgeKey(key);
+      continue;
+    }
+    if (volumeLooksCorrupt(r)) {
+      r.curVol = r.baseVol;
+      r.delta = 0;
+      r.mult = 1;
+      r.rollingDelta = null;
+      r.rolling30 = null;
+      r.d1m = null;
+      r.rvol = null;
+      delete history[key];
+      delete cycleState[key];
+    }
+  }
+}
+function resolvePct24h(t, price) {
+  const open = numOrNull(t.openPrice != null ? t.openPrice : t.o);
+  const fromOpen = (open != null && open > 0 && price > 0) ? ((price / open) - 1) * 100 : null;
+  const fromField = numOrNull(t.priceChangePercent != null ? t.priceChangePercent : t.P);
+  if (fromOpen != null && isFinite(fromOpen)) {
+    // Поле P на части !ticker@arr приходит "0.00" при живом ходе дня.
+    // Если open и last разошлись — верим формуле, как в приложении Binance.
+    if (fromField != null && isFinite(fromField) && Math.abs(fromField - fromOpen) <= 0.6) return fromField;
+    return fromOpen;
+  }
+  return fromField;
+}
 function parseTick(t) {
   const symbol = t.symbol;
   const quote = matchQuote(symbol);
   if (!quote) return null;
-  const curVol = parseFloat(t.quoteVolume);
   const price = parseFloat(t.lastPrice);
-  const pct = parseFloat(t.priceChangePercent);
-  if (isNaN(curVol) || isNaN(price)) return null;
+  const pct = resolvePct24h(t, price);
+  const curVol = resolveQuoteVolume(t, price);
+  if (isNaN(curVol) || isNaN(price) || curVol < 0) return null;
   return {
     symbol, base: symbol.slice(0, symbol.length - quote.length), quote, price, pct, curVol,
+    openPrice: numOrNull(t.openPrice != null ? t.openPrice : t.o),
     // extra fields already present in the same !ticker@arr / REST 24hr message — no new stream needed
-    trades: numOrNull(t.count),
-    bidPrice: numOrNull(t.bidPrice), bidQty: numOrNull(t.bidQty),
-    askPrice: numOrNull(t.askPrice), askQty: numOrNull(t.askQty),
-    vwap: numOrNull(t.weightedAvgPrice), high: numOrNull(t.highPrice), low: numOrNull(t.lowPrice),
+    trades: numOrNull(t.count != null ? t.count : t.n),
+    bidPrice: numOrNull(t.bidPrice != null ? t.bidPrice : t.b),
+    bidQty: numOrNull(t.bidQty != null ? t.bidQty : t.B),
+    askPrice: numOrNull(t.askPrice != null ? t.askPrice : t.a),
+    askQty: numOrNull(t.askQty != null ? t.askQty : t.A),
+    vwap: numOrNull(t.weightedAvgPrice != null ? t.weightedAvgPrice : t.w),
+    high: numOrNull(t.highPrice != null ? t.highPrice : t.h),
+    low: numOrNull(t.lowPrice != null ? t.lowPrice : t.l),
   };
 }
 
@@ -878,20 +1341,81 @@ function findAnchor(samples, now, windowMs) {
   }
   return anchor;
 }
+function windowTolerance(windowMs) {
+  // редкие тики альтов: 8с было слишком жёстко — RVOL / Δ1м / Δ%1м оставались пустыми
+  if (windowMs >= 60000) return 50000;
+  if (windowMs >= 30000) return 20000;
+  return ANCHOR_TOLERANCE_MS;
+}
 function rollingDelta(samples, now, windowMs, curVol) {
-  const anchor = findAnchor(samples, now, windowMs);
-  if (!anchor) return null;
-  const age = now - anchor.t;
-  if (age > windowMs + ANCHOR_TOLERANCE_MS) return null;
-  return curVol - anchor.vol;
+  return estimateLiveQuoteDelta(samples, now, windowMs, curVol).vol;
 }
 function rollingDeltaField(samples, now, windowMs, curVal, field) {
   const anchor = findAnchor(samples, now, windowMs);
-  if (!anchor) return null;
-  const age = now - anchor.t;
-  if (age > windowMs + ANCHOR_TOLERANCE_MS) return null;
-  if (anchor[field] === null || anchor[field] === undefined) return null;
-  return curVal - anchor[field];
+  if (anchor && anchor[field] !== null && anchor[field] !== undefined) {
+    const age = now - anchor.t;
+    if (age <= windowMs + windowTolerance(windowMs)) return curVal - anchor[field];
+  }
+  return null;
+}
+// 24ч quoteVolume — скользящее окно: за W мс с него сходит кусок «сутки назад».
+// Сырая дельта q_now - q_ago поэтому занижает живой оборот и часто уходит в минус
+// на реальном пампе (вчера в эту минуту лилось больше). Компенсируем равномерным
+// rolloff. НЕ масштабируем короткий хвост до полного окна — это и выкидывало
+// HOT/шум в топ-1 с фейковым +$N / 30с.
+function estimateLiveQuoteDelta(samples, now, windowMs, curVol) {
+  const empty = { vol: null, raw: null, scaled: false, span: 0 };
+  if (curVol == null || isNaN(curVol) || !samples || samples.length < 2) return empty;
+  const anchor = findAnchor(samples, now, windowMs);
+  if (anchor && anchor.vol != null) {
+    const age = now - anchor.t;
+    if (age <= windowMs + windowTolerance(windowMs)) {
+      const raw = curVol - anchor.vol;
+      const rolloff = curVol > 0 ? curVol * (windowMs / 86400000) : 0;
+      return { vol: raw + rolloff, raw, scaled: false, span: age };
+    }
+  }
+  // ещё нет полной ширины окна — показываем сколько УЖЕ зашло, без домножения
+  const oldest = samples[0];
+  if (oldest && oldest.vol != null) {
+    const span = now - oldest.t;
+    if (span >= 300) {
+      const raw = curVol - oldest.vol;
+      const rolloff = curVol > 0 ? curVol * (span / 86400000) : 0;
+      return { vol: raw + rolloff, raw, scaled: false, span };
+    }
+  }
+  return empty;
+}
+function trailingPairVol(key, now, windowMs) {
+  const samples = history[key];
+  const row = rows[key];
+  const empty = { current: null, prev: null };
+  if (!row || row.curVol == null) return empty;
+  const kNow = liveFromKline(key, now, windowMs);
+  let current = (kNow != null && kNow >= 0) ? kNow : null;
+  if (current == null && samples && samples.length >= 2) {
+    const est = estimateLiveQuoteDelta(samples, now, windowMs, row.curVol);
+    current = est.vol;
+  }
+  let prev = null;
+  if (samples && samples.length >= 3) {
+    const a1 = findAnchor(samples, now, windowMs);
+    const a2 = findAnchor(samples, now, windowMs * 2);
+    if (a1 && a2 && a1.vol != null && a2.vol != null && a1.t !== a2.t) {
+      prev = (a1.vol - a2.vol) + (a1.vol > 0 ? a1.vol * (windowMs / 86400000) : 0);
+    }
+  }
+  return { current, prev };
+}
+function scaleWindowDelta(samples, now, windowMs, curVal, field) {
+  // оставлено как no-op: экстраполяция короткого окна давала фейковые лидеры
+  return null;
+}
+function keepFeat(computed, prev, field) {
+  if (computed !== null && computed !== undefined && !isNaN(computed)) return computed;
+  if (prev && prev[field] !== null && prev[field] !== undefined && !isNaN(prev[field])) return prev[field];
+  return null;
 }
 // Linear-regression slope of volume over a window, in $/minute. Replaces the old
 // ratio-based accel (recent30/prev30), which produced garbage multiples whenever
@@ -912,6 +1436,39 @@ function linRegSlopePerMin(samples, now, windowMs) {
 }
 function computeAccel(samples, now, curVol) {
   return linRegSlopePerMin(samples, now, SLOPE_WINDOW_MS);
+}
+function liveFromKline(key, now, windowMs) {
+  const hist = klineQuoteHist[key];
+  const cs = candleShape[key];
+  if (!cs || cs.q == null || isNaN(cs.q)) return null;
+  if (now - cs.at > 8000) return null;
+  if (windowMs <= 60000 && windowMs >= 45000) {
+    // текущая 1м свеча Binance — то, что видит пользователь на графике
+    return cs.q;
+  }
+  if (!hist || hist.length < 2) {
+    if (windowMs <= 30000 && cs.q >= 0) {
+      const age = Math.max(1000, now - (cs.openTime || now));
+      if (age <= windowMs + 2000) return cs.q;
+      return cs.q * (windowMs / age);
+    }
+    return null;
+  }
+  // ищем семпл той же свечи ~windowMs назад; если свеча моложе окна — весь q свечи
+  const target = now - windowMs;
+  let older = null;
+  for (const s of hist) {
+    if (s.t <= target) older = s;
+  }
+  if (older && older.openTime === cs.openTime) return Math.max(0, cs.q - older.q);
+  if (older && older.openTime !== cs.openTime) {
+    // пересекли границу минуты: остаток прошлой + текущая
+    const prevEnd = hist.filter(s => s.openTime === older.openTime).pop();
+    const prevRemain = prevEnd ? Math.max(0, prevEnd.q - older.q) : 0;
+    return prevRemain + cs.q;
+  }
+  if (cs.openTime && (now - cs.openTime) <= windowMs + 1500) return cs.q;
+  return null;
 }
 function median(arr) {
   if (!arr || !arr.length) return null;
@@ -946,142 +1503,424 @@ function markFired(key, type) {
   ensureLastFired(key)[type] = Date.now();
 }
 function pushAlert(entry) {
-  // запись сигналов отключена по запросу — не копить журнал и не писать на диск
   signalCount[entry.key] = (signalCount[entry.key] || 0) + 1;
+  totalTriggeredCount++;
+  if (isEarlyType(entry.type)) totalEarlyCount++;
+  dataDirty = true;
 }
 function pushShelfAlert(entry) {
   // полка тоже без записи
 }
-const EARLY_TYPES = new Set(["VEL1M", "VEL2M", "ACCEL", "SIGNAL"]); // "ранние" = быстрее, чем базовый SPIKE
+const EARLY_TYPES = new Set(["VEL1M", "VEL1M30", "ACCEL", "SIGNAL"]); // "ранние" = быстрее, чем базовый SPIKE
 function isEarlyType(type) {
   return EARLY_TYPES.has(type);
 }
 
-// ---------- v15: composite score ----------
-// Каждый компонент даёт баллы (или отнимает), сумма зажимается в 0..100.
-// Смысл шкалы: 60+ — совпало объёмное И ценовое подтверждение; 80+ — совпало почти всё.
-// Веса подобраны на глаз, их специально держим в одном месте, чтобы крутить по статистике.
+// ---------- v16: score, откалиброванный на годе истории ----------
+// Веса не «на глаз»: research/futures_breakout_score/. Год 1м-свечей (2025-09..2026-08)
+// всех USDⓈ-M фьючерсов, 743 пары. Минута берётся в выборку, только если объём пары за
+// предыдущие 24ч был ≤ $3M в ЭТУ минуту (пара входит в выборку и выпадает из неё в течение
+// года). Кандидат = минута с RVOL ≥ 3, ценой вверх и оборотом ≥ $1.5k (3.9M минут).
+// «Вынос» = цена дала +10% в течение часа раньше, чем −5%.
+// Логистическая регрессия по корзинам признаков → целые баллы. Сумма максимумов = 100,
+// неизвестный признак (нет свечей) = 0 баллов, так что без данных score не стреляет.
+// Вне выборки (обучение сен–апр, проверка май–авг): AUC 0.88 против 0.72 у v15.
+// Что выкинуто, потому что на годе истории не отделяло вынос от шума при прочих равных:
+// форма свечи, тейкер-доля, средний чек (он работает в ОБРАТНУЮ сторону: у выносов
+// много мелких сделок), тихая полка, свежий 24ч-хай. Стакан/спред на фьючерсах в
+// !ticker@arr не приходят вообще.
+const SCORE_VERSION = 2;
+const SCORE_DEFAULT_THRESHOLD = 80;
+const SCORE_BINS = {
+  pct60m:    [-3, -1, 0, 0.5, 1, 2, 3, 5, 8],
+  pct15m:    [-1, 0, 0.3, 0.7, 1.2, 2, 3, 5],
+  pct5m:     [0, 0.3, 0.6, 1, 2, 3],
+  pct1m:     [0.1, 0.2, 0.35, 0.5, 1, 2],
+  vwapDev:   [-2, 0, 1, 2, 3, 5, 8],
+  sig60:     [0.07, 0.1, 0.13, 0.17, 0.22, 0.3, 0.45],
+  rng:       [0.3, 0.5, 0.7, 0.85, 0.95],
+  rvolPre20: [0.5, 1, 2, 3, 5, 10],
+  rvol5:     [1.5, 2.5, 4, 6, 10, 20],
+  pct24h:    [-5, -2, 0, 2, 5, 10, 20],
+};
+// баллы по корзинам: индекс = сколько границ из SCORE_BINS значение уже перешло
+const SCORE_POINTS = {
+  pct60m:    [6, 3, 0, 0, 3, 4, 7, 8, 10, 11],
+  pct15m:    [5, 0, 0, 2, 4, 6, 8, 9, 10],
+  pct5m:     [2, 0, 3, 6, 8, 10, 11],
+  pct1m:     [0, 1, 3, 5, 6, 9, 10],
+  vwapDev:   [2, 0, 2, 4, 6, 8, 10, 10],
+  sig60:     [2, 0, 0, 2, 3, 5, 7, 11],
+  rng:       [0, 5, 7, 8, 8, 7],
+  rvolPre20: [2, 0, 0, 3, 5, 7, 11],
+  rvol5:     [0, 0, 2, 4, 6, 7, 10],
+  pct24h:    [3, 1, 0, 0, 3, 6, 8, 7],
+};
+const SCORE_PART_LABEL = {
+  pct60m:    v => (v >= 0 ? "+" : "") + v.toFixed(1) + "%/1ч",
+  pct15m:    v => (v >= 0 ? "+" : "") + v.toFixed(1) + "%/15м",
+  pct5m:     v => "+" + v.toFixed(1) + "%/5м",
+  pct1m:     v => "+" + v.toFixed(1) + "%/1м",
+  vwapDev:   v => "VWAP " + (v >= 0 ? "+" : "") + v.toFixed(1) + "%",
+  sig60:     v => "вола " + v.toFixed(2) + "%/м",
+  rng:       v => "диапазон " + Math.round(v * 100) + "%",
+  rvolPre20: v => "фон ×" + v.toFixed(1),
+  rvol5:     v => "RVOL5 ×" + v.toFixed(1),
+  pct24h:    v => (v >= 0 ? "+" : "") + v.toFixed(0) + "%/24ч",
+};
+function scoreBinIndex(x, edges) {
+  let i = 0;
+  while (i < edges.length && x >= edges[i]) i++;
+  return i;
+}
 function computeScore(f) {
-  const parts = [];
   let s = 0;
-
-  // 1) RVOL — во сколько раз минутный объём выше средней минуты этих суток.
-  // Это замена долларовым порогам: $30к/мин — событие для пары на $200к и пыль для пары на $3M.
-  if (f.rvol !== null) {
-    if (f.rvol >= 25)      { s += 30; parts.push("RVOL ×" + f.rvol.toFixed(0)); }
-    else if (f.rvol >= 12) { s += 22; parts.push("RVOL ×" + f.rvol.toFixed(0)); }
-    else if (f.rvol >= 6)  { s += 14; parts.push("RVOL ×" + f.rvol.toFixed(1)); }
-    else if (f.rvol >= 3)  { s += 7; }
-    else if (f.rvol < 1)   { s -= 10; }
+  const contrib = [];
+  for (const name in SCORE_POINTS) {
+    const x = f[name];
+    if (x === null || x === undefined || !isFinite(x)) continue;
+    const pts = SCORE_POINTS[name][scoreBinIndex(x, SCORE_BINS[name])];
+    s += pts;
+    const maxPts = Math.max(...SCORE_POINTS[name]);
+    if (pts >= 0.7 * maxPts) contrib.push({ pts, label: SCORE_PART_LABEL[name](x) });
   }
-
-  // 2) Цена за минуту. Без этого объём одинаково выглядит и на выносе, и на сливе.
-  if (f.pct1m !== null) {
-    if (f.pct1m >= 2)         { s += 25; parts.push("+" + f.pct1m.toFixed(1) + "%/1м"); }
-    else if (f.pct1m >= 1)    { s += 18; parts.push("+" + f.pct1m.toFixed(1) + "%/1м"); }
-    else if (f.pct1m >= 0.4)  { s += 10; }
-    else if (f.pct1m <= -0.4) { s -= 18; parts.push("цена вниз"); }
-  }
-
-  // 3) Пробой дневного максимума в реальном времени (24ч high тикнул вверх только что).
-  if (f.highFresh !== null && f.highFresh <= 120000) { s += 18; parts.push("новый хай 24ч"); }
-  else if (f.rng !== null && f.rng >= 0.9)  { s += 8; }
-  else if (f.rng !== null && f.rng <= 0.35) { s -= 8; }
-
-  // 4) Цена против VWAP: выше средневзвешенной = весь дневной объём в прибыли.
-  if (f.vwapDev !== null) {
-    if (f.vwapDev >= 3)       { s += 10; parts.push("выше VWAP"); }
-    else if (f.vwapDev >= 0.5){ s += 5; }
-    else if (f.vwapDev <= -3) { s -= 5; }
-  }
-
-  // 5) Средний размер сделки против собственной медианы — «кто-то ест стакан».
-  if (f.ats !== null && f.atsMedian) {
-    const k = f.ats / f.atsMedian;
-    if (k >= 4)      { s += 15; parts.push("чек ×" + k.toFixed(1)); }
-    else if (k >= 2) { s += 8; }
-  }
-
-  // 6) Перекос стакана (bookTicker уже приходит в !ticker@arr — бесплатно).
-  if (f.imbal !== null) {
-    if (f.imbal >= 0.75)      { s += 10; parts.push("бид давит"); }
-    else if (f.imbal >= 0.6)  { s += 5; }
-    else if (f.imbal <= 0.25) { s -= 8; parts.push("аск давит"); }
-  }
-
-  // 7) Доля тейкер-покупок из kline_1m (только по «горячим» парам).
-  if (f.taker !== null) {
-    if (f.taker >= 0.7)       { s += 15; parts.push("тейкер " + Math.round(f.taker * 100) + "%"); }
-    else if (f.taker >= 0.58) { s += 7; }
-    else if (f.taker <= 0.35) { s -= 12; parts.push("тейкер продаёт"); }
-  }
-
-  // 8) Выход из тихой полки ценнее, чем продолжение уже начавшегося движения.
-  if (f.wasQuiet) { s += 12; parts.push("из тихой полки"); }
-
-  // штраф: широкий спред = неликвид, вход будет дороже сигнала
-  if (f.spreadPct !== null && f.spreadPct >= 1.5) { s -= 10; parts.push("широкий спред"); }
-
-  return { score: Math.max(0, Math.min(100, Math.round(s))), parts };
+  contrib.sort((a, b) => b.pts - a.pts);
+  return { score: Math.max(0, Math.min(100, Math.round(s))), parts: contrib.map(c => c.label) };
 }
 
-// ---------- v15: kline_1m по «горячим» парам (taker buy ratio) ----------
-// Полный aggTrade по 400 парам машина не потянет, а вот 12 самых горячих —
-// легко. kline_1m отдаёт поле V (taker buy base volume) уже посчитанным.
-const HOT_MAX = 12;
+// ---------- v16: закрытые 1м-свечи для score (REST, только по «тёплым» парам) ----------
+// Score смотрит на час назад (импульс 5/15/60м, волатильность, фоновый объём), а лента
+// !ticker@arr этого не даёт: её 24ч-дельта врёт из-за выпадающего вчерашнего объёма.
+// Поэтому по паре, которая начала шевелиться (RVOL ≥ 2 и цена вверх), берём 66 закрытых
+// 1м-свечей REST'ом и обновляем раз в минуту, пока пара тёплая. Вес запроса — 1, при
+// лимите Binance 2400/мин мы укладываемся в BAR_MAX_PER_MIN с большим запасом.
+const BAR_LIMIT = 66;
+const BAR_MAX_INFLIGHT = 4;
+const BAR_MAX_PER_MIN = 240;
+const BAR_STALE_MS = 3 * 60000;          // свечи старше 3 мин не используем
+const BAR_RETRY_MS = 15000;
+const BAR_KEEP_MS = 15 * 60000;          // кэш пары живёт 15 минут после последнего запроса
+let barCache = {};                       // key -> { bars:[{c,q,closeT}], at, pending, lastTry }
+let barInflight = 0;
+let barRequestTimes = [];
+function klinesUrl(marketId, symbol) {
+  return marketId === "USDT-M"
+    ? `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=1m&limit=${BAR_LIMIT}`
+    : `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=1m&limit=${BAR_LIMIT}`;
+}
+function requestBars(key, marketId, symbol, now) {
+  let c = barCache[key];
+  if (!c) c = barCache[key] = { bars: [], at: 0, pending: false, lastTry: 0 };
+  if (c.pending || now - c.lastTry < BAR_RETRY_MS) return;
+  const lastClose = c.bars.length ? c.bars[c.bars.length - 1].closeT : 0;
+  if (lastClose && now < lastClose + 60000 + 1500) return; // новая минута ещё не закрылась
+  if (barInflight >= BAR_MAX_INFLIGHT) return;
+  while (barRequestTimes.length && now - barRequestTimes[0] > 60000) barRequestTimes.shift();
+  if (barRequestTimes.length >= BAR_MAX_PER_MIN) return;
+  barRequestTimes.push(now);
+  c.pending = true; c.lastTry = now; barInflight++;
+  fetch(klinesUrl(marketId, symbol), { cache: "no-store" })
+    .then(res => res.ok ? res.json() : null)
+    .then(arr => {
+      if (!Array.isArray(arr)) return;
+      const t = Date.now();
+      const bars = [];
+      for (const k of arr) {
+        const closeT = +k[6], cl = parseFloat(k[4]), q = parseFloat(k[7]);
+        if (closeT < t && isFinite(cl) && cl > 0 && isFinite(q)) bars.push({ c: cl, q, closeT });
+      }
+      if (bars.length) { c.bars = bars; c.at = t; }
+    })
+    .catch(() => {})
+    .finally(() => { c.pending = false; barInflight--; });
+}
+function pruneBarCache(now) {
+  for (const k in barCache) if (now - barCache[k].lastTry > BAR_KEEP_MS && !barCache[k].pending) delete barCache[k];
+}
+setInterval(() => pruneBarCache(Date.now()), 60000);
+// Признаки так же, как в research/futures_breakout_score/proc.py: сигнальная минута —
+// последние 60с ленты (pct1m, d1m), всё остальное — закрытые свечи до неё.
+function barFeatures(key, now, price, curVol, d1m) {
+  const out = { pct5m: null, pct15m: null, pct60m: null, sig60: null, rvol5: null, rvolPre20: null };
+  const c = barCache[key];
+  if (!c || !c.bars.length || !(price > 0)) return out;
+  const bars = c.bars;
+  if (now - bars[bars.length - 1].closeT > BAR_STALE_MS) return out;
+  const closeAt = (T) => {
+    for (let i = bars.length - 1; i >= 0; i--) if (bars[i].closeT <= T) return bars[i].c;
+    return null;
+  };
+  const pctBack = (min) => {
+    const p0 = closeAt(now - min * 60000);
+    return p0 ? (price / p0 - 1) * 100 : null;
+  };
+  out.pct5m = pctBack(5);
+  out.pct15m = pctBack(15);
+  out.pct60m = pctBack(60);
+  const closes = bars.slice(-61).map(b => b.c);
+  if (closes.length >= 31) {
+    const r = [];
+    for (let i = 1; i < closes.length; i++) r.push(Math.log(closes[i] / closes[i - 1]));
+    const m = r.reduce((a, b) => a + b, 0) / r.length;
+    const v = r.reduce((a, b) => a + (b - m) * (b - m), 0) / (r.length - 1);
+    out.sig60 = Math.sqrt(v) * 100;
+  }
+  const exp = curVol > 0 ? curVol / 1440 : null;
+  if (exp) {
+    const before = bars.filter(b => b.closeT <= now - 60000);   // минуты до сигнальной
+    const pre20 = before.slice(-20);
+    if (pre20.length >= 10) out.rvolPre20 = pre20.reduce((a, b) => a + b.q, 0) / pre20.length / exp;
+    if (d1m !== null && before.length >= 4) {
+      out.rvol5 = (d1m + before.slice(-4).reduce((a, b) => a + b.q, 0)) / (5 * exp);
+    }
+  }
+  return out;
+}
+
+// ---------- v15: kline_1m по «горячим» парам (taker buy ratio + форма свечи) ----------
+// Полный aggTrade по 400 парам машина не потянет, а вот 12 самых горячих на КАЖДОМ
+// рынке — легко. kline_1m отдаёт taker buy base volume (V) и OHLC уже посчитанными.
+// До этого фикса горячий поток открывался только на spot-хосте и фильтровал
+// r.market === "SPOT" — фьючерсные пары (USDT-M) никогда не получали долю тейкера
+// в SCORE, хотя именно на низколиквидных фьючерсах она отделяет вынос от шпильки.
+const HOT_MAX = 24;
 const HOT_REBUILD_MS = 45000;
-let hotSocket = null;
-let hotSymbols = [];
-let lastHotRebuild = 0;
-function pickHotSymbols() {
-  return Object.values(rows)
-    .filter(r => r.market === "SPOT" && r.d1m !== null && r.d1m > 0)
-    .sort((a, b) => (b.score || 0) - (a.score || 0) || (b.d1m - a.d1m))
-    .slice(0, HOT_MAX)
-    .map(r => r.symbol.toLowerCase());
+const HOT_WS_HOST = { "SPOT": "wss://stream.binance.com:9443", "USDT-M": null /* dynamic fstreamMarketBase() */ };
+let hotSocket = {};          // market.id -> WebSocket
+let hotSymbols = {};         // market.id -> [symbol,...] в нижнем регистре
+let lastHotRebuild = {};     // market.id -> ts последней пересборки
+function pickHotSymbols(marketId) {
+  // Берём и оборот, и движение цены — иначе памп с «грязной» 24ч-дельтой
+  // (как ACH на скрине: график орёт, Δ1м отрицательная) не попадает в kline.
+  const pool = Object.values(rows).filter(r => r.market === marketId && !isExcluded(r.symbol) && !isDismissed(r.key));
+  const byVol = pool.filter(r => r.d1m != null && r.d1m > 0).sort((a, b) => b.d1m - a.d1m);
+  const byPx = pool.filter(r => r.pct1m != null).sort((a, b) => Math.abs(b.pct1m) - Math.abs(a.pct1m));
+  const byScore = pool.filter(r => (r.score || 0) >= 40).sort((a, b) => (b.score || 0) - (a.score || 0));
+  const seen = new Set();
+  const out = [];
+  const pushList = (list) => {
+    for (const r of list) {
+      if (seen.has(r.symbol) || out.length >= HOT_MAX) continue;
+      seen.add(r.symbol);
+      out.push(r.symbol.toLowerCase());
+    }
+  };
+  pushList(byScore);
+  pushList(byVol);
+  pushList(byPx);
+  return out;
 }
-function closeHotStream() {
-  if (hotSocket) { try { hotSocket.onclose = null; hotSocket.close(); } catch (e) {} }
-  hotSocket = null;
-  hotSymbols = [];
+function closeHotStream(marketId) {
+  const s = hotSocket[marketId];
+  if (s) { try { s.onclose = null; s.close(); } catch (e) {} }
+  hotSocket[marketId] = null;
+  hotSymbols[marketId] = [];
 }
-function rebuildHotStream() {
-  if (!takerStreamOn || paused) { if (hotSocket) closeHotStream(); return; }
+function closeAllHotStreams() { MARKETS.forEach(m => closeHotStream(m.id)); }
+function rebuildHotStream(marketId) {
+  if (!takerStreamOn || paused) { if (hotSocket[marketId]) closeHotStream(marketId); return; }
   const now = Date.now();
-  if (now - lastHotRebuild < HOT_REBUILD_MS) return;
-  const next = pickHotSymbols();
+  if (now - (lastHotRebuild[marketId] || 0) < HOT_REBUILD_MS) return;
+  const next = pickHotSymbols(marketId);
   if (!next.length) return;
-  if (next.join(",") === hotSymbols.join(",") && hotSocket && hotSocket.readyState === WebSocket.OPEN) {
-    lastHotRebuild = now;
+  const cur = hotSymbols[marketId] || [];
+  if (next.join(",") === cur.join(",") && hotSocket[marketId] && hotSocket[marketId].readyState === WebSocket.OPEN) {
+    lastHotRebuild[marketId] = now;
     return;
   }
-  lastHotRebuild = now;
-  if (hotSocket) { try { hotSocket.onclose = null; hotSocket.close(); } catch (e) {} }
-  hotSymbols = next;
-  const url = "wss://stream.binance.com:9443/stream?streams=" + hotSymbols.map(x => x + "@kline_1m").join("/");
-  try { hotSocket = new WebSocket(url); } catch (e) { hotSocket = null; return; }
-  hotSocket.onmessage = (ev) => {
+  lastHotRebuild[marketId] = now;
+  if (hotSocket[marketId]) { try { hotSocket[marketId].onclose = null; hotSocket[marketId].close(); } catch (e) {} }
+  hotSymbols[marketId] = next;
+  const host = marketId === "USDT-M" ? fstreamMarketBase() : HOT_WS_HOST[marketId];
+  const url = host + "/stream?streams=" + next.map(x => x + "@kline_1m").join("/");
+  let sock;
+  try { sock = new WebSocket(url); } catch (e) { hotSocket[marketId] = null; return; }
+  hotSocket[marketId] = sock;
+  sock.onmessage = (ev) => {
     try {
       const msg = JSON.parse(ev.data);
       const k = msg && msg.data && msg.data.k;
       if (!k) return;
       const vol = parseFloat(k.v), buy = parseFloat(k.V);
-      if (!(vol > 0) || isNaN(buy)) return;
-      takerRatio["SPOT:" + k.s] = { r: buy / vol, at: Date.now() };
+      const qQuote = parseFloat(k.q);
+      const key = marketId + ":" + k.s;
+      if (vol > 0 && !isNaN(buy)) takerRatio[key] = { r: buy / vol, at: Date.now() };
+      const o = parseFloat(k.o), h = parseFloat(k.h), l = parseFloat(k.l), c = parseFloat(k.c);
+      if (h > l && !isNaN(o) && !isNaN(c)) {
+        const prev = candleShape[key];
+        const sameCandle = prev && prev.openTime === k.t;
+        candleShape[key] = {
+          o, h, l, c, v: vol, q: isNaN(qQuote) ? null : qQuote,
+          openTime: k.t, closed: !!k.x, at: Date.now(),
+        };
+        if (!klineQuoteHist[key]) klineQuoteHist[key] = [];
+        const hist = klineQuoteHist[key];
+        const last = hist.length ? hist[hist.length - 1] : null;
+        if (!last || !sameCandle || Date.now() - last.t >= 800) {
+          hist.push({ t: Date.now(), q: isNaN(qQuote) ? 0 : qQuote, openTime: k.t });
+          while (hist.length && Date.now() - hist[0].t > 150000) hist.shift();
+        } else {
+          last.q = isNaN(qQuote) ? last.q : qQuote;
+          last.t = Date.now();
+        }
+      }
     } catch (e) {}
   };
-  hotSocket.onerror = () => {};
-  hotSocket.onclose = () => { hotSocket = null; };
+  sock.onerror = () => {};
+  sock.onclose = () => { if (hotSocket[marketId] === sock) hotSocket[marketId] = null; };
 }
-setInterval(rebuildHotStream, 15000);
+function rebuildAllHotStreams() { MARKETS.forEach(m => rebuildHotStream(m.id)); }
+setInterval(rebuildAllHotStreams, 15000);
+
+// ---------- funding rate + open interest (только USDT-M) ----------
+// !markPrice@arr — один поток на весь рынок фьючерсов сразу (без подписки по парам),
+// даёт funding rate и mark price бесплатно и в реальном времени. Это гораздо честнее
+// как индикатор "куда ставят деньги", чем taker_buy_share — 12-месячный бэктест
+// (research/binance_pump_patterns) показал, что доля тейкера почти не отличает
+// вынос от слива (P(REAL>FAIL) ≈ 0.51), а funding отражает реальный перекос лонг/шорт
+// по всему рынку. Open Interest в тикере не отдаётся вообще — только REST, поэтому
+// опрашиваем его не по всем 400+ парам (упрёмся в лимиты), а только по тем же 12
+// «горячим» USDT-M парам, что уже опрашивает тейкер-поток.
+let markPriceSocket = null;
+let markPriceFailStreak = 0;
+function connectMarkPriceStream() {
+  if (paused) return;
+  if (markPriceSocket && markPriceSocket.readyState === WebSocket.OPEN) return;
+  let sock;
+  try { sock = new WebSocket(usdtmMarkPriceWsUrl()); }
+  catch (e) { return; }
+  markPriceSocket = sock;
+  sock.onmessage = (ev) => {
+    try {
+      markPriceFailStreak = 0;
+      const arr = JSON.parse(ev.data);
+      if (!Array.isArray(arr)) return;
+      const now = Date.now();
+      for (const m of arr) {
+        const r = parseFloat(m.r), p = parseFloat(m.p);
+        if (!isNaN(r)) fundingRate[m.s] = { r, price: isNaN(p) ? null : p, at: now };
+      }
+    } catch (e) {}
+  };
+  sock.onerror = () => {};
+  sock.onclose = () => {
+    if (markPriceSocket === sock) markPriceSocket = null;
+    markPriceFailStreak++;
+    if (markPriceFailStreak >= 2) { rotateFstreamMarketBase("markPrice fails"); markPriceFailStreak = 0; }
+  };
+}
+function closeMarkPriceStream() {
+  if (markPriceSocket) { try { markPriceSocket.onclose = null; markPriceSocket.close(); } catch (e) {} }
+  markPriceSocket = null;
+}
+setInterval(() => { if (paused) closeMarkPriceStream(); else connectMarkPriceStream(); }, 10000);
+connectMarkPriceStream();
+
+const OI_HISTORY_MAX = 8;     // ~4 минуты при опросе раз в 30с
+const OI_POLL_MS = 30000;
+const OI_WATCH_TTL_MS = 10 * 60 * 1000; // держим пару в опросе 10 минут после последнего сигнала
+let oiPolling = false;
+async function pollOiSymbol(sym) {
+  try {
+    const res = await fetch(`https://fapi.binance.com/fapi/v1/openInterest?symbol=${sym}`, { cache: "no-store" });
+    if (!res.ok) return;
+    const data = await res.json();
+    const qty = parseFloat(data.openInterest);
+    const rowPx = rows["USDT-M:" + sym] && rows["USDT-M:" + sym].price;
+    const mark = (fundingRate[sym] && fundingRate[sym].price) || (rowPx > 0 ? rowPx : null);
+    if (isNaN(qty) || !mark) return;
+    const usd = qty * mark;
+    if (!oiHistory[sym]) oiHistory[sym] = [];
+    oiHistory[sym].push({ t: Date.now(), oi: usd });
+    if (oiHistory[sym].length > OI_HISTORY_MAX) oiHistory[sym].shift();
+  } catch (e) {}
+}
+async function pollOpenInterestOnce() {
+  if (paused || oiPolling) return;
+  const now = Date.now();
+  for (const sym in oiWatchSymbols) {
+    if (now - oiWatchSymbols[sym] > OI_WATCH_TTL_MS) delete oiWatchSymbols[sym];
+  }
+  // Раньше опрашивали только "горячие" топ-12 пар (по score/Δ1м) — но пара, которая
+  // выстрелила сигналом, почти всегда НЕ входит в этот рейтинг заранее, поэтому OI
+  // в телеграм почти никогда не приходил. Теперь дополнительно опрашиваем все пары,
+  // по которым недавно сработал хоть один сигнал (см. oiChangePctForSignal).
+  const symbols = new Set([
+    ...(hotSymbols["USDT-M"] || []).map(s => s.toUpperCase()),
+    ...Object.keys(oiWatchSymbols),
+    ...tableOiSymbols(36),
+  ]);
+  if (!symbols.size) return;
+  oiPolling = true;
+  try {
+    for (const sym of symbols) await pollOiSymbol(sym);
+  } finally {
+    oiPolling = false;
+  }
+}
+setInterval(pollOpenInterestOnce, OI_POLL_MS);
+function getOiChangePct(symbol) {
+  const h = oiHistory[symbol];
+  if (!h || h.length < 2 || !h[0].oi) return null;
+  return (h[h.length - 1].oi / h[0].oi - 1) * 100;
+}
+let oiTableCursor = 0;
+function tableOiSymbols(limit) {
+  const list = Object.values(rows)
+    .filter(r => r && r.market === "USDT-M" && r.symbol && !isExcluded(r.symbol) && !isDismissed(r.key))
+    .sort((a, b) => (b.delta || 0) - (a.delta || 0));
+  if (!list.length) return [];
+  const n = Math.min(limit, list.length);
+  const out = [];
+  for (let i = 0; i < n; i++) out.push(list[(oiTableCursor + i) % list.length].symbol);
+  oiTableCursor = (oiTableCursor + n) % list.length;
+  return out;
+}
+function oiSnapshot(symbol) {
+  const h = oiHistory[symbol];
+  if (!h || !h.length || !(h[h.length - 1].oi > 0)) return { usd: null, pct: null };
+  const usd = h[h.length - 1].oi;
+  const pct = (h.length >= 2 && h[0].oi) ? (usd / h[0].oi - 1) * 100 : null;
+  return { usd, pct };
+}
+// Вызывается из каждого порогового сигнала: ставит пару в очередь опроса OI (если
+// её там ещё нет) и сразу же дёргает первый замер, не дожидаясь общего 30-секундного
+// цикла — так следующий сигнал по этой же паре (а во время памп-серии их обычно
+// несколько подряд) уже получит реальный % изменения OI.
+function oiChangePctForSignal(marketId, symbol) {
+  if (marketId !== "USDT-M") return null;
+  oiWatchSymbols[symbol] = Date.now();
+  if (!oiHistory[symbol]) pollOiSymbol(symbol);
+  return getOiChangePct(symbol);
+}
 
 // ---------- websocket feed ----------
 function wsTickerToTick(item) {
   // Normalize Binance !ticker@arr fields (s/c/P/q/n/b/B/a/A/w/h/l) to the shape parseTick() expects.
+  // /market и REST иногда отдают уже длинные имена — берём оба варианта.
+  if (!item) return item;
+  if (item.data && typeof item.data === "object" && !Array.isArray(item.data)) item = item.data;
+  // после CM-миграции !ticker@arr мешает UM и CM. CM (st=2) имеет другой смысл q — выкидываем.
+  if (item.st === 2 || item.st === "2") return null;
   return {
-    symbol: item.s, quoteVolume: item.q, lastPrice: item.c, priceChangePercent: item.P,
-    count: item.n, bidPrice: item.b, bidQty: item.B, askPrice: item.a, askQty: item.A,
-    weightedAvgPrice: item.w, highPrice: item.h, lowPrice: item.l,
+    symbol: item.s || item.symbol,
+    quoteVolume: item.quoteVolume != null ? item.quoteVolume : item.q,
+    volume: item.volume != null ? item.volume : item.v,
+    q: item.q,
+    v: item.v,
+    lastPrice: item.c != null ? item.c : item.lastPrice,
+    priceChangePercent: item.P != null ? item.P : item.priceChangePercent,
+    openPrice: item.o != null ? item.o : item.openPrice,
+    o: item.o,
+    P: item.P,
+    count: item.n != null ? item.n : item.count,
+    bidPrice: item.b != null ? item.b : item.bidPrice,
+    bidQty: item.B != null ? item.B : item.bidQty,
+    askPrice: item.a != null ? item.a : item.askPrice,
+    askQty: item.A != null ? item.A : item.askQty,
+    weightedAvgPrice: item.w != null ? item.w : item.weightedAvgPrice,
+    highPrice: item.h != null ? item.h : item.highPrice,
+    lowPrice: item.l != null ? item.l : item.lowPrice,
   };
 }
 function connectMarket(market) {
@@ -1092,7 +1931,7 @@ function connectMarket(market) {
 
   let ws;
   try {
-    ws = new WebSocket(market.wsUrl);
+    ws = new WebSocket(marketWsUrl(market));
   } catch (e) {
     scheduleReconnect(market);
     return;
@@ -1109,11 +1948,13 @@ function connectMarket(market) {
     if (paused) { statuses[market.id] = "paused"; updateStatusLine(); return; }
     let arr;
     try {
-      arr = JSON.parse(ev.data);
-      if (!Array.isArray(arr)) return;
+      const raw = JSON.parse(ev.data);
+      if (Array.isArray(raw)) arr = raw;
+      else if (raw && Array.isArray(raw.data)) arr = raw.data;
+      else return;
     } catch (e) { return; }
     wsFailStreak[market.id] = 0;
-    handleTickerBatch(market, arr.map(wsTickerToTick));
+    handleTickerBatch(market, arr.map(wsTickerToTick).filter(Boolean));
   };
   ws.onerror = () => {
     errCounts[market.id] = (errCounts[market.id] || 0) + 1;
@@ -1127,12 +1968,25 @@ function connectMarket(market) {
 }
 function scheduleReconnect(market) {
   if (reconnectTimer[market.id]) return;
-  const delay = reconnectDelay[market.id] || RECONNECT_BASE_MS;
+  // Aggressive reconnect: keep base delay low; rotate endpoints after a couple of fails.
+  const delay = Math.min(reconnectDelay[market.id] || RECONNECT_BASE_MS, 4000);
   reconnectTimer[market.id] = setTimeout(() => {
     reconnectTimer[market.id] = null;
+    wsFailStreak[market.id] = (wsFailStreak[market.id] || 0) + 1;
+    if (market.id === "USDT-M") {
+      if ((wsFailStreak[market.id] || 0) >= 2) {
+        rotateFstreamMarketBase("ticker reconnect");
+        wsFailStreak[market.id] = 0;
+      }
+    } else if (market.id === "SPOT") {
+      if ((wsFailStreak[market.id] || 0) >= 2) {
+        rotateSpotWsBase("ticker reconnect");
+        wsFailStreak[market.id] = 0;
+      }
+    }
     connectMarket(market);
   }, delay);
-  reconnectDelay[market.id] = Math.min(delay * 2, RECONNECT_MAX_MS);
+  reconnectDelay[market.id] = Math.min(Math.max(delay, RECONNECT_BASE_MS) * 1.5, 8000);
 }
 
 // ---------- REST fallback (used when WS opens but delivers no data — blocked stream port, etc.) ----------
@@ -1155,11 +2009,13 @@ async function pollRestOnce(market) {
     if (!res.ok) throw new Error("HTTP " + res.status);
     const arr = await res.json();
     if (!Array.isArray(arr)) throw new Error("unexpected response shape");
-    handleTickerBatch(market, arr); // REST field names already match parseTick()
+    handleTickerBatch(market, arr.map(wsTickerToTick).filter(Boolean));
   } catch (e) {
     errCounts[market.id] = (errCounts[market.id] || 0) + 1;
-    statuses[market.id] = "error";
-    updateStatusLine();
+    if (feedMode[market.id] === "rest") {
+      statuses[market.id] = "error";
+      updateStatusLine();
+    }
   }
 }
 function scheduleWsProbe(market) {
@@ -1173,7 +2029,7 @@ function scheduleWsProbe(market) {
 function probeWs(market) {
   // Try a WS connection in the background without disturbing the REST fallback that's currently running.
   let probe;
-  try { probe = new WebSocket(market.wsUrl); } catch (e) { scheduleWsProbe(market); return; }
+  try { probe = new WebSocket(marketWsUrl(market)); } catch (e) { scheduleWsProbe(market); return; }
   let settled = false;
   const timeout = setTimeout(() => {
     if (settled) return;
@@ -1215,6 +2071,41 @@ function wsWatchdogTick() {
   });
 }
 setInterval(wsWatchdogTick, 3000);
+// REST только подкручивает 24ч% / open / last у УЖЕ отслеживаемых пар.
+// Полный массив в handleTickerBatch нельзя — так TRACKED взлетал до 800+
+// мертвых альтов с одинаковым +$13K (дрейф 24ч-окна), и таблица становилась мусором.
+setInterval(() => {
+  if (paused || appHidden) return;
+  // только USDT-M и только уже открытые строки — полный spot 24hr вешает Chrome на телефоне
+  const m = MARKETS.find(x => x.id === "USDT-M");
+  if (!m || feedMode[m.id] === "rest") return;
+  refreshRestSnapshot(m);
+}, 60000);
+async function refreshRestSnapshot(market) {
+  try {
+    const res = await fetch(market.restUrl, { cache: "no-store" });
+    if (!res.ok) return;
+    const arr = await res.json();
+    if (!Array.isArray(arr)) return;
+    const now = Date.now();
+    for (const raw of arr) {
+      const t = wsTickerToTick(raw);
+      if (!t || !t.symbol || isExcluded(t.symbol)) continue;
+      const key = market.id + ":" + t.symbol;
+      const r = rows[key];
+      if (!r) continue;
+      const parsed = parseTick(t);
+      if (!parsed) continue;
+      if (parsed.price > 0) r.price = parsed.price;
+      if (parsed.pct != null && !isNaN(parsed.pct)) r.pct = parsed.pct;
+      if (parsed.openPrice != null) r.openPrice = parsed.openPrice;
+      if (parsed.high != null) r.high = parsed.high;
+      if (parsed.low != null) r.low = parsed.low;
+      r.pctAt = now;
+    }
+    dataDirty = true;
+  } catch (e) {}
+}
 function handleTickerBatch(market, arr) {
     msgCounts[market.id] = (msgCounts[market.id] || 0) + 1;
     statuses[market.id] = "ok";
@@ -1225,18 +2116,29 @@ function handleTickerBatch(market, arr) {
     lastPollAt[market.id] = now;
 
     for (const t of arr) {
+      try {
+      if (!t || !t.symbol) continue;
       if (isExcluded(t.symbol)) {
         const exKey = `${market.id}:${t.symbol}`;
         if (rows[exKey]) purgeKey(exKey);
         continue;
       }
+      {
+        const banKey = `${market.id}:${t.symbol}`;
+        if (isDismissed(banKey)) {
+          if (rows[banKey]) purgeKey(banKey);
+          continue;
+        }
+      }
       const parsed = parseTick(t);
       if (!parsed) continue;
       const key = `${market.id}:${parsed.symbol}`;
+      const prevRow = rows[key];
+      if (prevRow && volumeJumpImplausible(prevRow.curVol, parsed.curVol, prevRow.lastTick, now)) continue;
 
       if (sessionBase[key] === undefined) {
-        if (parsed.price >= maxInitialPrice) continue;
-        if (parsed.curVol > maxInitialVolume) continue;
+        if (maxInitialPrice != null && parsed.price >= maxInitialPrice) continue;
+        if (maxInitialVolume != null && parsed.curVol > maxInitialVolume) continue;
         sessionBase[key] = parsed.curVol;
         baseTime[key] = now;
         priceBase[key] = parsed.price;
@@ -1249,12 +2151,32 @@ function handleTickerBatch(market, arr) {
 
       // history
       if (!history[key]) history[key] = [];
+      // после фона/рестарта history пустая, а строка живая — сеем прошлую точку,
+      // чтобы RVOL / Δ1м / Δ% не обнулялись на минуту
+      if (history[key].length === 0 && prevRow && prevRow.curVol != null && prevRow.lastTick && (now - prevRow.lastTick) <= 90000) {
+        const seedAge = Math.min(HISTORY_1M_MS, Math.max(1000, now - prevRow.lastTick));
+        history[key].push({
+          t: now - seedAge,
+          vol: prevRow.curVol,
+          n: prevRow.trades != null ? prevRow.trades : parsed.trades,
+          p: prevRow.price != null ? prevRow.price : parsed.price,
+        });
+      }
       history[key].push({ t: now, vol: parsed.curVol, n: parsed.trades, p: parsed.price });
       while (history[key].length && now - history[key][0].t > HISTORY_MAX_AGE_MS) history[key].shift();
+      updateCycleBuckets(key, now, parsed.curVol);
 
-      const rolling10 = rollingDelta(history[key], now, HISTORY_WINDOW_MS, parsed.curVol);
-      const d1m = rollingDelta(history[key], now, HISTORY_1M_MS, parsed.curVol);
-      const d2m = rollingDelta(history[key], now, HISTORY_2M_MS, parsed.curVol);
+      let rolling10 = rollingDelta(history[key], now, HISTORY_WINDOW_MS, parsed.curVol);
+      let rolling30 = rollingDelta(history[key], now, HISTORY_30S_MS, parsed.curVol);
+      let d1m = rollingDelta(history[key], now, HISTORY_1M_MS, parsed.curVol);
+      const kLive10 = liveFromKline(key, now, HISTORY_WINDOW_MS);
+      const kLive30 = liveFromKline(key, now, HISTORY_30S_MS);
+      const kLive1m = liveFromKline(key, now, HISTORY_1M_MS);
+      // kline.q — оборот свечи в USDT, как на графике Binance. Им подменяем
+      // дельту 24ч-тикера, которая врёт из-за выпадения вчерашнего объёма.
+      if (kLive10 != null && kLive10 >= 0) rolling10 = kLive10;
+      if (kLive30 != null && kLive30 >= 0) rolling30 = kLive30;
+      if (kLive1m != null && kLive1m >= 0) d1m = kLive1m;
       const accel = computeAccel(history[key], now, parsed.curVol); // now a $/min slope, see linRegSlopePerMin
 
       // ---- v15 признаки: цена, сделки, диапазон, VWAP, стакан ----
@@ -1262,28 +2184,46 @@ function handleTickerBatch(market, arr) {
       const anchor2m = findAnchor(history[key], now, HISTORY_2M_MS);
       const dp1m = rollingDeltaField(history[key], now, HISTORY_1M_MS, parsed.price, "p");
       const dp2m = rollingDeltaField(history[key], now, HISTORY_2M_MS, parsed.price, "p");
-      const pct1m = (dp1m !== null && anchor1m && anchor1m.p) ? (dp1m / anchor1m.p) * 100 : null;
-      const pct2m = (dp2m !== null && anchor2m && anchor2m.p) ? (dp2m / anchor2m.p) * 100 : null;
+      let pct1m = (dp1m !== null && parsed.price) ? (dp1m / (parsed.price - dp1m || parsed.price)) * 100 : null;
+      if ((pct1m === null || !isFinite(pct1m)) && dp1m !== null && anchor1m && anchor1m.p) {
+        pct1m = (dp1m / anchor1m.p) * 100;
+      }
+      if (pct1m !== null && !isFinite(pct1m)) pct1m = null;
+      let pct2m = (dp2m !== null && parsed.price) ? (dp2m / (parsed.price - dp2m || parsed.price)) * 100 : null;
+      if ((pct2m === null || !isFinite(pct2m)) && dp2m !== null && anchor2m && anchor2m.p) {
+        pct2m = (dp2m / anchor2m.p) * 100;
+      }
+      if (pct2m !== null && !isFinite(pct2m)) pct2m = null;
+      pct1m = keepFeat(pct1m, prevRow, "pct1m");
+      pct2m = keepFeat(pct2m, prevRow, "pct2m");
 
       // средний размер сделки за минуту: Δоборот / Δчисло сделок
       const dn1m = (parsed.trades !== null)
         ? rollingDeltaField(history[key], now, HISTORY_1M_MS, parsed.trades, "n") : null;
-      const ats = (dn1m !== null && dn1m >= 3 && d1m !== null && d1m > 0) ? d1m / dn1m : null;
+      let ats = (dn1m !== null && dn1m >= 3 && d1m !== null && d1m > 0) ? d1m / dn1m : null;
+      ats = keepFeat(ats, prevRow, "ats");
 
       // RVOL — минутный оборот против средней минуты суток (curVol/1440)
       const expMinVol = parsed.curVol > 0 ? parsed.curVol / 1440 : null;
-      const rvol = (d1m !== null && expMinVol) ? d1m / expMinVol : null;
+      let rvol = (d1m !== null && expMinVol && expMinVol > 0) ? d1m / expMinVol : null;
+      if (rvol != null && (!isFinite(rvol) || rvol < 0)) rvol = null;
+      rvol = keepFeat(rvol, prevRow, "rvol");
 
       // положение в дневном диапазоне и отклонение от VWAP
-      const rng = (parsed.high !== null && parsed.low !== null && parsed.high > parsed.low)
-        ? (parsed.price - parsed.low) / (parsed.high - parsed.low) : null;
-      const vwapDev = (parsed.vwap && parsed.vwap > 0) ? (parsed.price / parsed.vwap - 1) * 100 : null;
+      const hi = parsed.high != null ? parsed.high : dayHigh[key];
+      const lo = parsed.low != null ? parsed.low : dayLow[key];
+      let rng = (hi != null && lo != null && hi > lo) ? (parsed.price - lo) / (hi - lo) : null;
+      rng = keepFeat(rng, prevRow, "rng");
+      let vwapDev = (parsed.vwap && parsed.vwap > 0) ? (parsed.price / parsed.vwap - 1) * 100 : null;
+      vwapDev = keepFeat(vwapDev, prevRow, "vwapDev");
 
       // стакан прямо из полей тикера — нового стрима не нужно
-      const spreadPct = (parsed.bidPrice && parsed.askPrice && parsed.bidPrice > 0)
+      let spreadPct = (parsed.bidPrice && parsed.askPrice && parsed.bidPrice > 0)
         ? ((parsed.askPrice - parsed.bidPrice) / parsed.bidPrice) * 100 : null;
-      const imbal = (parsed.bidQty !== null && parsed.askQty !== null && (parsed.bidQty + parsed.askQty) > 0)
+      let imbal = (parsed.bidQty !== null && parsed.askQty !== null && (parsed.bidQty + parsed.askQty) > 0)
         ? parsed.bidQty / (parsed.bidQty + parsed.askQty) : null;
+      spreadPct = keepFeat(spreadPct, prevRow, "spreadPct");
+      imbal = keepFeat(imbal, prevRow, "imbal");
 
       // 24ч максимум — «храповик»: если он тикнул вверх, это и есть пробой в моменте
       if (parsed.high !== null && parsed.high > 0) {
@@ -1296,6 +2236,14 @@ function handleTickerBatch(market, arr) {
       // тейкер-доля из «горячего» kline-потока (может отсутствовать — тогда null)
       const tk = takerRatio[key];
       const taker = (tk && (now - tk.at) <= TAKER_STALE_MS) ? tk.r : null;
+
+      // форма последней 1m свечи горячего потока: закрытие у хая vs длинная тень.
+      // Реальный вынос обычно закрывается близко к своему максимуму; шпилька —
+      // прокалывает верх на объёме и утаскивает закрытие вниз длинной тенью.
+      const cs = candleShape[key];
+      const csFresh = cs && (now - cs.at) <= TAKER_STALE_MS && cs.h > cs.l;
+      const closePosCandle = csFresh ? (cs.c - cs.l) / (cs.h - cs.l) : null;
+      const wickPct = csFresh ? (cs.h - Math.max(cs.o, cs.c)) / (cs.h - cs.l) : null;
 
       // periodic baseline sampling for QUIET (mirrors how history[] already isn't persisted)
       if (d1m !== null && (now - (lastRateSampleAt[key] || 0)) >= RATE_SAMPLE_INTERVAL_MS) {
@@ -1316,8 +2264,13 @@ function handleTickerBatch(market, arr) {
       const lfQuiet = (lastFired[key] && lastFired[key].QUIET) || 0;
       const wasQuiet = lfQuiet > 0 && (now - lfQuiet) <= 600000;
 
+      // закрытые 1м-свечи нужны только тем парам, что начали шевелиться
+      if (rvol !== null && rvol >= 2 && pct1m !== null && pct1m > 0) requestBars(key, market.id, parsed.symbol, now);
+      const bf = barFeatures(key, now, parsed.price, parsed.curVol, d1m);
+      const pct24hNum = (parsed.pct !== null && parsed.pct !== undefined && isFinite(parsed.pct)) ? parsed.pct : null;
       const scoreObj = computeScore({
-        rvol, pct1m, pct2m, rng, vwapDev, ats, atsMedian, imbal, spreadPct, highFresh, taker, wasQuiet,
+        pct1m, pct5m: bf.pct5m, pct15m: bf.pct15m, pct60m: bf.pct60m, pct24h: pct24hNum,
+        vwapDev, sig60: bf.sig60, rng, rvolPre20: bf.rvolPre20, rvol5: bf.rvol5,
       });
 
       // age of base — ignore very first minutes for some signals to reduce noise
@@ -1326,14 +2279,18 @@ function handleTickerBatch(market, arr) {
       rows[key] = {
         key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
         price: parsed.price, pct: parsed.pct, baseVol: base, baseAt: baseTime[key],
-        priceBase: priceBase[key], priceAt: baseTime[key],
+        priceBase: priceBase[key], priceAt: baseTime[key], openPrice: parsed.openPrice,
         curVol: parsed.curVol, delta, mult,
-        rollingDelta: rolling10, d1m, d2m, accel,
+        rollingDelta: rolling10, rolling30, d1m, accel,
         // v15
         pct1m, pct2m, rvol, ats, atsMedian, rng, vwapDev, spreadPct, imbal, taker,
+        closePosCandle, wickPct,
         highFresh, trades: parsed.trades,
+        high: parsed.high, low: parsed.low, openPrice: parsed.openPrice,
         score: scoreObj.score, scoreParts: scoreObj.parts,
         lastTick: now,
+        oiUsd: market.id === "USDT-M" ? oiSnapshot(parsed.symbol).usd : null,
+        oiChangePct: market.id === "USDT-M" ? oiSnapshot(parsed.symbol).pct : null,
       };
 
       // outcomes
@@ -1356,53 +2313,115 @@ function handleTickerBatch(market, arr) {
         if (outcomesByKey[key].length === 0) delete outcomesByKey[key];
       }
 
+      // план сделки: проверяем стоп/цель/тайм-аут на каждый тик, даже во время resync —
+      // это просто сверка текущей цены с уже зафиксированными уровнями, не новый сигнал.
+      const ot = openTrades[key];
+      if (ot) {
+        if (parsed.price <= ot.stopPrice) closeTradePlan(key, "stop", ot.stopPrice, now);
+        else if (parsed.price >= ot.targetPrice) closeTradePlan(key, "target", ot.targetPrice, now);
+        else if (now >= ot.expireAt) closeTradePlan(key, "time", parsed.price, now);
+      }
+
       if (resyncing) continue; // skip firing on resync cycle
 
       // ---- пороговые сигналы: каждый по своему $ порогу из шапки, прямо в журнал ----
       // SPIKE 10s
-      if (!scoreOnlyMode && rolling10 !== null && rolling10 >= threshold && canFire(key, "SPIKE", HISTORY_WINDOW_MS)) {
+      if (!scoreOnlyMode && threshold != null && rolling10 !== null && rolling10 >= threshold && canFire(key, "SPIKE", HISTORY_WINDOW_MS)) {
         markFired(key, "SPIKE");
-        pushAlert({
+        const alertEntry = {
           key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
           amount: rolling10, time: now, type: "SPIKE", extra: "10с",
-        });
+          curVol: parsed.curVol, pct24h: parsed.pct, price: parsed.price,
+          dirPct: pct1m !== null ? pct1m : (parsed.pct !== null && parsed.pct !== undefined && !isNaN(parsed.pct) ? parsed.pct : null),
+          imbal,
+          fundingPct: market.id === "USDT-M" && fundingRate[parsed.symbol] ? fundingRate[parsed.symbol].r * 100 : null,
+          oiChangePct: oiChangePctForSignal(market.id, parsed.symbol),
+        };
+        pushAlert(alertEntry);
+        recordThresholdSignal(alertEntry);
+        recordPairSignal(alertEntry);
         notify(`⚡ SPIKE: ${parsed.base}/${parsed.quote}`, `+$${fmtMoney(rolling10)} за 10с (${market.id})`);
         startOutcome(key, market.id, parsed, now, "SPIKE", { rvol, pct1m, ats, atsMedian, imbal, spreadPct, vwapDev, rng, taker, d1m, score: scoreObj.score, parts: scoreObj.parts });
       }
 
+      // SPIKE 30s — тот же принцип, что 10с, но на более широком окне: ловит выносы,
+      // которые набирают объём чуть медленнее и на 10с-окне остаются незамеченными.
+      if (!scoreOnlyMode && threshold30 != null && rolling30 !== null && rolling30 >= threshold30 && canFire(key, "SPIKE30", HISTORY_30S_MS)) {
+        markFired(key, "SPIKE30");
+        const alertEntry = {
+          key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
+          amount: rolling30, time: now, type: "SPIKE30", extra: "30с",
+          curVol: parsed.curVol, pct24h: parsed.pct, price: parsed.price,
+          dirPct: pct1m !== null ? pct1m : (parsed.pct !== null && parsed.pct !== undefined && !isNaN(parsed.pct) ? parsed.pct : null),
+          imbal,
+          fundingPct: market.id === "USDT-M" && fundingRate[parsed.symbol] ? fundingRate[parsed.symbol].r * 100 : null,
+          oiChangePct: oiChangePctForSignal(market.id, parsed.symbol),
+        };
+        pushAlert(alertEntry);
+        recordThresholdSignal(alertEntry);
+        recordPairSignal(alertEntry);
+        notify(`⚡ SPIKE30: ${parsed.base}/${parsed.quote}`, `+$${fmtMoney(rolling30)} за 30с (${market.id})`);
+        startOutcome(key, market.id, parsed, now, "SPIKE30", { rvol, pct1m, ats, atsMedian, imbal, spreadPct, vwapDev, rng, taker, d1m, score: scoreObj.score, parts: scoreObj.parts });
+      }
+
       // VEL 1M
-      if (!scoreOnlyMode && d1m !== null && d1m >= threshold1m && baseAge >= 20000 && canFire(key, "VEL1M", 45000)) {
+      if (!scoreOnlyMode && threshold1m != null && d1m !== null && d1m >= threshold1m && baseAge >= 20000 && canFire(key, "VEL1M", 45000)) {
         markFired(key, "VEL1M");
-        pushAlert({
+        const alertEntry = {
           key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
           amount: d1m, time: now, type: "VEL1M", extra: "Δ1м",
-        });
+          curVol: parsed.curVol, pct24h: parsed.pct, price: parsed.price,
+          dirPct: pct1m !== null ? pct1m : (parsed.pct !== null && parsed.pct !== undefined && !isNaN(parsed.pct) ? parsed.pct : null),
+          imbal,
+          fundingPct: market.id === "USDT-M" && fundingRate[parsed.symbol] ? fundingRate[parsed.symbol].r * 100 : null,
+          oiChangePct: oiChangePctForSignal(market.id, parsed.symbol),
+        };
+        pushAlert(alertEntry);
+        recordThresholdSignal(alertEntry);
+        recordPairSignal(alertEntry);
         earlyBeep();
         notify(`🚀 VEL1M: ${parsed.base}/${parsed.quote}`, `+$${fmtMoney(d1m)} за 1м (${market.id})`);
         startOutcome(key, market.id, parsed, now, "VEL1M", { rvol, pct1m, ats, atsMedian, imbal, spreadPct, vwapDev, rng, taker, d1m, score: scoreObj.score, parts: scoreObj.parts });
       }
 
-      // VEL 2M
-      if (!scoreOnlyMode && d2m !== null && d2m >= threshold2m && baseAge >= 30000 && canFire(key, "VEL2M", 60000)) {
-        markFired(key, "VEL2M");
-        pushAlert({
+      // VEL1M30 — тот же VEL1M, но на 30-секундном окне (rolling30, как у SPIKE30), со своим
+      // отдельным порогом: ловит то же ускорение объёма, но раньше, чем 60-секундный VEL1M.
+      if (!scoreOnlyMode && thresholdVel1m30 != null && rolling30 !== null && rolling30 >= thresholdVel1m30 && canFire(key, "VEL1M30", 30000)) {
+        markFired(key, "VEL1M30");
+        const alertEntry = {
           key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
-          amount: d2m, time: now, type: "VEL2M", extra: "Δ2м",
-        });
+          amount: rolling30, time: now, type: "VEL1M30", extra: "Δ30с",
+          curVol: parsed.curVol, pct24h: parsed.pct, price: parsed.price,
+          dirPct: pct1m !== null ? pct1m : (parsed.pct !== null && parsed.pct !== undefined && !isNaN(parsed.pct) ? parsed.pct : null),
+          imbal,
+          fundingPct: market.id === "USDT-M" && fundingRate[parsed.symbol] ? fundingRate[parsed.symbol].r * 100 : null,
+          oiChangePct: oiChangePctForSignal(market.id, parsed.symbol),
+        };
+        pushAlert(alertEntry);
+        recordThresholdSignal(alertEntry);
+        recordPairSignal(alertEntry);
         earlyBeep();
-        notify(`🚀 VEL2M: ${parsed.base}/${parsed.quote}`, `+$${fmtMoney(d2m)} за 2м (${market.id})`);
-        startOutcome(key, market.id, parsed, now, "VEL2M", { rvol, pct1m, ats, atsMedian, imbal, spreadPct, vwapDev, rng, taker, d1m, score: scoreObj.score, parts: scoreObj.parts });
+        notify(`🚀 VEL1M30: ${parsed.base}/${parsed.quote}`, `+$${fmtMoney(rolling30)} за 30с (${market.id})`);
+        startOutcome(key, market.id, parsed, now, "VEL1M30", { rvol, pct1m, ats, atsMedian, imbal, spreadPct, vwapDev, rng, taker, d1m, score: scoreObj.score, parts: scoreObj.parts });
       }
 
       // ACCEL — slope of a 90s linear regression, in $/min, compared against порог Δ1м.
       // Robust replacement for the old recent30/prev30 ratio, which produced garbage
       // multiples whenever prev30 was ~0.
-      if (!scoreOnlyMode && accel !== null && accel >= threshold1m * 0.6 && d1m !== null && d1m >= threshold1m * 0.4 && baseAge >= 40000 && canFire(key, "ACCEL", 50000)) {
+      if (!scoreOnlyMode && threshold1m != null && accel !== null && accel >= threshold1m * 0.6 && d1m !== null && d1m >= threshold1m * 0.4 && baseAge >= 40000 && canFire(key, "ACCEL", 50000)) {
         markFired(key, "ACCEL");
-        pushAlert({
+        const alertEntry = {
           key, market: market.id, symbol: parsed.symbol, base: parsed.base, quote: parsed.quote,
           amount: d1m, time: now, type: "ACCEL", extra: `наклон ${accel >= 0 ? "+" : ""}$${fmtMoney(accel)}/мин`,
-        });
+          curVol: parsed.curVol, pct24h: parsed.pct, price: parsed.price,
+          dirPct: pct1m !== null ? pct1m : (parsed.pct !== null && parsed.pct !== undefined && !isNaN(parsed.pct) ? parsed.pct : null),
+          imbal,
+          fundingPct: market.id === "USDT-M" && fundingRate[parsed.symbol] ? fundingRate[parsed.symbol].r * 100 : null,
+          oiChangePct: oiChangePctForSignal(market.id, parsed.symbol),
+        };
+        pushAlert(alertEntry);
+        recordThresholdSignal(alertEntry);
+        recordPairSignal(alertEntry);
         earlyBeep();
         notify(`🚀 ACCEL: ${parsed.base}/${parsed.quote}`, `наклон $${fmtMoney(accel)}/мин · Δ1м +$${fmtMoney(d1m)} (${market.id})`);
         startOutcome(key, market.id, parsed, now, "ACCEL", { rvol, pct1m, ats, atsMedian, imbal, spreadPct, vwapDev, rng, taker, d1m, score: scoreObj.score, parts: scoreObj.parts });
@@ -1411,7 +2430,7 @@ function handleTickerBatch(market, arr) {
       // ---- ТИХАЯ ПОЛКА (QUIET) — отдельный сигнал, идёт не в общий журнал, а в свой
       // пришпиленный блок над списком. Baseline низкий (медиана Δ1м заметно ниже порога
       // Δ1м) и стабильный (маленький разброс) — настоящая полка, а не пауза в тренде.
-      if (d1m !== null && baseAge >= 60000 && rvolMedian !== null && rvolStd !== null
+      if (threshold1m != null && d1m !== null && baseAge >= 60000 && rvolMedian !== null && rvolStd !== null
           && rvolMedian < threshold1m * 0.5 && rvolStd <= Math.max(rvolMedian, 1) * QUIET_STD_FACTOR
           && d1m >= Math.max(rvolMedian, 1) * QUIET_BREAK_MULT && d1m >= RVOL_MIN_ABS * 0.6
           && canFire(key, "QUIET", 90000)) {
@@ -1427,9 +2446,10 @@ function handleTickerBatch(market, arr) {
 
       // ---- SCORE — главный сигнал v15. Не «ещё один порог», а совпадение
       // объёма, цены, диапазона и агрессии покупателя в одном событии.
-      if (scoreObj.score >= scoreThreshold
+      if (scoreThreshold != null && scoreObj.score >= scoreThreshold
           && d1m !== null && d1m >= RVOL_MIN_ABS
           && pct1m !== null && pct1m > 0
+          && rvol !== null && rvol >= 3              // та же выборка кандидатов, на которой калибровался score
           && baseAge >= SCORE_MIN_BASE_AGE_MS
           && canFire(key, "SIGNAL", SCORE_COOLDOWN_MS)) {
         markFired(key, "SIGNAL");
@@ -1443,6 +2463,8 @@ function handleTickerBatch(market, arr) {
         notify(`⭐ SCORE ${scoreObj.score}: ${parsed.base}/${parsed.quote}`,
                `${scoreObj.parts.slice(0, 3).join(" · ")} · Δ1м +$${fmtMoney(d1m)}`);
         startOutcome(key, market.id, parsed, now, "SIGNAL", { rvol, pct1m, ats, atsMedian, imbal, spreadPct, vwapDev, rng, taker, d1m, score: scoreObj.score, parts: scoreObj.parts });
+        // встроенная стратегия: одна виртуальная позиция на пару одновременно
+        if (tradePlanOn && !openTrades[key]) openTradePlan(key, market.id, parsed, now, scoreObj.score);
       }
 
       // doubling sound (kept)
@@ -1451,6 +2473,15 @@ function handleTickerBatch(market, arr) {
         doubleLevel[key] = Math.floor(currentMultiple);
         doubleBeep();
         notify(`Объём x${doubleLevel[key]}: ${parsed.base}/${parsed.quote}`, `×${doubleLevel[key]} от начального (${market.id})`);
+      }
+      } catch (e) {
+        // Защита: раньше необработанное исключение на одной паре прерывало
+        // весь for-loop и обработка остальных пар в этом тике не доходила
+        // до VEL1M/ACCEL и т.д. Стресс-тестами (150 синтетических тикеров,
+        // намеренно битые данные) такого исключения не найдено ни в старой,
+        // ни в новой версии — так что это подстраховка на будущее, а не
+        // подтверждённая причина реже приходящих ACCEL/VEL1M.
+        console.error("VolScan: ошибка обработки тика", t && t.symbol, e);
       }
     }
     updateStatusLine();
@@ -1473,9 +2504,10 @@ function updateStatusLine() {
   const el = document.getElementById("status-line");
   const anyOk = Object.values(statuses).some(s => s === "ok");
   el.className = anyOk ? "live" : "err";
-  el.textContent = MARKETS.map(m =>
-    `${m.id}:${(statuses[m.id] || "…").toUpperCase().slice(0,4)}${feedMode[m.id] === "rest" ? "·REST" : ""} MSG:${msgCounts[m.id] || 0}${errCounts[m.id] ? " ERR:" + errCounts[m.id] : ""}`
-  ).join("   ");
+  el.textContent = MARKETS.map(m => {
+    const mode = feedMode[m.id] === "rest" ? "·REST" : (feedMode[m.id] === "ws" ? "·WS" : "");
+    return `${m.id}:${(statuses[m.id] || "…").toUpperCase().slice(0,4)}${mode} MSG:${msgCounts[m.id] || 0}${errCounts[m.id] ? " ERR:" + errCounts[m.id] : ""}`;
+  }).join("   ");
 }
 
 // ---------- rank signals (after full ranking is known) ----------
@@ -1498,9 +2530,30 @@ function processRankSignals() {
 // ---------- render ----------
 let renderScheduled = false;
 let dataDirty = false;
-function scheduleRender() { dataDirty = true; }
+let lastRenderAt = 0;
+let renderRaf = 0;
+let renderWait = 0;
+function scheduleRender() {
+  dataDirty = true;
+  if (appHidden || renderRaf || renderWait) return;
+  const wait = Math.max(0, RENDER_INTERVAL_MS - (Date.now() - lastRenderAt));
+  const kick = () => {
+    renderRaf = 0;
+    renderWait = 0;
+    if (!dataDirty || appHidden) return;
+    dataDirty = false;
+    lastRenderAt = Date.now();
+    render();
+  };
+  if (wait <= 0 && typeof requestAnimationFrame === "function") {
+    renderRaf = requestAnimationFrame(kick);
+  } else {
+    renderWait = setTimeout(kick, wait);
+  }
+}
 
 function badgeClass(m) { return "badge badge-" + m; }
+function priceCellClass(m) { return "price-cell-" + m; }
 
 function pctChange(from, to) {
   if (!from) return null;
@@ -1510,6 +2563,7 @@ function pctChange(from, to) {
 function renderStats() {
   if (!statsVisible) return;
   const content = document.getElementById("stats-content");
+  if (!content) return;
 
   function bucket(list, field) {
     let n = 0, sum = 0, pos = 0;
@@ -1557,7 +2611,7 @@ function renderStats() {
   const completed = outcomes.filter(o => o.done).length;
   const pending = outcomes.length - completed;
 
-  const types = ["SIGNAL", "QUIET", "ACCEL", "VEL1M", "VEL2M", "SPIKE"];
+  const types = ["SIGNAL", "QUIET", "ACCEL", "VEL1M", "VEL1M30", "SPIKE"];
   const byType = types.map(t => {
     const list = outcomes.filter(o => (o.type || "SPIKE") === t);
     return list.length ? exLine(t === "SIGNAL" ? "⭐ SCORE" : t, excursion(list)) : "";
@@ -1565,7 +2619,7 @@ function renderStats() {
 
   // разбивка SCORE-сигналов по силе — сразу видно, стоит ли поднимать порог
   const sig = outcomes.filter(o => o.type === "SIGNAL" && o.score !== null);
-  const bands = [[80, 100], [70, 79], [60, 69]].map(([a, b]) => {
+  const bands = [[90, 100], [85, 89], [80, 84], [70, 79]].map(([a, b]) => {
     const list = sig.filter(o => o.score >= a && o.score <= b);
     return list.length ? exLine(`score ${a}–${b}`, excursion(list)) : "";
   }).filter(Boolean).join("");
@@ -1582,11 +2636,154 @@ function renderStats() {
   `;
 }
 
+// ---------- план сделки: рендер ----------
+function fmtTimeLeft(ms) {
+  if (ms <= 0) return "0м";
+  const m = Math.round(ms / 60000);
+  if (m < 60) return `${m}м`;
+  return `${Math.floor(m / 60)}ч${m % 60 ? " " + (m % 60) + "м" : ""}`;
+}
+function renderTradePanel() {
+  const openEl = document.getElementById("trade-open-list");
+  const closedEl = document.getElementById("trade-closed-list");
+  const summaryEl = document.getElementById("trade-summary");
+  if (!openEl && !closedEl && !summaryEl) return; // panels removed — no-op
+  if (!openEl || !closedEl) return;
+
+  const totalPnl = tradeEquity - TRADE_STARTING_EQUITY;
+  const totalPnlPct = (totalPnl / TRADE_STARTING_EQUITY) * 100;
+  const n = closedTrades.length;
+  const wins = closedTrades.filter(t => t.pnlUsd > 0).length;
+  const winRate = n ? (wins / n) * 100 : null;
+  if (summaryEl) {
+    summaryEl.innerHTML = ` — капитал $${tradeEquity.toFixed(0)} (${totalPnl >= 0 ? "+" : ""}${totalPnlPct.toFixed(2)}%)`
+      + (n ? ` · сделок ${n} · win-rate ${winRate.toFixed(0)}%` : " · сделок пока нет")
+      + (tradePlanOn ? "" : " · <span style=\"color:#ff6b6b\">выключен</span>");
+  }
+
+  const now = Date.now();
+  const open = Object.values(openTrades);
+  if (!open.length) {
+    openEl.innerHTML = "";
+  } else {
+    openEl.innerHTML = open.map(ot => {
+      const row = rows[ot.key];
+      const cur = row ? row.price : ot.entryPrice;
+      const floatPct = ((cur / ot.entryPrice) - 1) * 100;
+      return `
+        <div class="trade-item">
+          <span class="t-sym">${ot.base}/${ot.quote} <span style="color:#4a6478; font-weight:400;">${ot.market}</span></span>
+          <span class="t-line">вход $${fmtPrice(ot.entryPrice)} · сейчас <span class="${floatPct >= 0 ? "pct-pos" : "pct-neg"}">${floatPct >= 0 ? "+" : ""}${floatPct.toFixed(1)}%</span></span>
+          <span class="t-line">стоп $${fmtPrice(ot.stopPrice)} · цель $${fmtPrice(ot.targetPrice)}</span>
+          <span class="t-line">осталось ${fmtTimeLeft(ot.expireAt - now)} · score ${ot.score}</span>
+        </div>`;
+    }).join("");
+  }
+
+  if (!closedTrades.length) {
+    closedEl.innerHTML = "";
+  } else {
+    const icon = t => t.exitType === "target" ? "✅" : t.exitType === "stop" ? "🛑" : "⏱";
+    closedEl.innerHTML = closedTrades.slice(0, 15).map(t => `
+      <div class="trade-closed-item">
+        <span>${icon(t)}</span>
+        <span class="t-sym">${t.base}/${t.quote}</span>
+        <span class="${t.pnlPct >= 0 ? "pct-pos" : "pct-neg"}">${t.pnlPct >= 0 ? "+" : ""}${t.pnlPct.toFixed(1)}%</span>
+        <span style="color:#4a6478; font-size:10px;">R ${t.R === null ? "—" : (t.R >= 0 ? "+" : "") + t.R.toFixed(2)}</span>
+        <span class="t-time">${fmtTimeMinusHour(t.exitTime)}</span>
+      </div>`).join("");
+  }
+}
+
+// ---------- пороговый сигнал: рендер ----------
+const THRESHOLD_TYPE_LABEL = { SPIKE: "10с", SPIKE30: "30с", VEL1M: "Δ1м", VEL1M30: "Δ30с", ACCEL: "наклон" };
+function renderPairColumns() {
+  const summaryEl = document.getElementById("pair-columns-summary");
+  const scrollEl = document.getElementById("pair-columns-scroll");
+  if (!summaryEl || !scrollEl) return;
+  if (!summaryEl || !scrollEl) return;
+  summaryEl.textContent = pairColumnOrder.length ? ` — пар: ${pairColumnOrder.length}` : "";
+  if (!pairColumnOrder.length) {
+    scrollEl.innerHTML = "";
+    return;
+  }
+  scrollEl.innerHTML = pairColumnOrder.map(key => {
+    const list = pairSignalLog[key];
+    if (!list || !list.length) return "";
+    const head = list[0];
+    const rows = list.map(a => {
+      const hasDir = a.dirPct !== null && a.dirPct !== undefined && !isNaN(a.dirPct);
+      const dirCls = hasDir ? (a.dirPct >= 0 ? "pct-pos" : "pct-neg") : "";
+      const dirText = hasDir ? `${directionEmoji(a.dirPct)} ${a.dirPct >= 0 ? "+" : ""}${a.dirPct.toFixed(2)}%` : "—";
+      const hasPrice = a.price !== null && a.price !== undefined && !isNaN(a.price);
+      const has24h = a.pct24h !== null && a.pct24h !== undefined && !isNaN(a.pct24h);
+      return `
+        <tr data-key="${a.key}" title="Показать пару в таблице">
+          <td class="pcc-type">${THRESHOLD_TYPE_LABEL[a.type] || a.type}</td>
+          <td class="pcc-amount">+$${fmtMoney(a.amount)}</td>
+          <td class="pcc-price">${hasPrice ? "$" + fmtPrice(a.price) : "—"}</td>
+          <td class="${dirCls}">${dirText}</td>
+          <td class="pcc-24h">${has24h ? (a.pct24h >= 0 ? "+" : "") + a.pct24h.toFixed(2) + "%" : "—"}</td>
+          <td class="pcc-time">${fmtTimeMinusHour(a.time)}</td>
+        </tr>`;
+    }).join("");
+    return `
+      <div class="pair-group" data-key="${key}">
+        <div class="pair-group-head">${head.base}/${head.quote} <span class="pcc-market">${head.market}</span></div>
+        <table class="pair-group-table"><tbody>${rows}</tbody></table>
+      </div>`;
+  }).join("");
+}
+function renderThresholdPanel() {
+  const listEl = document.getElementById("threshold-list");
+  const summaryEl = document.getElementById("threshold-summary");
+  if (!listEl && !summaryEl) return; // panel removed — no-op
+  if (!listEl) return;
+  if (summaryEl) summaryEl.textContent = thresholdLog.length ? ` — сработало ${thresholdLog.length}` : "";
+  if (!thresholdLog.length) {
+    listEl.innerHTML = "";
+  } else {
+    listEl.innerHTML = thresholdLog.map(a => {
+      const hasVol = a.curVol !== null && a.curVol !== undefined;
+      const hasPct = hasVol && a.pct24h !== null && a.pct24h !== undefined && !isNaN(a.pct24h);
+      const volText = hasVol
+        ? `24ч $${fmtMoney(a.curVol)}` + (hasPct ? ` (${a.pct24h >= 0 ? "+" : ""}${a.pct24h.toFixed(2)}%)` : "")
+        : "";
+      const hasDir = a.dirPct !== null && a.dirPct !== undefined && !isNaN(a.dirPct);
+      const dirCls = hasDir ? (a.dirPct >= 0 ? "pct-pos" : "pct-neg") : "";
+      const dirText = hasDir ? `${directionEmoji(a.dirPct)} ${a.dirPct >= 0 ? "+" : ""}${a.dirPct.toFixed(2)}%` : "";
+      const hasImbal = a.imbal !== null && a.imbal !== undefined && !isNaN(a.imbal);
+      const extraBits = [];
+      if (hasImbal) extraBits.push(`стакан ${Math.round(a.imbal * 100)}%`);
+      if (a.fundingPct !== null && a.fundingPct !== undefined && !isNaN(a.fundingPct)) extraBits.push(`фандинг ${a.fundingPct >= 0 ? "+" : ""}${a.fundingPct.toFixed(3)}%`);
+      if (a.oiChangePct !== null && a.oiChangePct !== undefined && !isNaN(a.oiChangePct)) extraBits.push(`OI ${a.oiChangePct >= 0 ? "+" : ""}${a.oiChangePct.toFixed(1)}%`);
+      return `
+      <div class="threshold-item" data-key="${a.key}" title="Показать пару в таблице">
+        <span class="th-sym">${a.seq ? bigNumber(a.seq) + " " : ""}${a.base}/${a.quote} <span style="color:#7a5a3a; font-weight:400;">${a.market}</span></span>
+        <span class="th-type">${THRESHOLD_TYPE_LABEL[a.type] || a.type}</span>
+        <span class="th-amount">+$${fmtMoney(a.amount)}</span>
+        ${dirText ? `<span class="${dirCls}">${dirText}</span>` : ""}
+        ${volText ? `<span class="th-vol">${volText}</span>` : ""}
+        ${extraBits.length ? `<span class="th-vol">${extraBits.join(" · ")}</span>` : ""}
+        <span class="th-time">${fmtTimeMinusHour(a.time)}</span>
+      </div>`;
+    }).join("");
+  }
+}
+
+function renderShelfPanel() {
+  const listEl = document.getElementById("shelf-list");
+  if (!listEl) return; // panel removed — no-op
+}
+function renderTrades() { renderTradePanel(); }
+function renderThreshold() { renderThresholdPanel(); }
+function renderShelf() { renderShelfPanel(); }
+
 // ---------- v15 cell renderers ----------
 function scoreCell(r) {
   const v = r.score || 0;
   let cls = "score-low";
-  if (v >= 80) cls = "score-hot";
+  if (v >= 90) cls = "score-hot";
   else if (v >= scoreThreshold) cls = "score-mid";
   const parts = (r.scoreParts && r.scoreParts.length)
     ? `<span class="score-parts">${r.scoreParts.slice(0, 3).join(" · ")}</span>` : "";
@@ -1626,6 +2823,15 @@ function takerCell(r) {
   const cls = p >= 60 ? "taker-buy" : (p <= 40 ? "taker-sell" : "");
   return `<span class="${cls}">${p}% buy</span>`;
 }
+function oiCell(r) {
+  if (!r || r.market !== "USDT-M") return `<span class="vel-cold">—</span>`;
+  const snap = oiSnapshot(r.symbol);
+  if (snap.usd == null) return `<span class="vel-cold">…</span>`;
+  const pct = snap.pct;
+  const cls = pct == null ? "vel-cold" : (pct > 0.05 ? "pct-pos" : (pct < -0.05 ? "pct-neg" : "vel-cold"));
+  const sub = pct == null ? `<span class="sub">Δ ждём</span>` : `<span class="sub ${cls}">${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%</span>`;
+  return `$${fmtMoney(snap.usd)}${sub}`;
+}
 
 function hasRecentEarly(key) {
   const lf = lastFired[key];
@@ -1634,32 +2840,380 @@ function hasRecentEarly(key) {
   return [...EARLY_TYPES].some(t => lf[t] && (now - lf[t]) < 180000); // last 3 min
 }
 
-function render() {
-  processRankSignals();
 
-  let list = Object.values(rows);
+function topMoverFloorUsd() {
+  // Prefer active threshold for the selected window; else absolute floor.
+  if (topMoverWindowSec === 10 && threshold != null) return Math.max(TOP_MOVER_FLOOR_USD, threshold * 0.25);
+  if (topMoverWindowSec === 30 && threshold30 != null) return Math.max(TOP_MOVER_FLOOR_USD, threshold30 * 0.25);
+  if (topMoverWindowSec === 30 && thresholdVel1m30 != null) return Math.max(TOP_MOVER_FLOOR_USD, thresholdVel1m30 * 0.25);
+  if (topMoverWindowSec === 60 && threshold1m != null) return Math.max(TOP_MOVER_FLOOR_USD, threshold1m * 0.25);
+  return TOP_MOVER_FLOOR_USD;
+}
+function rowSurgeUsd(r) {
+  if (!r || isExcluded(r.symbol)) return null;
+  const tv = trailingPairVol(r.key, Date.now(), topMoverWindowSec * 1000);
+  let v = tv.current;
+  if (v == null) {
+    if (topMoverWindowSec === 10) v = r.rollingDelta;
+    else if (topMoverWindowSec === 30) v = r.rolling30;
+    else v = r.d1m;
+  }
+  if (v == null || !Number.isFinite(v) || v <= 0) return null;
+  return v;
+}
+function persistPinState() {
+  try {
+    if (pinnedKey) localStorage.setItem(PIN_LS_KEY, pinnedKey);
+    else localStorage.removeItem(PIN_LS_KEY);
+  } catch (e) {}
+  try { localStorage.setItem(TM_WIN_LS_KEY, String(topMoverWindowSec)); } catch (e) {}
+}
+function isFreezeActive() { return !!pinnedKey; }
+function setPinned(key) {
+  if (key && !rows[key]) key = null;
+  pinnedKey = key || null;
+  if (!pinnedKey) frozenOrder = null;
+  persistPinState();
+  render();
+  if (pinnedKey) {
+    requestAnimationFrame(() => {
+      const el = document.getElementById("row-" + pinnedKey);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        flashRow(pinnedKey);
+      }
+    });
+  }
+}
+function togglePin(key) {
+  if (!key) return;
+  if (pinnedKey === key) setPinned(null);
+  else setPinned(key);
+}
+function flashRow(key) {
+  highlightUntil[key] = Date.now() + 3000;
+  const el = document.getElementById("row-" + key);
+  if (!el) return;
+  el.classList.remove("row-flash");
+  void el.offsetWidth;
+  el.classList.add("row-flash");
+  setTimeout(() => { el.classList.remove("row-flash"); }, 3100);
+}
+function updateStickyRailHeight() {
+  // sticky-rail sits ABOVE .table-wrap (not inside), so no --sticky-rail-h offset needed.
+  // Kept as no-op so callers remain safe.
+  return;
+}
+function liveActivityUsd(r) {
+  if (!r) return 0;
+  const a = r.rolling30 != null && r.rolling30 > 0 ? r.rolling30 : 0;
+  const b = r.d1m != null && r.d1m > 0 ? r.d1m : 0;
+  const c = r.rollingDelta != null && r.rollingDelta > 0 ? r.rollingDelta : 0;
+  return Math.max(a, b * 0.5, c);
+}
+function isZombieRow(r) {
+  if (!r) return true;
+  const live = liveActivityUsd(r);
+  if (live >= 800) return false;
+  const sess = (r.priceBase > 0 && r.price > 0) ? Math.abs(r.price / r.priceBase - 1) : 0;
+  if (sess >= 0.004) return false; // 0.4% за сессию — живая
+  const pct = (r.pct != null && !isNaN(r.pct)) ? Math.abs(r.pct) : 0;
+  if (pct >= 1.0) return false;
+  const score = r.score || 0;
+  if (score >= 40) return false;
+  return true;
+}
+function sortDeltaValue(r) {
+  // сырой Δ 24ч-окна у мертвых альтов одинаковый (~+$13K) — не ранг
+  const live = liveActivityUsd(r);
+  if (live > 0) return live;
+  return isZombieRow(r) ? -1 : (r.delta || 0);
+}
+function buildFilteredSortedList() {
+  let list = Object.values(rows).filter(r => !isDismissed(r.key));
   if (marketFilter !== "ALL") list = list.filter(r => r.market === marketFilter);
   if (searchTerm.trim()) {
     const s = searchTerm.trim().toUpperCase();
     list = list.filter(r => r.base.includes(s) || r.symbol.includes(s));
   }
   if (earlyOnlyMode) {
-    list = list.filter(r => hasRecentEarly(r.key) || (r.d1m !== null && r.d1m >= threshold1m * 0.7));
+    list = list.filter(r => hasRecentEarly(r.key) || (threshold1m != null && r.d1m !== null && r.d1m >= threshold1m * 0.7));
   }
-  if (sortMode === "score") list.sort((a, b) => (b.score || 0) - (a.score || 0) || (b.delta - a.delta));
-  else list.sort((a, b) => b.delta - a.delta);
+  const freezeOn = isFreezeActive();
+  if (!freezeOn) {
+    frozenOrder = null;
+    if (sortMode === "score") list.sort((a, b) => (b.score || 0) - (a.score || 0) || (b.delta - a.delta));
+    else list.sort((a, b) => b.delta - a.delta);
+  } else {
+    if (!frozenOrder || !frozenOrder.length) {
+      const tmp = list.slice();
+      if (sortMode === "score") tmp.sort((a, b) => (b.score || 0) - (a.score || 0) || (b.delta - a.delta));
+      else tmp.sort((a, b) => b.delta - a.delta);
+      frozenOrder = tmp.map(r => r.key);
+    }
+    const byKey = {};
+    for (const r of list) byKey[r.key] = r;
+    const ordered = [];
+    for (const k of frozenOrder) if (byKey[k]) { ordered.push(byKey[k]); delete byKey[k]; }
+    const extras = Object.values(byKey);
+    if (sortMode === "score") extras.sort((a, b) => (b.score || 0) - (a.score || 0) || (b.delta - a.delta));
+    else extras.sort((a, b) => b.delta - a.delta);
+    for (const r of extras) { ordered.push(r); frozenOrder.push(r.key); }
+    list = ordered;
+  }
+  if (pinnedKey && rows[pinnedKey] && !list.some(r => r.key === pinnedKey)) {
+    list.unshift(rows[pinnedKey]);
+  }
+  return list;
+}
+function evalTopMover(candidateList) {
+  const candidates = candidateList || [];
+  const candKeys = new Set(candidates.map(r => r.key));
+  const floor = topMoverFloorUsd();
+  const now = Date.now();
+
+  if (topMoverKey && !candKeys.has(topMoverKey)) {
+    topMoverKey = null; topMoverValue = -Infinity; topMoverSince = 0; lastTopMoverEvalAt = 0;
+  }
+
+  if (now - lastTopMoverEvalAt < TOP_MOVER_EVAL_MS && topMoverKey && candKeys.has(topMoverKey)) {
+    const cur = rowSurgeUsd(rows[topMoverKey]);
+    if (cur == null || cur < floor) {
+      topMoverKey = null; topMoverValue = -Infinity; lastTopMoverEvalAt = 0;
+    } else {
+      topMoverValue = cur;
+      return { key: topMoverKey, value: topMoverValue, belowMin: false, floor };
+    }
+  }
+  lastTopMoverEvalAt = now;
+
+  let bestKey = null, bestVal = -Infinity;
+  for (const r of candidates) {
+    const v = rowSurgeUsd(r);
+    if (v == null) continue;
+    // ленточный шум без цены (классика HOT) не должен выигрывать у реального выноса
+    const px = r.pct1m != null ? r.pct1m : 0;
+    const scoreBoost = 1 + Math.max(0, Math.min(px, 8)) / 20;
+    const ranked = v * scoreBoost;
+    if (ranked > bestVal) { bestVal = ranked; bestKey = r.key; }
+  }
+  const bestValUsd = bestKey ? rowSurgeUsd(rows[bestKey]) : null;
+  if (bestValUsd != null) bestVal = bestValUsd;
+
+  if (topMoverKey && candKeys.has(topMoverKey)) {
+    const cur = rowSurgeUsd(rows[topMoverKey]);
+    const held = (now - topMoverSince) < TOP_MOVER_HOLD_MS;
+    if (cur != null && cur >= floor) {
+      if (bestKey && bestKey !== topMoverKey) {
+        // new leader must beat by ~18%
+        if (held || bestVal < cur * (1 + TOP_MOVER_MARGIN_RATIO)) {
+          bestKey = topMoverKey; bestVal = cur;
+        }
+      } else if (!bestKey) {
+        bestKey = topMoverKey; bestVal = cur;
+      }
+    }
+  }
+
+  const belowMin = !(bestKey && Number.isFinite(bestVal) && bestVal >= floor);
+  const leaderKey = belowMin ? null : bestKey;
+  const leaderVal = belowMin ? -Infinity : bestVal;
+  if (leaderKey !== topMoverKey) { topMoverKey = leaderKey; topMoverSince = now; }
+  topMoverValue = leaderVal;
+  return { key: topMoverKey, value: topMoverValue, belowMin, floor, bestKey, bestValue: bestVal };
+}
+function fmtPctShort(p) {
+  if (p == null || isNaN(p)) return "—";
+  return (p >= 0 ? "+" : "") + p.toFixed(2) + "%";
+}
+function rowPct24h(r) {
+  if (!r) return null;
+  const open = r.openPrice;
+  const fromOpen = (open > 0 && r.price > 0) ? (r.price / open - 1) * 100 : null;
+  const fromField = (r.pct != null && !isNaN(r.pct)) ? r.pct : null;
+  if (fromOpen != null && isFinite(fromOpen)) {
+    if (fromField != null && Math.abs(fromField - fromOpen) <= 0.6) return fromField;
+    return fromOpen;
+  }
+  return fromField;
+}
+function rowPctSess(r) {
+  if (!r || !(r.priceBase > 0) || !(r.price > 0)) return null;
+  return (r.price / r.priceBase - 1) * 100;
+}
+function fillPctEl(el, pct) {
+  if (!el) return;
+  if (pct == null || isNaN(pct)) {
+    el.textContent = "—";
+    el.style.color = "#5a6b5a";
+    return;
+  }
+  el.textContent = (pct >= 0 ? "+" : "") + pct.toFixed(2) + "%";
+  el.style.color = pct > 0.004 ? "#5eff8f" : (pct < -0.004 ? "#ff6b6b" : "#8a9a8a");
+}
+function sessionPctSub(r) {
+  if (!r || !(r.priceBase > 0) || !(r.price > 0)) return "";
+  const sess = (r.price / r.priceBase - 1) * 100;
+  const cls = sess > 0.004 ? "pct-pos" : (sess < -0.004 ? "pct-neg" : "vel-cold");
+  return `<span class="sub ${cls}">сесс ${sess >= 0 ? "+" : ""}${sess.toFixed(2)}%</span>`;
+}
+function formatPct24hCell(r, pctClass) {
+  const pctOk = r.pct != null && !isNaN(r.pct);
+  const open = r.openPrice;
+  const fromOpen = (open > 0 && r.price > 0) ? (r.price / open - 1) * 100 : null;
+  let pct = pctOk ? r.pct : fromOpen;
+  if ((pct == null || Math.abs(pct) < 0.005) && fromOpen != null) pct = fromOpen;
+  const body = (pct == null || isNaN(pct))
+    ? "—"
+    : ((pct >= 0 ? "+" : "") + pct.toFixed(2) + "%");
+  const cls = (pct == null || isNaN(pct)) ? "vel-cold" : (pct >= 0 ? "pct-pos" : "pct-neg");
+  return `<td class="${cls}">${body}${sessionPctSub(r)}</td>`;
+}
+function surgeBaselineMult(r) {
+  if (!r) return null;
+  if (r.rvol != null && Number.isFinite(r.rvol) && r.rvol > 0) return { label: "RVOL", x: r.rvol };
+  if (r.atsMedian != null && r.ats != null && r.atsMedian > 0) return { label: "чек", x: r.ats / r.atsMedian };
+  return null;
+}
+function formatSurgePrimary(surge, winLabel) {
+  if (surge == null || !Number.isFinite(surge)) return "+$— / " + winLabel;
+  const sign = surge >= 0 ? "+" : "−";
+  return sign + "$" + fmtMoney(Math.abs(surge)) + " / " + winLabel;
+}
+function updateCycleBuckets(key, now, curVol) {
+  if (curVol == null || isNaN(curVol)) return;
+  if (!cycleState[key]) cycleState[key] = {};
+  for (const w of [10, 30, 60]) {
+    const ms = w * 1000;
+    const id = Math.floor(now / ms);
+    let st = cycleState[key][w];
+    if (!st) {
+      cycleState[key][w] = { id, startVol: curVol, lastClosed: null, lastClosedAt: 0 };
+      continue;
+    }
+    if (st.id !== id) {
+      const raw = curVol - st.startVol;
+      const rolloff = curVol > 0 ? curVol * (ms / 86400000) : 0;
+      st.lastClosed = raw + rolloff;
+      st.lastClosedAt = now;
+      st.id = id;
+      st.startVol = curVol;
+    }
+  }
+}
+function cycleInfo(key, winSec) {
+  const w = winSec || topMoverWindowSec;
+  const st = cycleState[key] && cycleState[key][w];
+  const ms = w * 1000;
+  const now = Date.now();
+  const elapsed = now % ms;
+  const left = ms - elapsed;
+  if (!st) return { elapsed, left, current: null, lastClosed: null, winSec: w };
+  const row = rows[key];
+  const curVol = row && row.curVol != null ? row.curVol : null;
+  let current = (curVol != null && st.startVol != null) ? (curVol - st.startVol) : null;
+  if (current != null && curVol > 0) current += curVol * (ms / 86400000);
+  return { elapsed, left, current, lastClosed: st.lastClosed, lastClosedAt: st.lastClosedAt, winSec: w };
+}
+function formatCycleUsd(v) {
+  if (v == null || !Number.isFinite(v)) return "+$—";
+  const sign = v >= 0 ? "+" : "−";
+  return sign + "$" + fmtMoney(Math.abs(v));
+}
+function formatCycleLine(key) {
+  const winLabel = topMoverWindowSec === 60 ? "1м" : (topMoverWindowSec + "с");
+  const info = cycleInfo(key, topMoverWindowSec);
+  const elapsedSec = Math.max(0, Math.floor(info.elapsed / 1000));
+  const leftSec = Math.max(0, Math.ceil(info.left / 1000));
+  const nowTxt = info.current == null
+    ? `<span class="cy-wait">набор…</span>`
+    : `<span class="cy-now">${formatCycleUsd(info.current)}</span>`;
+  const doneTxt = info.lastClosed == null
+    ? `<span class="cy-wait">ещё не закрыт</span>`
+    : `<span class="cy-done">${formatCycleUsd(info.lastClosed)}</span>`;
+  return `<span class="cy-lbl">цикл ${elapsedSec}/${winLabel}</span> ${nowTxt}` +
+    ` <span class="cy-lbl">· осталось ${leftSec}с · прошлый</span> ${doneTxt}`;
+}
+function renderTopMoverCard(tm, shown) {
+  const symEl = document.getElementById("tm-sym");
+  const volEl = document.getElementById("tm-vol");
+  const prevEl = document.getElementById("tm-prev");
+  const card = document.getElementById("top-mover-card");
+  if (!symEl || !volEl) return;
+  document.querySelectorAll("#tm-windows button").forEach(b => {
+    b.classList.toggle("active", parseInt(b.dataset.win, 10) === topMoverWindowSec);
+  });
+
+  const key = tm && !tm.belowMin ? tm.key : null;
+  const r = key ? rows[key] : null;
+  if (!r) {
+    if (card) { card.dataset.key = ""; card.classList.add("tm-nogrowth"); }
+    symEl.textContent = "—";
+    volEl.textContent = "+$—";
+    if (prevEl) prevEl.textContent = "+$—";
+    fillPctEl(document.getElementById("tm-pct24"), null);
+    fillPctEl(document.getElementById("tm-pctsess"), null);
+    return;
+  }
+  if (card) { card.dataset.key = r.key; card.classList.remove("tm-nogrowth"); }
+  symEl.textContent = r.base + "/" + r.quote;
+  const tv = trailingPairVol(r.key, Date.now(), topMoverWindowSec * 1000);
+  volEl.textContent = formatCycleUsd(tv.current);
+  if (prevEl) prevEl.textContent = formatCycleUsd(tv.prev);
+  fillPctEl(document.getElementById("tm-pct24"), rowPct24h(r));
+  fillPctEl(document.getElementById("tm-pctsess"), rowPctSess(r));
+}
+function renderPinCard() {
+  const card = document.getElementById("pin-card");
+  if (!card) return;
+  if (!pinnedKey || !rows[pinnedKey]) {
+    card.classList.add("hidden");
+    card.dataset.key = "";
+    return;
+  }
+  const r = rows[pinnedKey];
+  card.classList.remove("hidden");
+  card.dataset.key = r.key;
+  const winLabel = topMoverWindowSec === 60 ? "1м" : (topMoverWindowSec + "с");
+  const surge = rowSurgeUsd(r);
+  const volEl = document.getElementById("pin-vol");
+  if (volEl) volEl.textContent = formatSurgePrimary(surge, winLabel);
+  const volSubEl = document.getElementById("pin-vol-sub");
+  const bm = surgeBaselineMult(r);
+  if (volSubEl) volSubEl.textContent = bm ? ("×" + bm.x.toFixed(1) + " " + bm.label) : "";
+  document.getElementById("pin-sym").textContent = r.base + "/" + r.quote;
+  const pctEl = document.getElementById("pin-pct");
+  pctEl.textContent = "24ч " + fmtPctShort(r.pct);
+  pctEl.className = "fc-pct " + (r.pct != null && !isNaN(r.pct) && r.pct >= 0 ? "pos" : "neg");
+  document.getElementById("pin-price").textContent = "$" + fmtPrice(r.price);
+  document.getElementById("pin-meta").textContent = r.market + " · 24ч " + fmtPctShort(r.pct) + " · снять: ✕ или повторный тап";
+  const pinCycle = document.getElementById("pin-cycle");
+  if (pinCycle) pinCycle.innerHTML = formatCycleLine(r.key);
+}
+
+
+function render() {
+  try {
+  processRankSignals();
+
+  const list = buildFilteredSortedList();
   const shown = list.slice(0, 200);
+  const tm = evalTopMover(shown);
+  renderTopMoverCard(tm, shown);
+  renderPinCard();
+  updateStickyRailHeight();
 
   const tbody = document.getElementById("table-body");
   if (shown.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="20" class="empty-row">${Object.values(statuses).some(s=>s==="ok") ? "нет пар, прошедших фильтр…" : "подключение к Binance…"}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="21" class="empty-row">${Object.values(statuses).some(s=>s==="ok") ? "нет пар, прошедших фильтр…" : "подключение к Binance…"}</td></tr>`;
   } else {
     tbody.innerHTML = shown.map(r => {
-      const triggered = r.rollingDelta !== null && r.rollingDelta >= threshold;
-      const earlyHot = (r.d1m !== null && r.d1m >= threshold1m) || (r.d2m !== null && r.d2m >= threshold2m);
-      const accelHot = r.accel !== null && r.accel >= threshold1m * 0.5; // accel is now a $/min slope, not a ratio
+      const triggered = threshold != null && r.rollingDelta !== null && r.rollingDelta >= threshold;
+      const earlyHot = threshold1m != null && r.d1m !== null && r.d1m >= threshold1m;
+      const accelHot = threshold1m != null && r.accel !== null && r.accel >= threshold1m * 0.5; // accel is now a $/min slope, not a ratio
       let rowClasses = [];
-      if ((r.score || 0) >= scoreThreshold) rowClasses.push("score-row");
+      if (pinnedKey && r.key === pinnedKey) rowClasses.push("row-pinned");
+      if (scoreThreshold != null && (r.score || 0) >= scoreThreshold) rowClasses.push("score-row");
       else if (triggered) rowClasses.push("triggered");
       else if (accelHot) rowClasses.push("accel-row");
       else if (earlyHot) rowClasses.push("early-row");
@@ -1701,7 +3255,7 @@ function render() {
       else if (curRank && curRank <= TOP_N_30) rankPrefix = `<span class="rank-up">#${curRank}</span>`;
 
       const flags = [];
-      if ((r.score || 0) >= scoreThreshold) flags.push("⭐");
+      if (scoreThreshold != null && (r.score || 0) >= scoreThreshold) flags.push("⭐");
       if (triggered) flags.push("🔔");
       if (earlyHot) flags.push("⚡");
       if (accelHot) flags.push("🚀");
@@ -1709,15 +3263,14 @@ function render() {
       return `<tr id="row-${r.key}" class="${rowClasses.join(" ")}">
         <td><span class="${badgeClass(r.market)}">${r.market}</span></td>
         <td><span class="sym-base">${r.base}</span><span class="sym-quote">/${r.quote}</span></td>
-        <td>${fmtPrice(r.priceBase)}<span class="base-time">${fmtTime(r.priceAt)}</span></td>
-        <td>${fmtPrice(r.price)}</td>
-        <td class="${pctClass}">${isNaN(r.pct) ? "—" : (r.pct >= 0 ? "+" : "") + r.pct.toFixed(2) + "%"}</td>
+        <td class="${priceCellClass(r.market)}">${fmtPrice(r.priceBase)}<span class="base-time">${fmtTime(r.priceAt)}</span></td>
+        <td class="${priceCellClass(r.market)}">${fmtPrice(r.price)}</td>
+        ${formatPct24hCell(r, pctClass)}
         <td class="base-vol">$${fmtMoney(r.baseVol)}<span class="base-time">${fmtTime(r.baseAt)}</span></td>
         <td>$${fmtMoney(r.curVol)}</td>
         <td class="${deltaClass}">${r.delta >= 0 ? "+" : ""}$${fmtMoney(r.delta)}</td>
         <td class="${multClass}">×${r.mult.toFixed(2)}</td>
         <td class="${velClass(r.d1m, threshold1m)}">${r.d1m !== null ? (r.d1m >= 0 ? "+" : "") + "$" + fmtMoney(r.d1m) : "—"}</td>
-        <td class="${velClass(r.d2m, threshold2m)}">${r.d2m !== null ? (r.d2m >= 0 ? "+" : "") + "$" + fmtMoney(r.d2m) : "—"}</td>
         <td class="score-cell">${scoreCell(r)}</td>
         <td>${pctCell(r)}</td>
         <td>${rvolCell(r)}</td>
@@ -1726,65 +3279,38 @@ function render() {
         <td>${takerCell(r)}</td>
         <td>${rankPrefix}<br>${rankCell}</td>
         <td>${flags.join("")}</td>
+        <td>${oiCell(r)}</td>
         <td><button class="del-btn" data-key="${r.key}" title="Убрать пару">✕</button></td>
       </tr>`;
     }).join("");
   }
 
-  document.getElementById("tracked-count").textContent = Object.keys(rows).length;
-  document.getElementById("triggered-count").textContent = alertsLog.length;
-  const earlyN = alertsLog.filter(a => isEarlyType(a.type)).length;
-  document.getElementById("early-count").textContent = earlyN;
-
-  // alerts list
-  const alertsList = document.getElementById("alerts-list");
-  let shownAlerts = alertsLog;
-  if (alertsTab === "early") shownAlerts = alertsLog.filter(a => isEarlyType(a.type));
-
-  if (shownAlerts.length === 0) {
-    alertsList.innerHTML = `<div class="alerts-empty">${alertsTab === "early"
-      ? "Запись сигналов отключена."
-      : "Запись сигналов отключена."}</div>`;
-  } else {
-    alertsList.innerHTML = shownAlerts.map(a => `
-      <div class="alert-item market-${a.market} type-${a.type || "SPIKE"}" data-key="${a.key}" title="Показать пару в таблице">
-        <div class="alert-top">
-          <span class="alert-sym">
-            <span class="alert-type ${a.type || "SPIKE"}">${a.type || "SPIKE"}</span>
-            ${a.base}/${a.quote}
-            <span class="alert-seq">#${a.seq || "?"}</span>
-          </span>
-          <span class="alert-delta">${a.amount != null ? "+$" + fmtMoney(a.amount) : ""}</span>
-        </div>
-        <div class="alert-bottom">
-          <span>${a.market}${a.extra ? " · " + a.extra : ""}</span>
-          <span>${fmtTimeMinusHour(a.time)}</span>
-        </div>
-      </div>
-    `).join("");
+  {
+    document.getElementById("tracked-count").textContent = Object.keys(rows).length;
   }
+  document.getElementById("triggered-count").textContent = totalTriggeredCount;
+  document.getElementById("early-count").textContent = totalEarlyCount;
 
-  // shelf (тихая полка) — свой список, отдельно от общего журнала, всегда на виду
-  const shelfList = document.getElementById("shelf-list");
-  if (!shelfAlerts.length) {
-    shelfList.innerHTML = `<div class="shelf-empty">Пока нет.</div>`;
-  } else {
-    shelfList.innerHTML = shelfAlerts.map(a => `
-      <div class="shelf-item" data-key="${a.key}" title="Показать пару в таблице">
-        <span class="shelf-sym">${a.base}/${a.quote} <span style="color:#8a7a4a; font-weight:400;">${a.market}</span></span>
-        <span class="shelf-delta">+$${fmtMoney(a.amount)}</span>
-        <span class="shelf-time">${fmtTimeMinusHour(a.time)}</span>
-      </div>
-    `).join("");
+
+  // panels removed from UI — keep in-memory journals for Telegram if used
+  } catch (e) {
+    try { console.warn("[VolScan] render", e); } catch (e2) {}
   }
-
-  renderStats();
 }
 
 // ---------- controls ----------
 function removePair(key) {
+  if (!key) return;
+  dismissKey(key);
   purgeKey(key);
   saveState();
+  updateDismissedButton();
+  render();
+}
+function restoreDismissed() {
+  dismissedKeys = {};
+  saveState();
+  updateDismissedButton();
   render();
 }
 document.getElementById("table-body").addEventListener("click", (e) => {
@@ -1792,6 +3318,44 @@ document.getElementById("table-body").addEventListener("click", (e) => {
   if (!btn) return;
   removePair(btn.dataset.key);
 });
+
+document.getElementById("table-body").addEventListener("click", (e) => {
+  if (e.target.closest(".del-btn")) return;
+  const tr = e.target.closest("tr[id^='row-']");
+  if (!tr) return;
+  const key = tr.id.slice(4);
+  if (key) togglePin(key);
+});
+document.getElementById("top-mover-card").addEventListener("click", (e) => {
+  if (e.target.closest(".tm-windows")) return;
+  const key = document.getElementById("top-mover-card").dataset.key;
+  if (key) togglePin(key);
+});
+document.getElementById("tm-windows").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-win]");
+  if (!btn) return;
+  e.stopPropagation();
+  const w = parseInt(btn.dataset.win, 10);
+  if (w === 10 || w === 30 || w === 60) {
+    topMoverWindowSec = w;
+    topMoverKey = null; topMoverValue = -Infinity; topMoverSince = 0; lastTopMoverEvalAt = 0;
+    persistPinState();
+    render();
+  }
+});
+document.getElementById("pin-card").addEventListener("click", (e) => {
+  if (e.target.closest("#pin-close")) return;
+  const key = document.getElementById("pin-card").dataset.key;
+  if (key) {
+    const el = document.getElementById("row-" + key);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+});
+document.getElementById("pin-close").addEventListener("click", (e) => {
+  e.stopPropagation();
+  setPinned(null);
+});
+
 
 function jumpToPair(key) {
   if (!rows[key]) return;
@@ -1817,18 +3381,9 @@ function jumpToPair(key) {
   void el.offsetWidth;
   el.classList.add("row-flash");
 }
-document.getElementById("alerts-list").addEventListener("click", (e) => {
-  const item = e.target.closest(".alert-item");
-  if (!item) return;
-  jumpToPair(item.dataset.key);
-});
-document.getElementById("shelf-list").addEventListener("click", (e) => {
-  const item = e.target.closest(".shelf-item");
-  if (!item) return;
-  jumpToPair(item.dataset.key);
-});
 
 function resetBaseline() {
+  const keptDismissed = dismissedKeys;
   rows = {};
   sessionBase = {};
   baseTime = {};
@@ -1836,8 +3391,8 @@ function resetBaseline() {
   doubleLevel = {};
   lastFired = {};
   signalCount = {};
-  alertsLog = [];
   history = {};
+  cycleState = {};
   rankSnapshot = {};
   lastComputedRanks = {};
   lastRankSnapshotAt = 0;
@@ -1856,8 +3411,17 @@ function resetBaseline() {
   outcomes = [];
   outcomesByKey = {};
   shelfAlerts = [];
+  totalTriggeredCount = 0;
+  totalEarlyCount = 0;
+  signalSeq = { SPIKE: {}, SPIKE30: {}, VEL1M: {}, VEL1M30: {} };
+  lastSignalPct24h = {};
+  pairSignalLog = {};
+  pairColumnOrder = [];
   startTime = Date.now();
+  dismissedKeys = keptDismissed || {};
   clearState();
+  saveState();
+  updateDismissedButton();
   render();
 }
 
@@ -1918,85 +3482,126 @@ function flashApplied(inputEl) {
 
 document.getElementById("apply-threshold").addEventListener("click", () => {
   const inputEl = document.getElementById("threshold-input");
-  const v = parseAmountInput(inputEl.value);
-  if (!isNaN(v) && v > 0) {
-    threshold = v;
-    inputEl.value = String(v);
-    saveState();
-    render();
-    flashApplied(inputEl);
-  }
+  const raw = (inputEl.value || "").trim();
+  if (!raw) { threshold = null; inputEl.value = ""; saveState(); render(); flashApplied(inputEl); return; }
+  const v = parseAmountInput(raw);
+  if (!isNaN(v) && v > 0) { threshold = v; inputEl.value = String(v); saveState(); render(); flashApplied(inputEl); }
+  else { threshold = null; inputEl.value = ""; saveState(); render(); flashApplied(inputEl); }
 });
 document.getElementById("threshold-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter") document.getElementById("apply-threshold").click();
 });
+document.getElementById("apply-threshold-30s").addEventListener("click", () => {
+  const inputEl = document.getElementById("threshold-30s-input");
+  const raw = (inputEl.value || "").trim();
+  if (!raw) { threshold30 = null; inputEl.value = ""; saveState(); render(); flashApplied(inputEl); return; }
+  const v = parseAmountInput(raw);
+  if (!isNaN(v) && v > 0) { threshold30 = v; inputEl.value = String(v); saveState(); render(); flashApplied(inputEl); }
+  else { threshold30 = null; inputEl.value = ""; saveState(); render(); flashApplied(inputEl); }
+});
+document.getElementById("threshold-30s-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.getElementById("apply-threshold-30s").click();
+});
 document.getElementById("apply-threshold-1m").addEventListener("click", () => {
   const inputEl = document.getElementById("threshold-1m-input");
-  const v = parseAmountInput(inputEl.value);
-  if (!isNaN(v) && v > 0) {
-    threshold1m = v;
-    inputEl.value = String(v);
-    saveState();
-    render();
-    flashApplied(inputEl);
-  }
+  const raw = (inputEl.value || "").trim();
+  if (!raw) { threshold1m = null; inputEl.value = ""; saveState(); render(); flashApplied(inputEl); return; }
+  const v = parseAmountInput(raw);
+  if (!isNaN(v) && v > 0) { threshold1m = v; inputEl.value = String(v); saveState(); render(); flashApplied(inputEl); }
+  else { threshold1m = null; inputEl.value = ""; saveState(); render(); flashApplied(inputEl); }
 });
 document.getElementById("threshold-1m-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter") document.getElementById("apply-threshold-1m").click();
 });
-document.getElementById("apply-threshold-2m").addEventListener("click", () => {
-  const inputEl = document.getElementById("threshold-2m-input");
-  const v = parseAmountInput(inputEl.value);
-  if (!isNaN(v) && v > 0) {
-    threshold2m = v;
-    inputEl.value = String(v);
-    saveState();
-    render();
-    flashApplied(inputEl);
-  }
+document.getElementById("apply-threshold-vel1m30").addEventListener("click", () => {
+  const inputEl = document.getElementById("threshold-vel1m30-input");
+  const raw = (inputEl.value || "").trim();
+  if (!raw) { thresholdVel1m30 = null; inputEl.value = ""; saveState(); render(); flashApplied(inputEl); return; }
+  const v = parseAmountInput(raw);
+  if (!isNaN(v) && v > 0) { thresholdVel1m30 = v; inputEl.value = String(v); saveState(); render(); flashApplied(inputEl); }
+  else { thresholdVel1m30 = null; inputEl.value = ""; saveState(); render(); flashApplied(inputEl); }
 });
-document.getElementById("threshold-2m-input").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") document.getElementById("apply-threshold-2m").click();
+document.getElementById("threshold-vel1m30-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.getElementById("apply-threshold-vel1m30").click();
 });
 document.getElementById("apply-max-price").addEventListener("click", () => {
   const inputEl = document.getElementById("max-price-input");
-  const v = parseAmountInput(inputEl.value);
-  if (!isNaN(v) && v > 0) {
-    maxInitialPrice = v;
-    inputEl.value = String(v);
-    saveState();
-    flashApplied(inputEl);
-  }
+  const raw = (inputEl.value || "").trim();
+  if (!raw) { maxInitialPrice = null; inputEl.value = ""; saveState(); flashApplied(inputEl); return; }
+  const v = parseAmountInput(raw);
+  if (!isNaN(v) && v > 0) { maxInitialPrice = v; inputEl.value = String(v); saveState(); flashApplied(inputEl); }
+  else { maxInitialPrice = null; inputEl.value = ""; saveState(); flashApplied(inputEl); }
 });
 document.getElementById("max-price-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter") document.getElementById("apply-max-price").click();
 });
 document.getElementById("apply-max-volume").addEventListener("click", () => {
   const inputEl = document.getElementById("max-volume-input");
-  const v = parseAmountInput(inputEl.value);
-  if (!isNaN(v) && v > 0) {
-    maxInitialVolume = v;
-    inputEl.value = String(v);
-    saveState();
-    flashApplied(inputEl);
-  }
+  const raw = (inputEl.value || "").trim();
+  if (!raw) { maxInitialVolume = null; inputEl.value = ""; saveState(); flashApplied(inputEl); return; }
+  const v = parseAmountInput(raw);
+  if (!isNaN(v) && v > 0) { maxInitialVolume = v; inputEl.value = String(v); saveState(); flashApplied(inputEl); }
+  else { maxInitialVolume = null; inputEl.value = ""; saveState(); flashApplied(inputEl); }
 });
 document.getElementById("max-volume-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter") document.getElementById("apply-max-volume").click();
 });
 document.getElementById("apply-score-threshold").addEventListener("click", () => {
   const inputEl = document.getElementById("score-threshold-input");
-  const v = parseFloat(inputEl.value);
-  if (!isNaN(v) && v > 0 && v <= 100) {
-    scoreThreshold = v;
-    inputEl.value = String(v);
-    saveState();
-    render();
-    flashApplied(inputEl);
-  }
+  const raw = (inputEl.value || "").trim();
+  if (!raw) { scoreThreshold = null; inputEl.value = ""; saveState(); render(); flashApplied(inputEl); return; }
+  const v = parseFloat(raw);
+  if (!isNaN(v) && v >= 1 && v <= 100) { scoreThreshold = v; inputEl.value = String(v); saveState(); render(); flashApplied(inputEl); }
+  else { scoreThreshold = null; inputEl.value = ""; saveState(); render(); flashApplied(inputEl); }
 });
 document.getElementById("score-threshold-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter") document.getElementById("apply-score-threshold").click();
+});
+document.getElementById("apply-telegram").addEventListener("click", () => {
+  const tokenEl = document.getElementById("telegram-token-input");
+  const chatEl = document.getElementById("telegram-chatid-input");
+  telegramToken = tokenEl.value.trim();
+  telegramChatId = chatEl.value.trim();
+  saveState();
+  flashApplied(tokenEl); flashApplied(chatEl);
+});
+document.getElementById("test-telegram").addEventListener("click", async (e) => {
+  const tokenEl = document.getElementById("telegram-token-input");
+  const chatEl = document.getElementById("telegram-chatid-input");
+  telegramToken = tokenEl.value.trim();
+  telegramChatId = chatEl.value.trim();
+  saveState();
+  if (!telegramToken || !telegramChatId) {
+    e.target.textContent = "нет токена/id";
+    setTimeout(() => { e.target.textContent = "ТЕСТ"; }, 2000);
+    return;
+  }
+  e.target.textContent = "…";
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: telegramChatId, text: "✅ VolScan: тестовое сообщение дошло." }),
+    });
+    const ok = res.ok;
+    e.target.textContent = ok ? "✓ ОК" : "✗ ОШИБКА";
+    if (ok && !telegramOn) document.getElementById("telegram-btn").click();
+  } catch (err) {
+    e.target.textContent = "✗ СЕТЬ";
+  }
+  setTimeout(() => { e.target.textContent = "ТЕСТ"; }, 3000);
+});
+document.getElementById("telegram-btn").addEventListener("click", (e) => {
+  telegramOn = !telegramOn;
+  e.target.textContent = telegramOn ? "📨 TELEGRAM: ВКЛ" : "📨 TELEGRAM: ВЫКЛ";
+  e.target.classList.toggle("paused", telegramOn);
+  saveState();
+});
+document.getElementById("filters-toggle-btn").addEventListener("click", (e) => {
+  filtersCollapsed = !filtersCollapsed;
+  document.getElementById("filters-collapsible").classList.toggle("collapsed", filtersCollapsed);
+  e.target.textContent = filtersCollapsed ? "⚙ Фильтры ▾" : "⚙ Фильтры ▴";
+  saveState();
 });
 document.getElementById("score-only-btn").addEventListener("click", (e) => {
   scoreOnlyMode = !scoreOnlyMode;
@@ -2008,8 +3613,8 @@ document.getElementById("taker-btn").addEventListener("click", (e) => {
   takerStreamOn = !takerStreamOn;
   e.target.textContent = takerStreamOn ? "🔥 ТЕЙКЕР-ПОТОК: ВКЛ" : "🔥 ТЕЙКЕР-ПОТОК: ВЫКЛ";
   e.target.classList.toggle("off", !takerStreamOn);
-  if (!takerStreamOn) { closeHotStream(); takerRatio = {}; }
-  else { lastHotRebuild = 0; rebuildHotStream(); }
+  if (!takerStreamOn) { closeAllHotStreams(); takerRatio = {}; candleShape = {}; }
+  else { lastHotRebuild = {}; rebuildAllHotStreams(); }
   saveState();
 });
 document.getElementById("sort-btn").addEventListener("click", (e) => {
@@ -2019,8 +3624,8 @@ document.getElementById("sort-btn").addEventListener("click", (e) => {
   saveState();
   render();
 });
-document.getElementById("csv-btn").addEventListener("click", exportCsv);
 document.getElementById("reset-btn").addEventListener("click", resetBaseline);
+document.getElementById("undismiss-btn").addEventListener("click", restoreDismissed);
 document.getElementById("search-input").addEventListener("input", (e) => { searchTerm = e.target.value; render(); });
 document.getElementById("market-toggle").addEventListener("click", (e) => {
   if (e.target.tagName !== "BUTTON") return;
@@ -2053,26 +3658,12 @@ document.getElementById("stop-btn").addEventListener("click", (e) => {
     updateStatusLine();
   }
 });
-document.getElementById("stats-btn").addEventListener("click", (e) => {
-  statsVisible = !statsVisible;
-  document.getElementById("stats-panel").style.display = statsVisible ? "block" : "none";
-  e.target.classList.toggle("paused", statsVisible);
-  if (statsVisible) renderStats();
-});
 document.getElementById("early-only-btn").addEventListener("click", (e) => {
   earlyOnlyMode = !earlyOnlyMode;
   e.target.textContent = earlyOnlyMode ? "⚡ ТОЛЬКО РАННИЕ: ВКЛ" : "⚡ ТОЛЬКО РАННИЕ: ВЫКЛ";
   e.target.classList.toggle("paused", earlyOnlyMode);
   render();
 });
-document.getElementById("alerts-tabs").addEventListener("click", (e) => {
-  if (e.target.tagName !== "BUTTON") return;
-  document.querySelectorAll("#alerts-tabs button").forEach(b => b.classList.remove("active"));
-  e.target.classList.add("active");
-  alertsTab = e.target.dataset.tab;
-  render();
-});
-
 // wake lock
 let wakeLock = null;
 const wakelockBtn = document.getElementById("wakelock-btn");
@@ -2122,7 +3713,8 @@ setInterval(() => {
   if (!badge) return;
   if (!takerStreamOn) { badge.textContent = ""; return; }
   const live = Object.keys(takerRatio).filter(k => Date.now() - takerRatio[k].at <= TAKER_STALE_MS).length;
-  badge.textContent = hotSymbols.length ? `· 🔥 ${live}/${hotSymbols.length}` : "";
+  const total = MARKETS.reduce((n, m) => n + (hotSymbols[m.id] || []).length, 0);
+  badge.textContent = total ? `· 🔥 ${live}/${total}` : "";
 }, 3000);
 setInterval(() => {
   const now = Date.now();
@@ -2133,15 +3725,6 @@ setInterval(() => {
 }, 5000);
 
 // ---------- boot ----------
-document.body.classList.add("pane-table");
-document.getElementById("tab-bar").addEventListener("click", (e) => {
-  const btn = e.target.closest("button");
-  if (!btn) return;
-  document.querySelectorAll("#tab-bar button").forEach(b => b.classList.remove("active"));
-  btn.classList.add("active");
-  document.body.classList.toggle("pane-table", btn.dataset.pane === "table");
-  document.body.classList.toggle("pane-alerts", btn.dataset.pane === "alerts");
-});
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("./sw.js").catch(() => {});
 }
@@ -2151,12 +3734,22 @@ const restored = false; // real restore is async below
 loadStateAsync().then((ok) => {
   if (!ok) return;
 
-  document.getElementById("threshold-input").value = String(threshold);
-  document.getElementById("threshold-1m-input").value = String(threshold1m);
-  document.getElementById("threshold-2m-input").value = String(threshold2m);
-  document.getElementById("max-price-input").value = String(maxInitialPrice);
-  document.getElementById("max-volume-input").value = String(maxInitialVolume);
-  document.getElementById("score-threshold-input").value = String(scoreThreshold);
+  const _nv = (v) => (v == null ? "" : String(v));
+  document.getElementById("threshold-input").value = _nv(threshold);
+  document.getElementById("threshold-30s-input").value = _nv(threshold30);
+  document.getElementById("threshold-1m-input").value = _nv(threshold1m);
+  document.getElementById("threshold-vel1m30-input").value = _nv(thresholdVel1m30);
+  document.getElementById("max-price-input").value = _nv(maxInitialPrice);
+  document.getElementById("max-volume-input").value = _nv(maxInitialVolume);
+  document.getElementById("score-threshold-input").value = _nv(scoreThreshold);
+  document.getElementById("telegram-token-input").value = telegramToken;
+  document.getElementById("telegram-chatid-input").value = telegramChatId;
+  if (telegramOn) {
+    const b = document.getElementById("telegram-btn");
+    b.textContent = "📨 TELEGRAM: ВКЛ"; b.classList.add("paused");
+  }
+  document.getElementById("filters-collapsible").classList.toggle("collapsed", filtersCollapsed);
+  document.getElementById("filters-toggle-btn").textContent = filtersCollapsed ? "⚙ Фильтры ▾" : "⚙ Фильтры ▴";
   if (scoreOnlyMode) {
     const b = document.getElementById("score-only-btn");
     b.textContent = "⭐ ТОЛЬКО SCORE: ВКЛ"; b.classList.add("paused");
@@ -2170,8 +3763,10 @@ loadStateAsync().then((ok) => {
     b.textContent = "⇅ СОРТ: SCORE"; b.classList.add("paused");
   }
   Object.keys(rows).forEach(key => {
-    if (isExcluded(rows[key].symbol)) purgeKey(key);
+    if (isExcluded(rows[key].symbol) || isDismissed(key)) purgeKey(key);
   });
+  updateDismissedButton();
+  sanitizeVolumeRows();
   saveState();
   render();
 });
@@ -2189,7 +3784,8 @@ function pauseForBackground() {
     }
     if (restTimer[m.id]) { clearInterval(restTimer[m.id]); restTimer[m.id] = null; }
   });
-  closeHotStream();
+  closeAllHotStreams();
+  closeMarkPriceStream();
 }
 function resumeFromBackground() {
   appHidden = false;
@@ -2200,8 +3796,9 @@ function resumeFromBackground() {
     wsFailStreak[m.id] = 0;
     connectMarket(m);
   });
-  lastHotRebuild = 0;
-  rebuildHotStream();
+  lastHotRebuild = {};
+  rebuildAllHotStreams();
+  connectMarkPriceStream();
   dataDirty = true;
   render();
 }

@@ -1,0 +1,5 @@
+d1/
+ev/
+*.parquet
+syms.txt
+eligible.txt
